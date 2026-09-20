@@ -1,0 +1,35 @@
+# === AdminRed (proyecto Android / Capacitor) ===
+
+# Dependencias de Node (se reinstalan con `npm ci`)
+node_modules/
+
+# Salidas de compilación de Android
+android/app/build/
+android/build/
+android/.gradle/
+android/capacitor-cordova-android-plugins/
+android/app/src/main/assets/public/
+android/app/src/main/assets/capacitor.config.json
+android/app/src/main/assets/capacitor.plugins.json
+android/app/src/main/res/xml/config.xml
+android/local.properties
+
+# APKs generados localmente (los publica GitHub Actions como release)
+*.apk
+*.aab
+*.ap_
+
+# === SECRETOS: NUNCA subir esto al repo ===
+# El keystore y sus credenciales viven como "secrets" en GitHub.
+adminred-release.keystore
+*.keystore
+*.jks
+android/keystore.properties
+
+# Sistema / editor
+.DS_Store
+Thumbs.db
+*.log
+.idea/
+*.iml
+.vscode/

@@ -1,0 +1,1274 @@
+/* ============================================================
+   AdminRed (RedNet) — Hoja de estilos
+   Tema claro/oscuro con variables CSS, diseño mobile-first PWA.
+   Optimizado para uso principal en móvil.
+   ============================================================ */
+
+:root {
+  --bg: #f1f5f9;
+  --surface: #ffffff;
+  --surface-2: #f8fafc;
+  --bg-alt: #eef2f7;
+  --border: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --primary: #2563eb;
+  --primary-hover: #1d4ed8;
+  --primary-soft: #dbeafe;
+  --success: #16a34a;
+  --success-soft: #dcfce7;
+  --warn: #d97706;
+  --warn-soft: #fef3c7;
+  --danger: #dc2626;
+  --danger-soft: #fee2e2;
+  --shadow: 0 1px 3px rgba(0,0,0,.08), 0 1px 2px rgba(0,0,0,.06);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,.12), 0 6px 10px rgba(0,0,0,.08);
+  --radius: 12px;
+  --radius-sm: 8px;
+  --header-h: 56px;
+  --tabs-h: 48px;
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --safe-top: env(safe-area-inset-top, 0px);
+}
+
+[data-theme="dark"] {
+  --bg: #0f172a;
+  --surface: #1e293b;
+  --surface-2: #172033;
+  --bg-alt: #172033;
+  --border: #334155;
+  --text: #e2e8f0;
+  --text-muted: #94a3b8;
+  --primary: #3b82f6;
+  --primary-hover: #2563eb;
+  --primary-soft: #1e3a5f;
+  --success: #22c55e;
+  --success-soft: #14532d;
+  --warn: #f59e0b;
+  --warn-soft: #422006;
+  --danger: #ef4444;
+  --danger-soft: #4c0519;
+  --shadow: 0 1px 3px rgba(0,0,0,.4);
+  --shadow-lg: 0 10px 25px rgba(0,0,0,.5);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-text-size-adjust: 100%; }
+
+html, body {
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+  overscroll-behavior-y: none;
+}
+
+/* ---------- Header ---------- */
+.app-header {
+  position: sticky; top: 0; z-index: 50;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  padding: 8px 12px;
+  padding-top: calc(8px + var(--safe-top));
+  display: flex; align-items: center; gap: 8px;
+  box-shadow: var(--shadow);
+  height: var(--header-h);
+  min-height: var(--header-h);
+}
+.app-header .logo {
+  font-weight: 800; font-size: 16px; color: var(--primary);
+  display: flex; align-items: center; gap: 6px;
+  white-space: nowrap;
+}
+.app-header .logo .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--success); flex-shrink: 0; }
+.app-header .logo .sub { font-weight: 500; font-size: 11px; color: var(--text-muted); }
+.app-header .spacer { flex: 1; }
+.app-header .ver {
+  font-size: 11px; color: var(--text-muted); background: var(--surface-2);
+  border: 1px solid var(--border); padding: 2px 7px; border-radius: 20px;
+  white-space: nowrap;
+  /* v5.13.12: la versión es un botón para forzar la búsqueda de actualizaciones */
+  cursor: pointer; user-select: none;
+  transition: background .15s, border-color .15s, color .15s;
+  -webkit-tap-highlight-color: transparent;
+}
+.app-header .ver:hover { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+.app-header .ver:active { transform: scale(.95); }
+/* v5.13.12: badge animado cuando hay una actualización esperando */
+.app-header .ver.ver-update {
+  background: var(--primary-soft); border-color: var(--primary); color: var(--primary);
+  animation: ver-pulse 1.4s ease-in-out infinite;
+}
+.app-header .ver.ver-update::before { content: '↻ '; }
+@keyframes ver-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(37, 99, 235, .0); }
+  50%      { box-shadow: 0 0 0 4px rgba(37, 99, 235, .18); }
+}
+.app-header .header-actions { display: flex; gap: 6px; align-items: center; }
+.app-header .clock {
+  font-size: 11px; color: var(--text-muted); text-align: right;
+  white-space: nowrap; overflow: hidden;
+}
+
+/* Hide clock on very small screens */
+@media (max-width: 420px) {
+  .app-header .clock { display: none; }
+  .app-header .logo .sub { display: none; }
+}
+
+.icon-btn {
+  background: var(--surface-2); border: 1px solid var(--border); color: var(--text);
+  width: 36px; height: 36px; border-radius: 50%; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; font-size: 17px;
+  transition: background .15s; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.icon-btn:hover { background: var(--primary-soft); border-color: var(--primary); }
+.icon-btn:active { transform: scale(.92); }
+
+/* ---------- Tabs — 3 grupos principales con subtabs ---------- */
+.tabs {
+  display: flex; background: var(--surface);
+  border-bottom: 1px solid var(--border); position: sticky;
+  top: var(--header-h); z-index: 40;
+  height: var(--tabs-h);
+  overflow: visible;
+}
+.tab-group {
+  flex: 1; display: flex; flex-direction: column; position: relative;
+}
+.tab-group .tab {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  cursor: pointer; color: var(--text-muted); font-weight: 700; font-size: 13px;
+  border-bottom: 3px solid transparent; transition: color .15s, border-color .15s;
+  -webkit-tap-highlight-color: transparent; white-space: nowrap; gap: 5px;
+  padding: 0 6px;
+}
+.tab-group .tab:hover { color: var(--primary); }
+.tab-group.active .tab { color: var(--primary); border-bottom-color: var(--primary); }
+.tab-group .tab:active { background: var(--surface-2); }
+
+/* Subtabs: fila horizontal debajo, visible solo del grupo activo */
+.subtabs {
+  display: none; position: absolute; top: 100%; left: 0; right: 0;
+  background: var(--surface); border-bottom: 1px solid var(--border);
+  box-shadow: var(--shadow); z-index: 35;
+  padding: 0; overflow-x: auto; -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.subtabs::-webkit-scrollbar { display: none; }
+.tab-group.active .subtabs { display: flex; }
+
+.subtab {
+  padding: 10px 16px; white-space: nowrap; cursor: pointer; color: var(--text-muted);
+  font-weight: 600; font-size: 13px; border-bottom: 2px solid transparent;
+  transition: color .15s, border-color .15s; -webkit-tap-highlight-color: transparent;
+  flex-shrink: 0;
+}
+.subtab:hover { color: var(--primary); }
+.subtab.active { color: var(--primary); border-bottom-color: var(--primary); }
+.subtab:active { background: var(--surface-2); }
+
+/* Mobile: subtabs scroll horizontal más compacto */
+@media (max-width: 600px) {
+  .tab-group .tab { font-size: 12px; }
+  .subtab { font-size: 12px; padding: 9px 14px; }
+}
+
+@media (max-width: 380px) {
+  .tab-group .tab { font-size: 11px; }
+  .subtab { font-size: 11px; padding: 8px 12px; }
+}
+
+/* ---------- Main / views ---------- */
+main {
+  padding: 12px;
+  max-width: 1100px;
+  margin: 0 auto;
+  padding-bottom: calc(80px + var(--safe-bottom));
+}
+.view { display: none; }
+.view.active { display: block; animation: viewFade .2s ease; }
+@keyframes viewFade { from { opacity: 0; } to { opacity: 1; } }
+
+.view-header {
+  display: flex; align-items: center; gap: 8px; margin-bottom: 14px; flex-wrap: wrap;
+}
+.view-header h2 { font-size: 18px; }
+.view-header .spacer { flex: 1; }
+/* v5.13.6 (UI-5): Badge del mes operativo en el header del panel */
+.mes-badge { font-size: 13px; font-weight: 400; }
+.mes-badge.muted { color: var(--text-muted); }
+.mes-badge.mes-cerrado {
+  color: #e6a700; background: rgba(245,158,11,0.1);
+  padding: 3px 10px; border-radius: var(--radius-sm);
+  border: 1px solid rgba(245,158,11,0.3); font-size: 12px;
+}
+
+
+/* ---------- Cards ---------- */
+.card {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 14px; box-shadow: var(--shadow); margin-bottom: 14px;
+}
+.card h3 { font-size: 13px; margin-bottom: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
+
+/* ---------- KPI grid ---------- */
+.kpi-grid {
+  display: grid; gap: 10px;
+  grid-template-columns: repeat(2, 1fr);
+  /* v5.13.15 (UI-1): Separar la cuadricula de KPIs del contenido inferior
+     (barra de busqueda, tarjetas, listas) para que no quede pegada. */
+  margin-bottom: 14px;
+}
+/* v5.13.16 (UI-3): Sub-titulos para agrupar KPIs en bloques tematicos
+   (Inversiones / Deudas personales) dentro de la vista unificada. */
+.kpi-group-title {
+  font-size: 12px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: .5px; color: var(--text-muted);
+  margin: 0 0 6px 0; padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.kpi {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px; box-shadow: var(--shadow);
+}
+.kpi .label { font-size: 11px; color: var(--text-muted); text-transform: uppercase; letter-spacing: .4px; }
+.kpi .value { font-size: 22px; font-weight: 800; margin-top: 4px; }
+.kpi .sub { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+/* v5.13.6 (UI-6): Badge distintivo para el equivalente en USD */
+.kpi .sub .usd-badge {
+  display: inline-block; background: var(--bg-alt); color: var(--text-muted);
+  padding: 1px 6px; border-radius: 4px; font-weight: 600; font-size: 10px;
+  margin-left: 4px; border: 1px solid var(--border);
+}
+
+.kpi.green .value { color: var(--success); }
+.kpi.ok .value { color: var(--success); }
+.kpi.amber .value { color: var(--warn); }
+.kpi.red .value { color: var(--danger); }
+.kpi.blue .value { color: var(--primary); }
+
+/* v5.10.4: KPIs clicables (Cobranza, Clientes morosos, Fondo de caja) */
+.kpi.kpi-click {
+  cursor: pointer; transition: transform .12s ease, box-shadow .12s ease, border-color .12s ease;
+  outline: none;
+}
+.kpi.kpi-click:hover {
+  transform: translateY(-2px); border-color: var(--primary);
+  box-shadow: 0 4px 14px rgba(37,99,235,.25);
+}
+.kpi.kpi-click:focus-visible {
+  border-color: var(--primary); box-shadow: 0 0 0 2px rgba(37,99,235,.4);
+}
+.kpi.kpi-click:active { transform: translateY(0); }
+
+/* ---------- v5.16.0: Panel — deltas ▲/▼ vs mes anterior ---------- */
+.kpi .sub .delta {
+  display: inline-block; margin-left: 4px; padding: 1px 6px;
+  border-radius: 4px; font-weight: 700; font-size: 10px;
+  border: 1px solid var(--border);
+}
+.kpi .sub .delta.up { color: var(--success); background: var(--success-soft); border-color: transparent; }
+.kpi .sub .delta.down { color: var(--danger); background: var(--danger-soft); border-color: transparent; }
+.kpi .sub .delta.flat { color: var(--text-muted); background: var(--bg-alt); }
+
+/* ---------- v5.16.0: Panel — "Requiere tu atención" ---------- */
+.atencion-item {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); margin-bottom: 8px;
+  background: var(--surface-2);
+}
+.atencion-item:last-child { margin-bottom: 0; }
+.atencion-item.red { border-left: 4px solid var(--danger); }
+.atencion-item.amber { border-left: 4px solid var(--warn); }
+.atencion-item.blue { border-left: 4px solid var(--primary); }
+.atencion-ico { font-size: 16px; flex: 0 0 auto; }
+.atencion-txt { flex: 1 1 auto; font-size: 13px; }
+.atencion-item .btn { flex: 0 0 auto; }
+.atencion-ok {
+  padding: 12px; border-radius: var(--radius-sm); text-align: center;
+  background: var(--success-soft); color: var(--success); font-weight: 600; font-size: 13px;
+}
+
+/* ---------- v5.16.0: Panel — tendencia de 6 meses ---------- */
+.tend-legend { display: flex; gap: 16px; margin-bottom: 10px; font-size: 12px; color: var(--text-muted); }
+.tend-key { display: inline-flex; align-items: center; gap: 5px; }
+.tend-key .dot { width: 10px; height: 10px; border-radius: 3px; display: inline-block; }
+.tend-key .dot.ing { background: var(--success); }
+.tend-key .dot.gas { background: var(--danger); }
+.tend-chart {
+  display: flex; align-items: flex-end; justify-content: space-between;
+  gap: 6px; height: 120px; padding: 0 2px;
+}
+.tend-col { flex: 1 1 0; display: flex; flex-direction: column; align-items: center; height: 100%; }
+.tend-bars { flex: 1 1 auto; display: flex; align-items: flex-end; gap: 3px; width: 100%; justify-content: center; }
+.tend-bar { width: 42%; max-width: 18px; border-radius: 3px 3px 0 0; transition: height .4s ease; }
+.tend-bar.ing { background: var(--success); }
+.tend-bar.gas { background: var(--danger); }
+.tend-col.actual .tend-lbl { font-weight: 800; color: var(--primary); }
+.tend-lbl { font-size: 10px; color: var(--text-muted); margin-top: 6px; text-transform: capitalize; }
+.tend-foot { margin-top: 10px; font-size: 11px; }
+
+/* ---------- v5.16.0: Panel — próximos cortes ---------- */
+.corte-row {
+  display: flex; align-items: center; gap: 12px;
+  padding: 10px 12px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); margin-bottom: 8px; background: var(--surface-2);
+}
+.corte-row:last-child { margin-bottom: 0; }
+.corte-row.vigente { border-color: var(--primary); background: var(--primary-soft); }
+.corte-dia {
+  flex: 0 0 auto; width: 46px; text-align: center; line-height: 1.1;
+}
+.corte-dia strong { font-size: 20px; display: block; }
+.corte-dia .muted { font-size: 10px; }
+.corte-info { flex: 1 1 auto; font-size: 13px; }
+.corte-estado {
+  flex: 0 0 auto; font-size: 11px; font-weight: 700; padding: 3px 8px;
+  border-radius: 20px; border: 1px solid var(--border);
+}
+.corte-estado.vigente { background: var(--primary); color: #fff; border-color: transparent; }
+.corte-estado.pasado { color: var(--text-muted); }
+.corte-estado.proximo { color: var(--warn); border-color: var(--warn); }
+
+/* ---------- v5.16.0: Panel — caja proyectada ---------- */
+.caja-proy { display: flex; flex-direction: column; gap: 8px; }
+.caja-linea {
+  display: flex; justify-content: space-between; align-items: center;
+  font-size: 13px; padding: 6px 0; border-bottom: 1px dashed var(--border);
+}
+.caja-linea.total {
+  border-bottom: none; border-top: 2px solid var(--border);
+  padding-top: 10px; font-size: 15px; font-weight: 800;
+}
+
+
+/* KPI: 2 columns on mobile, auto-fill on larger screens */
+@media (min-width: 600px) {
+  .kpi-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); }
+  .kpi .value { font-size: 24px; }
+}
+
+/* ---------- Buttons ---------- */
+.btn {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer;
+  border: 1px solid var(--border); background: var(--surface-2); color: var(--text);
+  padding: 10px 16px; border-radius: var(--radius-sm); font-size: 14px; font-weight: 600;
+  transition: background .15s, border-color .15s, transform .05s;
+  -webkit-tap-highlight-color: transparent;
+  min-height: 40px;
+}
+.btn:hover { background: var(--primary-soft); border-color: var(--primary); }
+.btn:active { transform: scale(.97); }
+.btn.primary { background: var(--primary); color: #fff; border-color: var(--primary); }
+.btn.primary:hover { background: var(--primary-hover); }
+.btn.success { background: var(--success); color: #fff; border-color: var(--success); }
+.btn.danger { background: var(--danger); color: #fff; border-color: var(--danger); }
+.btn.ghost { background: transparent; }
+.btn.sm { padding: 7px 12px; font-size: 13px; min-height: 34px; }
+.btn:disabled { opacity: .5; cursor: not-allowed; }
+
+/* ---------- Tables ---------- */
+.table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+th, td { padding: 10px 10px; text-align: left; border-bottom: 1px solid var(--border); }
+th { font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: .4px; position: sticky; top: 0; background: var(--surface); }
+tr:hover td { background: var(--surface-2); }
+td .actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+/* Responsive table → card layout on mobile */
+@media (max-width: 600px) {
+  .table-wrap.responsive table,
+  .table-wrap.responsive thead,
+  .table-wrap.responsive tbody,
+  .table-wrap.responsive tr,
+  .table-wrap.responsive th,
+  .table-wrap.responsive td { display: block; width: 100%; }
+  .table-wrap.responsive thead { display: none; }
+  .table-wrap.responsive tr {
+    margin-bottom: 10px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+    background: var(--surface); padding: 4px 0; box-shadow: var(--shadow);
+  }
+  .table-wrap.responsive tr:hover td { background: transparent; }
+  .table-wrap.responsive td {
+    display: flex; justify-content: space-between; align-items: center;
+    border-bottom: 1px solid var(--border); padding: 10px 14px; text-align: right;
+  }
+  .table-wrap.responsive td:last-child { border-bottom: none; }
+  .table-wrap.responsive td::before {
+    content: attr(data-label); font-weight: 600; font-size: 12px;
+    color: var(--text-muted); text-transform: uppercase; letter-spacing: .3px;
+    text-align: left; margin-right: 12px; flex-shrink: 0;
+  }
+  .table-wrap.responsive td .actions { justify-content: flex-end; }
+}
+
+/* Badges / status */
+.badge {
+  display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 700;
+}
+.badge.ok { background: var(--success-soft); color: var(--success); }
+.badge.warn { background: var(--warn-soft); color: var(--warn); }
+.badge.due { background: var(--danger-soft); color: var(--danger); }
+.badge.paid { background: var(--primary-soft); color: var(--primary); }
+.badge.muted { background: var(--surface-2); color: var(--text-muted); }
+
+/* ---------- Forms ---------- */
+.form-row { display: grid; gap: 12px; margin-bottom: 12px; }
+.form-row.cols-2 { grid-template-columns: 1fr; }
+.form-row.cols-3 { grid-template-columns: 1fr; }
+@media (min-width: 600px) {
+  .form-row.cols-2 { grid-template-columns: 1fr 1fr; }
+  .form-row.cols-3 { grid-template-columns: 1fr 1fr 1fr; }
+}
+label { font-size: 13px; font-weight: 600; color: var(--text-muted); display: block; margin-bottom: 4px; }
+input, select, textarea {
+  width: 100%; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text); font-size: 16px; font-family: inherit;
+  -webkit-appearance: none; appearance: none;
+}
+input:focus, select:focus, textarea:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 8L1 3h10z'/%3E%3C/svg%3E"); background-repeat: no-repeat; background-position: right 12px center; padding-right: 32px; }
+
+/* ---------- Modal (mobile: full-screen bottom sheet) ---------- */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(0,0,0,.5); z-index: 100;
+  display: none; align-items: flex-end; justify-content: center; overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+.modal-overlay.open { display: flex; animation: overlayIn .2s ease; }
+@keyframes overlayIn { from { background: rgba(0,0,0,0); } to { background: rgba(0,0,0,.5); } }
+
+.modal {
+  background: var(--surface); border-radius: var(--radius) var(--radius) 0 0;
+  box-shadow: var(--shadow-lg); width: 100%; max-width: 520px;
+  max-height: 92vh; overflow: hidden; display: flex; flex-direction: column;
+  animation: sheetUp .25s cubic-bezier(.32,.72,0,1);
+}
+@keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
+.modal.lg { max-width: 760px; }
+
+.modal-header {
+  padding: 14px 16px; border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; flex-shrink: 0;
+  position: relative;
+}
+.modal-header::before {
+  content: ''; position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
+  width: 36px; height: 4px; border-radius: 4px; background: var(--border);
+}
+.modal-header h3 { font-size: 17px; flex: 1; padding-top: 6px; }
+.modal-header .close {
+  cursor: pointer; font-size: 24px; color: var(--text-muted);
+  background: none; border: none; padding: 4px 8px; flex-shrink: 0;
+  -webkit-tap-highlight-color: transparent;
+}
+.modal-body { padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1; }
+.modal-footer {
+  padding: 12px 16px; padding-bottom: calc(12px + var(--safe-bottom));
+  border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end;
+  flex-shrink: 0; background: var(--surface);
+}
+.modal-footer .btn { flex: 1; justify-content: center; }
+
+/* Desktop modal: centered dialog */
+@media (min-width: 640px) {
+  .modal-overlay { align-items: flex-start; padding: 40px 16px; }
+  .modal {
+    border-radius: var(--radius); max-height: 85vh; margin: 0;
+    animation: modalIn .25s cubic-bezier(.32,.72,0,1);
+  }
+  @keyframes modalIn { from { opacity: 0; transform: translateY(-20px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+  .modal-header::before { display: none; }
+  .modal-header h3 { padding-top: 0; }
+  .modal-footer .btn { flex: none; }
+}
+
+/* ---------- Toast / notify ---------- */
+#notify-container {
+  position: fixed; bottom: calc(76px + var(--safe-bottom)); left: 50%; transform: translateX(-50%);
+  z-index: 200; display: flex; flex-direction: column; gap: 8px; align-items: center;
+  width: 100%; max-width: 420px; padding: 0 12px; pointer-events: none;
+}
+.toast {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: 12px 16px; box-shadow: var(--shadow-lg); font-size: 14px; width: 100%;
+  display: flex; gap: 10px; align-items: center; animation: toastIn .25s ease;
+  pointer-events: auto;
+}
+.toast.success { border-left: 4px solid var(--success); }
+.toast.error { border-left: 4px solid var(--danger); }
+.toast.warn { border-left: 4px solid var(--warn); }
+.toast.info { border-left: 4px solid var(--primary); }
+@keyframes toastIn { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes slideDown { from { opacity: 0; transform: translateY(-100%); } to { opacity: 1; transform: translateY(0); } }
+
+/* ---------- Empty state ---------- */
+.empty { text-align: center; padding: 40px 20px; color: var(--text-muted); }
+.empty .icon { font-size: 42px; margin-bottom: 8px; }
+
+/* ---------- Calendar ---------- */
+.cal-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; }
+.cal-head { text-align: center; font-size: 11px; font-weight: 700; color: var(--text-muted); padding: 4px 0; }
+.cal-day {
+  aspect-ratio: 1; border-radius: 6px; padding: 4px; font-size: 11px; cursor: default;
+  background: var(--surface-2); border: 1px solid var(--border); display: flex; flex-direction: column; gap: 2px;
+  min-height: 38px;
+}
+.cal-day.empty { background: transparent; border: none; }
+.cal-day.today { border-color: var(--primary); border-width: 2px; }
+.cal-day .num { font-weight: 700; font-size: 12px; }
+.cal-day .dot { width: 6px; height: 6px; border-radius: 50%; }
+.cal-day.ok .dot { background: var(--success); }
+.cal-day.warn .dot { background: var(--warn); }
+.cal-day.due .dot { background: var(--danger); }
+.cal-day.paid .dot { background: var(--primary); }
+.cal-day.parcial .dot { background: var(--warn); }
+/* v5.13.10 (BUG-4): estado 'por-iniciar' con color propio (gris), distinto de 'ok'. */
+.cal-day.por-iniciar .dot { background: var(--text-muted); }
+.cal-day.por-iniciar { border-style: dotted; opacity: .82; }
+/* v5.13.10 (UI-4): contenedor de puntos (uno por estado presente). */
+.cal-dots { display: flex; gap: 3px; flex-wrap: wrap; align-items: center; }
+.cal-dots .dot { display: inline-block; }
+
+/* v5.12.9 — Días de corte (5, 15, 25) destacados */
+.cal-day.corte {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  border-style: dashed;
+  border-width: 1.5px;
+  position: relative;
+}
+.cal-day.corte .num { color: var(--primary); }
+.cal-corte-tag {
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--primary);
+  background: var(--surface);
+  border: 1px solid var(--primary);
+  border-radius: 4px;
+  padding: 0 3px;
+  line-height: 14px;
+  display: inline-block;
+  white-space: nowrap;
+}
+
+/* v5.12.9 — Días clickeables (con clientes) */
+.cal-day.clickable {
+  cursor: pointer;
+  transition: transform .08s ease, box-shadow .08s ease, background .12s ease;
+}
+.cal-day.clickable:hover {
+  transform: translateY(-1px);
+  box-shadow: var(--shadow);
+}
+.cal-day.clickable:active {
+  transform: translateY(0);
+  background: var(--surface);
+}
+.cal-day.clickable:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 1px;
+}
+.cal-day.clickable.corte:hover {
+  background: var(--surface);
+  border-color: var(--primary);
+}
+.cal-count { font-size: 10px; color: var(--text-muted); }
+
+/* v5.13.10 (UI-6): clases semánticas para el modal del día (sustituyen estilos inline). */
+.cal-col-right { text-align: right; white-space: nowrap; }
+.cal-col-center { text-align: center; white-space: nowrap; }
+.cal-modal-plan { font-size: 12px; }
+.cal-modal-ip { font-size: 11px; }
+.cal-modal-note { font-size: 12px; }
+.cal-modal-desglose { font-size: 12px; margin-bottom: 12px; }
+.cal-modal-actions { margin-top: 14px; text-align: right; }
+.cal-deuda-total { font-size: 11px; }
+/* v5.13.11 (UI-movil): leyenda del calendario responsive.
+   Cada item es un chip compacto; la grilla se acomoda a 2-4 columnas
+   segun el ancho, evitando el desbordamiento horizontal en telefono. */
+.cal-legend {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+  gap: 6px 10px;
+  font-size: 12px;
+  align-items: center;
+  margin-top: 14px;
+}
+.cal-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cal-legend-item .badge { flex-shrink: 0; }
+@media (max-width: 379px) {
+  .cal-legend { grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 5px 8px; font-size: 11px; }
+}
+
+/* v5.13.11 (UI-movil): etiqueta de mes del header del calendario.
+   Antes tenia min-width:160px inline que forzaba overflow en telefonos. */
+.cal-mes-label { min-width: 160px; text-align: center; font-weight: 700; }
+@media (max-width: 599px) {
+  .cal-mes-label { min-width: 0; flex: 1 1 auto; text-align: center; font-size: 15px; }
+}
+
+/* v5.13.10 (UI-7): aviso de mes sin cobros programados. */
+#cal-empty-aviso { display: none; margin-top: 12px; text-align: center; color: var(--text-muted); font-size: 13px; }
+
+/* v5.13.11 (UI-movil): grid del calendario legible en telefono.
+   En pantallas < 600px las celdas usan minmax(52px,1fr) y la grilla
+   permite scroll horizontal suave si el telefono es muy estrecho (<372px),
+   en vez de aplastar el contenido. Se quita aspect-ratio:1 para que la
+   celda crezca verticalmente con num + tag + puntos + cuenta. */
+@media (max-width: 599px) {
+  .cal-grid {
+    grid-template-columns: repeat(7, minmax(50px, 1fr));
+    gap: 2px;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    padding-bottom: 4px;
+  }
+  .cal-day {
+    aspect-ratio: auto;
+    min-height: 52px;
+    padding: 3px;
+    gap: 1px;
+    font-size: 10px;
+  }
+  .cal-day .num { font-size: 11px; }
+  .cal-corte-tag { font-size: 8px; line-height: 13px; padding: 0 2px; }
+  .cal-count { font-size: 9px; }
+  .cal-head { font-size: 10px; padding: 3px 0; }
+}
+
+/* v5.13.11 (UI-movil): en telefonos muy estrechos (<380px) ocultamos la
+   palabra "Corte" del tag (queda solo el icono ✂) para que quepa, y
+   reducimos el min de las columnas para evitar scroll excesivo. */
+@media (max-width: 379px) {
+  .cal-grid { grid-template-columns: repeat(7, minmax(44px, 1fr)); }
+  .cal-day { min-height: 46px; }
+  .cal-corte-tag .cut-word { display: none; }
+  .cal-corte-tag { font-size: 9px; padding: 0 1px; }
+}
+
+@media (min-width: 600px) {
+  .cal-day { font-size: 12px; padding: 6px; min-height: 48px; }
+  .cal-corte-tag { font-size: 10px; }
+}
+
+/* ---------- Recibo ---------- */
+.recibo {
+  background: #fff; color: #111; border: 1px solid #ccc; border-radius: 8px;
+  padding: 20px; max-width: 420px; margin: 0 auto; font-family: "Courier New", monospace;
+}
+.recibo h2 { text-align: center; font-size: 18px; margin-bottom: 4px; }
+.recibo .line { border-top: 1px dashed #999; margin: 10px 0; }
+.recibo .row { display: flex; justify-content: space-between; margin: 4px 0; font-size: 14px; }
+.recibo .total { font-weight: 800; font-size: 16px; }
+
+/* ---------- Toolbar / filters ---------- */
+.toolbar { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; margin-bottom: 12px; }
+.toolbar .search { flex: 1; min-width: 140px; }
+.toolbar select { max-width: 180px; }
+
+/* ---------- PIN lock ---------- */
+#pin-lock {
+  position: fixed; inset: 0; background: var(--bg); z-index: 300;
+  display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 16px; padding: 20px;
+  padding-top: calc(20px + var(--safe-top));
+}
+#pin-lock .lock-icon { font-size: 48px; }
+#pin-lock input { max-width: 240px; text-align: center; font-size: 22px; letter-spacing: 8px; }
+
+/* ---------- Mobile bottom action bar (FAB) ---------- */
+.fab {
+  position: fixed; bottom: calc(76px + var(--safe-bottom)); right: 16px;
+  width: 56px; height: 56px; border-radius: 50%;
+  background: var(--primary); color: #fff; border: none;
+  font-size: 26px; cursor: pointer; box-shadow: var(--shadow-lg);
+  display: none; align-items: center; justify-content: center;
+  z-index: 45; -webkit-tap-highlight-color: transparent;
+  transition: transform .15s;
+}
+.fab:active { transform: scale(.9); }
+
+/* ---------- v5.12.7: Botón flotante de aviso de tasa USD ---------- */
+.fab-tasa {
+  position: fixed; bottom: calc(76px + var(--safe-bottom)); left: 16px;
+  width: 56px; height: 56px; border-radius: 50%;
+  color: #fff; border: none; font-size: 24px; cursor: pointer;
+  box-shadow: var(--shadow-lg);
+  display: flex; align-items: center; justify-content: center;
+  z-index: 46; -webkit-tap-highlight-color: transparent;
+  transition: transform .15s;
+}
+.fab-tasa:active { transform: scale(.9); }
+/* Estado aviso (24-72 h): ámbar */
+.fab-tasa-aviso { background: var(--amber); }
+/* Estado urgente (>72 h o nunca): rojo con animación pulse */
+.fab-tasa-urgente { background: var(--danger); animation: fab-tasa-pulse 1.4s ease-in-out infinite; }
+@keyframes fab-tasa-pulse {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(220,38,38,.5), var(--shadow-lg); }
+  50% { box-shadow: 0 0 0 14px rgba(220,38,38,0), var(--shadow-lg); }
+}
+
+/* ---------- v5.12.7: Indicador visual de estado de la tasa (Ajustes) ---------- */
+.tasa-indicator {
+  display: flex; align-items: center; gap: 6px;
+  margin-top: 6px; font-size: 12px;
+}
+.tasa-indicator-txt { color: var(--text-muted, #888); }
+.tasa-dot {
+  width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+  flex-shrink: 0;
+}
+.tasa-dot-ok { background: var(--green); box-shadow: 0 0 6px rgba(34,197,94,.5); }
+.tasa-dot-aviso { background: var(--amber); box-shadow: 0 0 6px rgba(245,158,11,.5); }
+.tasa-dot-urgente {
+  background: var(--danger); box-shadow: 0 0 6px rgba(220,38,38,.5);
+  animation: dot-pulse 1.4s ease-in-out infinite;
+}
+.tasa-dot-sintasa { background: var(--text-muted, #aaa); }
+@keyframes dot-pulse {
+  0%, 100% { transform: scale(1); opacity: 1; }
+  50% { transform: scale(1.4); opacity: .6; }
+}
+
+
+/* ---------- Moneda toggle (modal de cobro) ---------- */
+.moneda-toggle {
+  display: inline-flex; gap: 4px; background: var(--bg);
+  border-radius: 8px; padding: 3px;
+}
+.moneda-toggle .btn {
+  padding: 6px 16px; font-weight: 700; font-size: 13px;
+  border-radius: 6px; border: none; background: transparent;
+  color: var(--text-muted); cursor: pointer; transition: all .15s;
+}
+.moneda-toggle .btn.primary {
+  background: var(--primary); color: #fff;
+}
+.moneda-toggle .btn:disabled {
+  opacity: .4; cursor: not-allowed;
+}
+#cobro-monto-pagado, #cobro-monto-usd, #cobro-monto-cup {
+  font-size: 18px; font-weight: 700; padding: 10px 12px;
+  border: 2px solid var(--border); border-radius: 8px;
+  width: 100%; box-sizing: border-box;
+}
+#cobro-monto-pagado:focus, #cobro-monto-usd:focus, #cobro-monto-cup:focus {
+  border-color: var(--primary); outline: none;
+}
+#cobro-monto-usd { border-color: #2e7d32; }
+#cobro-monto-cup { border-color: var(--primary); }
+
+/* ---------- Desglose del pago (modal de cobro) ---------- */
+.cobro-desglose-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 6px 0; font-size: 14px;
+}
+.cobro-desglose-row .muted { font-size: 12px; }
+.cobro-desglose-row strong { font-size: 14px; }
+
+/* Badge de pago parcial */
+.badge.parcial {
+  background: #fff3cd; color: #856404;
+}
+.badge.parcial::before { content: '⏳ '; }
+/* Badge de cliente por iniciar (aun no le toca pagar) v5.10.5 */
+.badge.por-iniciar {
+  background: var(--surface-2); color: var(--text-muted);
+}
+.badge.por-iniciar::before { content: '⏭ '; }
+
+
+/* Fondo de caja en ajustes */
+#cfg-fondo-caja {
+  font-size: 16px; font-weight: 700; padding: 10px 12px;
+  border: 2px solid var(--border); border-radius: 8px;
+  width: 100%; box-sizing: border-box;
+}
+#cfg-fondo-caja:focus {
+  border-color: var(--primary); outline: none;
+}
+
+@media (max-width: 600px) {
+  .fab { display: flex; }
+}
+
+/* ---------- Misc ---------- */
+.muted { color: var(--text-muted); }
+.flex { display: flex; gap: 10px; align-items: center; }
+.flex.wrap { flex-wrap: wrap; }
+.grow { flex: 1; }
+.center { text-align: center; }
+.right { text-align: right; }
+.mt-8 { margin-top: 8px; } .mt-16 { margin-top: 16px; } .mt-24 { margin-top: 24px; }
+.mb-8 { margin-bottom: 8px; } .mb-16 { margin-bottom: 16px; }
+.pill { display: inline-block; padding: 2px 8px; border-radius: 12px; font-size: 12px; background: var(--primary-soft); color: var(--primary); font-weight: 600; }
+.divider { height: 1px; background: var(--border); margin: 16px 0; }
+.printable { display: none; }
+
+/* ---------- Mobile-specific tweaks ---------- */
+@media (max-width: 600px) {
+  html, body { font-size: 14px; }
+  main { padding: 10px; }
+  .view-header h2 { font-size: 17px; width: 100%; }
+  .view-header { gap: 6px; }
+  .view-header .btn { font-size: 13px; padding: 8px 12px; }
+  .card { padding: 12px; }
+  th, td { padding: 8px 8px; }
+  table { font-size: 13px; }
+  .btn { padding: 10px 14px; }
+  .modal-body { padding: 14px; }
+  .modal-header h3 { font-size: 16px; }
+  .recibo { padding: 16px; }
+  /* v5.13.11 (UI-movil): toolbar (filtros Realizados/Cobros) ocupa 2 filas
+     en pantallas estrechas: search a fila completa, selects+btn debajo. */
+  .toolbar .search { flex: 1 1 100%; min-width: 0; }
+  .toolbar select { flex: 1 1 40%; max-width: none; }
+  .toolbar .btn { flex: 1 1 100%; }
+}
+
+@media (max-width: 380px) {
+  .kpi-grid { grid-template-columns: 1fr; }
+  .kpi .value { font-size: 20px; }
+  .icon-btn { width: 32px; height: 32px; font-size: 15px; }
+}
+
+/* Print */
+@media print {
+  body * { visibility: hidden; }
+  #print-area, #print-area * { visibility: visible; }
+  #print-area { position: absolute; left: 0; top: 0; width: 100%; }
+  .no-print { display: none !important; }
+}
+
+/* === v5.8.5: Botones de selección de moneda (modal pago proveedor) === */
+.cobro-moneda-btn {
+  flex: 1; padding: 10px 8px; border: 2px solid var(--border); border-radius: 8px;
+  background: #fff; color: var(--text); font-size: 13px; font-weight: 600;
+  cursor: pointer; transition: all .15s;
+}
+.cobro-moneda-btn:hover { border-color: var(--primary); }
+.cobro-moneda-btn.active {
+  background: var(--primary); color: #fff; border-color: var(--primary);
+}
+
+/* === v5.8.6: Widget de pago del servicio de internet en el dashboard === */
+.prov-widget-head { font-size: 15px; margin-bottom: 10px; }
+.prov-widget-row {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+  font-size: 13px; padding: 4px 0;
+}
+.prov-widget-row.prov-paid { color: var(--green, #2e7d32); }
+.prov-widget-row.prov-due  { color: var(--red, #c62828); }
+.prov-widget-actions {
+  display: flex; gap: 8px; flex-wrap: wrap; margin-top: 10px;
+}
+
+/* === v5.8.7: Barra de capacidad de red (widget dashboard) === */
+.prov-cap { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
+.prov-cap-label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px; margin-bottom:6px; }
+.prov-cap-bar {
+  width:100%; height:10px; background: var(--surface-2); border-radius:6px; overflow:hidden;
+}
+.prov-cap-fill { height:100%; border-radius:6px; transition: width .25s ease; }
+.bar-green { background: linear-gradient(90deg, #2e7d32, #43a047); }
+.bar-amber { background: linear-gradient(90deg, #e6a700, #fbc02d); }
+.bar-red   { background: linear-gradient(90deg, #c62828, #e53935); }
+.prov-cap-sub { font-size:11px; margin-top:4px; }
+
+/* === v5.8.7: Aviso de capacidad en la card de Ajustes === */
+.prov-cap-aviso {
+  padding:10px 12px; border-radius:8px; font-size:13px;
+  background: var(--bg-alt); border:1px solid var(--border);
+}
+.prov-cap-aviso.prov-cap-ok    { border-color:#2e7d32; background: rgba(46,125,50,.08); }
+.prov-cap-aviso.prov-cap-warn  { border-color:#e6a700; background: rgba(230,167,0,.08); }
+.prov-cap-aviso.prov-cap-alert { border-color:#c62828; background: rgba(198,40,40,.08); }
+.prov-cap-aviso.muted { background: var(--bg-alt); border:1px dashed var(--border); color: var(--text-muted); }
+
+/* ============================================================
+   v5.12.6 — Barra de recuperación de la inversión (animada)
+   Reutiliza el patrón visual de la barra de capacidad de red,
+   pero con su propia clase para animar el ancho desde 0%.
+   ============================================================ */
+.recup-card { width: 100%; }
+.recup-head {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px; margin-bottom: 10px;
+}
+.recup-titulo { display: flex; align-items: center; gap: 6px; font-size: 14px; }
+.recup-ico { font-size: 18px; }
+.recup-pct { font-size: 20px; }
+.recup-pct strong { font-size: 20px; font-weight: 800; color: var(--primary); }
+.recup-bar {
+  width: 100%; height: 14px;
+  background: var(--surface-2); border-radius: 8px; overflow: hidden;
+  border: 1px solid var(--border);
+}
+.recup-fill {
+  height: 100%; width: 0%;
+  border-radius: 8px;
+  transition: width .15s linear;
+  background-size: 200% 100%;
+}
+.recup-fill.recup-green { background: linear-gradient(90deg, #2e7d32, #43a047); }
+.recup-fill.recup-amber { background: linear-gradient(90deg, #e6a700, #fbc02d); }
+.recup-fill.recup-red   { background: linear-gradient(90deg, #c62828, #e53935); }
+
+.recup-datos {
+  display: flex; flex-wrap: wrap; gap: 16px 24px;
+  margin-top: 12px;
+}
+.recup-dato { display: flex; flex-direction: column; gap: 2px; min-width: 110px; }
+.recup-dato .muted { font-size: 11px; text-transform: uppercase; letter-spacing: .4px; }
+.recup-dato strong { font-size: 15px; font-weight: 700; }
+.recup-estado { margin-top: 10px; font-size: 12px; }
+
+/* En móviles compactar los datos de recuperación en columna si hace falta */
+@media (max-width: 599px) {
+  .recup-datos { gap: 12px 18px; }
+  .recup-dato { min-width: 90px; }
+  .recup-pct strong { font-size: 18px; }
+}
+
+/* ============================================================
+   v5.10.0 — Cintillas colapsables (accordion cards)
+   Tarjetas expandibles para optimizar la interfaz en móvil.
+   ============================================================ */
+
+/* Contenedor de la lista de tarjetas (sustituye a table-wrap en secciones accordion).
+   v5.14.3: también usado por el "Historial de cobros" de la vista Reportes
+   (#lista-historial-reportes) para agrupar por mes en cintillas colapsables. */
+.accordion-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Tarjeta individual */
+.acc-card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.acc-card.open {
+  border-color: var(--primary);
+  box-shadow: var(--shadow-lg);
+}
+/* v5.13.7 (UI-9): borde lateral de color segun estado del cliente */
+.acc-card[data-estado="due"]     { border-left: 3px solid var(--danger); }
+.acc-card[data-estado="warn"]    { border-left: 3px solid var(--warn); }
+.acc-card[data-estado="paid"]    { border-left: 3px solid var(--success); }
+.acc-card[data-estado="parcial"] { border-left: 3px solid var(--warn); }
+.acc-card[data-estado="inactivo"]{ border-left: 3px solid var(--text-muted); }
+.acc-card[data-estado="por-iniciar"] { border-left: 3px solid var(--text-muted); }
+
+/* Cabecera / resumen (la parte siempre visible, táctil) */
+.acc-summary {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  transition: background .15s ease;
+}
+.acc-summary:active { background: var(--surface-2); }
+.acc-card.open .acc-summary { border-bottom: 1px solid var(--border); }
+
+/* Indicador de estado (punto de color a la izquierda) */
+.acc-dot {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  background: var(--text-muted);
+}
+.acc-dot.ok      { background: var(--success); }
+.acc-dot.warn    { background: var(--warn); }
+.acc-dot.due     { background: var(--danger); }
+.acc-dot.paid    { background: var(--primary); }
+.acc-dot.parcial { background: var(--warn); }
+.acc-dot.inactivo     { background: var(--text-muted); }
+
+/* Contenido principal del resumen: ocupa el espacio disponible */
+.acc-summary-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.acc-summary-name {
+  font-weight: 700;
+  font-size: 15px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.acc-summary-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+.acc-summary-sub .acc-ip {
+  font-family: ui-monospace, "SF Mono", "Cascadia Code", monospace;
+  font-size: 11px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: 4px;
+}
+
+/* Total a pagar (lado derecho del resumen) */
+.acc-summary-total {
+  text-align: right;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 1px;
+}
+.acc-summary-total .amt {
+  font-weight: 800;
+  font-size: 15px;
+  color: var(--text);
+  white-space: nowrap;
+}
+.acc-summary-total .amt.paid { color: var(--success); }
+.acc-summary-total .lbl {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+}
+
+/* Flecha/chevron indicador de expansión */
+.acc-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: transform .22s ease;
+  margin-left: 2px;
+}
+.acc-card.open .acc-chevron { transform: rotate(180deg); }
+
+/* Cuerpo expandible (oculto por defecto) */
+.acc-details {
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .28s ease;
+}
+.acc-card.open .acc-details { max-height: 5000px; }
+
+/* Filas de datos dentro del detalle (label + valor) */
+.acc-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+}
+.acc-row:last-child { border-bottom: none; }
+.acc-row .acc-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: .3px;
+  flex-shrink: 0;
+}
+.acc-row .acc-value {
+  text-align: right;
+  font-weight: 600;
+}
+
+/* Bloque de acciones dentro del detalle */
+.acc-actions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  padding: 10px 14px;
+  justify-content: flex-end;
+}
+
+/* Estado vacío para listas accordion */
+.acc-empty {
+  text-align: center;
+  padding: 32px 16px;
+  color: var(--text-muted);
+}
+.acc-empty .icon { font-size: 32px; margin-bottom: 8px; }
+
+/* v5.13.11 (UI-movil): resumen accordion en 2 filas en pantallas estrechas.
+   Fila 1: [dot] nombre + badge   ....   monto
+   Fila 2:               fecha . concepto (full width, truncable)
+   Asi evitamos que el monto y el sub-texto se solapen en ~360px. */
+@media (max-width: 640px) {
+  .acc-summary { padding: 10px 11px; gap: 7px; flex-wrap: wrap; }
+  .acc-summary-main { flex: 1 1 55%; min-width: 0; }
+  .acc-summary-total { flex: 0 0 auto; max-width: 40%; }
+  .acc-summary-name {
+    font-size: 13.5px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    display: flex; align-items: center; gap: 5px;
+  }
+  .acc-summary-name .badge { font-size: 9px !important; padding: 1px 5px; }
+  .acc-summary-name .pill  { font-size: 9px !important; padding: 1px 5px; }
+  .acc-summary-sub {
+    font-size: 11px;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    flex-basis: 100%;
+    order: 3;
+    width: 100%;
+  }
+  .acc-summary-total .amt { font-size: 13.5px; }
+  .acc-summary-total .lbl { font-size: 9px; }
+  .acc-summary-total .pill { font-size: 9px !important; }
+  .acc-chevron { font-size: 11px; order: 2; }
+  .acc-row { padding: 8px 12px; font-size: 13px; gap: 8px; }
+  .acc-row .acc-label { font-size: 10px; }
+}
+
+/* v5.12.3 — Cintillas de mes para el historial de cobros (agrupacion por mes) */
+.cintilla-mes {
+  background: var(--bg-alt);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  transition: border-color .18s ease, box-shadow .18s ease;
+}
+.cintilla-mes.cintilla-mes-open {
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
+}
+.cintilla-mes-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  background: var(--surface, #fff);
+  border-left: 4px solid var(--primary);
+  transition: background .15s ease;
+}
+.cintilla-mes-head:active { background: var(--surface-2, #eee); }
+.cintilla-mes-icon {
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.cintilla-mes-titulo {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+.cintilla-mes-nombre {
+  font-weight: 800;
+  font-size: 15px;
+  text-transform: capitalize;
+  color: var(--text);
+}
+.cintilla-mes-sub {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.cintilla-mes-chevron {
+  flex-shrink: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  margin-left: 2px;
+}
+.cintilla-mes-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  max-height: 0;
+  overflow: hidden;
+  transition: max-height .3s ease, padding .3s ease;
+}
+.cintilla-mes.cintilla-mes-open .cintilla-mes-body {
+  max-height: 5000px;
+}
+.cintilla-mes-body .acc-card {
+  box-shadow: none;
+}
+/* v5.13.11 (UI-movil): cintilla de mes mas compacta en telefono */
+@media (max-width: 640px) {
+  .cintilla-mes-head { padding: 10px 11px; gap: 7px; }
+  .cintilla-mes-nombre { font-size: 13.5px; }
+  .cintilla-mes-sub { font-size: 11px; }
+  .cintilla-mes-body { padding: 7px 7px; gap: 7px; }
+}
+
+/* v5.11.2 — Animación del punto rojo de "cambios sin guardar" */
+@keyframes rnpulse {
+  0%   { opacity: 1; transform: scale(1); }
+  50%  { opacity: 0.4; transform: scale(0.8); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+/* v5.15 — Botón regalo 🎁 (acceso rápido a bonificaciones/descuentos por
+   cliente en la lista de Cobros del mes). Reposo: discreto (mismo tono que
+   un botón secundario). Con descuentos activos este mes (.has-desc):
+   destaca en verde con contador. Funciona en tema claro y oscuro gracias
+   a las variables. */
+.btn.gift-btn {
+  background: var(--surface-2);
+  border-color: var(--border);
+  font-size: 15px;
+  line-height: 1;
+  padding: 7px 11px;
+}
+.btn.gift-btn:hover {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+}
+.btn.gift-btn.has-desc {
+  background: var(--success-soft);
+  border-color: var(--success);
+}
+.btn.gift-btn.has-desc:hover {
+  background: var(--success);
+  color: #fff;
+}
+.gift-count {
+  display: inline-block;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  margin-left: 2px;
+  border-radius: 999px;
+  background: var(--success);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 16px;
+  text-align: center;
+  vertical-align: 1px;
+}
+/* v5.15 — Detalle "Bonificaciones" en la ficha de cobro: badges apilables */
+.acc-row .acc-value .badge.ok { display: inline-block; margin: 2px 4px 2px 0; }
+

@@ -1,0 +1,100 @@
+name: Compilar APK AdminRed
+
+# Se ejecuta automáticamente cada vez que subes cambios a la rama main,
+# y también se puede lanzar a mano desde la pestaña "Actions" de GitHub.
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+# Permisos necesarios para publicar el APK como "release" descargable.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Compilar y firmar APK
+    runs-on: ubuntu-latest
+
+    steps:
+      # 1. Descargar el código del repositorio
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      # 2. Instalar Node.js (para Capacitor)
+      - name: Instalar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # 3. Instalar JDK 17 (requerido por Android Gradle Plugin 8.x)
+      - name: Instalar JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'temurin'
+          java-version: '17'
+
+      # 4. Instalar el SDK de Android
+      - name: Configurar Android SDK
+        uses: android-actions/setup-android@v3
+
+      # 5. Instalar dependencias de npm (Capacitor y plugins)
+      - name: Instalar dependencias
+        run: npm ci
+
+      # 6. Sincronizar los assets web (www/) con el proyecto Android
+      - name: Sincronizar Capacitor
+        run: npx cap sync android
+
+      # 7. Reconstruir el keystore desde el secret cifrado de GitHub
+      - name: Restaurar keystore de firma
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 -d > adminred-release.keystore
+          cat > android/keystore.properties <<EOF
+          storeFile=../../adminred-release.keystore
+          storePassword=${{ secrets.KEYSTORE_PASSWORD }}
+          keyAlias=${{ secrets.KEY_ALIAS }}
+          keyPassword=${{ secrets.KEY_PASSWORD }}
+          EOF
+
+      # 8. Compilar el APK de release (firmado)
+      - name: Compilar APK de release
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon
+
+      # 9. Renombrar el APK con la versión para que sea fácil de identificar
+      - name: Preparar APK final
+        id: apk
+        run: |
+          VERSION=$(grep -oP "APP_VERSION\s*=\s*'\K[^']+" www/js/version.js)
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          cp android/app/build/outputs/apk/release/app-release.apk "AdminRed_v${VERSION}.apk"
+          ls -la "AdminRed_v${VERSION}.apk"
+
+      # 10. Guardar el APK como artefacto descargable del workflow
+      - name: Subir APK como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdminRed-APK
+          path: AdminRed_v*.apk
+          retention-days: 90
+
+      # 11. Publicar el APK como "release" descargable desde el repo
+      - name: Publicar release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.apk.outputs.version }}
+          name: AdminRed v${{ steps.apk.outputs.version }}
+          body: |
+            APK de AdminRed generado automáticamente.
+
+            - **Versión:** ${{ steps.apk.outputs.version }}
+            - **Paquete:** com.rednet.adminred
+            - **Compilado:** ${{ github.event.head_commit.timestamp || github.run_started_at }}
+
+            Descarga el archivo `.apk` de abajo e instálalo en tu teléfono Android.
+          files: AdminRed_v*.apk
+          fail_on_unmatched_files: true
