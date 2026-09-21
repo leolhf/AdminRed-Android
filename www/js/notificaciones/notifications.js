@@ -23,6 +23,15 @@
  *   - IDs por hash de cliente (RN.notify._idCliente) y cancelación individual
  *     (RN.notify.cancelarCliente) al enviar WhatsApp o registrar el cobro.
  *
+ * v5.27.1 — Ciclo de vida del TOQUE:
+ *   - Tocar un recordatorio NO lo elimina: abre el modal del cliente y la
+ *     notificación permanece (autoCancel:false + ongoing). Sólo se elimina
+ *     cuando se toma una decisión (cobro registrado o WhatsApp enviado),
+ *     que es donde se llama cancelarCliente().
+ *   - Cada vez que la app pasa a primer plano (visibilitychange) y tras el
+ *     toque, revisarRecordatorios() re-publica los avisos de clientes sin
+ *     acción en el día (mismo ID -> reemplaza, nunca duplica).
+ *
  * v5.25.1 — Recordatorios en 3 GRUPOS (alineados con el modelo v5.10.5):
  *   1. MOROSOS (getMora > 0): clientes con meses completos de atraso — prioridad
  *      máxima, con deuda TOTAL (servicio + equipo) vía deudaTotalCliente().
@@ -542,11 +551,33 @@ RN.notify.init = function () {
 
   // v5.26.1: al volver la app a primer plano, re-evaluar los recordatorios para
   // re-publicar los que se hayan descartado (persistencia real).
+  // v5.27.1: aquí se cumple la regla de negocio — al abrir la APK en primer
+  // plano se REACTIVAN todos los recordatorios de clientes que NO tengan una
+  // acción registrada en el día ('wa' de hoy, 'pagado' o 'visto' los excluye;
+  // ver notify-state.estaResuelto). Los ya resueltos no se duplican porque
+  // schedule() reemplaza por el mismo ID estable (_idCliente).
   document.addEventListener('visibilitychange', function () {
     if (document.visibilityState === 'visible') {
       try { RN.notify.revisarRecordatorios(); } catch (e) {}
     }
   });
+
+  // v5.27.1: en la APK, además del visibilitychange del WebView usamos el
+  // evento oficial appStateChange del plugin App (Capacitor), que dispara de
+  // forma fiable en onResume. Garantiza la reactivación al abrir la app aunque
+  // el WebView tarde en emitir visibilitychange.
+  if (RN.platform && RN.platform.esNativo()) {
+    var appPlugin = RN.platform.plugin('App');
+    if (appPlugin && appPlugin.addListener) {
+      try {
+        appPlugin.addListener('appStateChange', function (st) {
+          if (st && st.isActive) {
+            try { RN.notify.revisarRecordatorios(); } catch (e) {}
+          }
+        });
+      } catch (e) { /* no soportado */ }
+    }
+  }
 
   // FIX v5.25.1: en la APK el permiso de notificaciones nunca se pedía solo —
   // requestPermiso() estaba atado exclusivamente al botón de Ajustes
@@ -594,10 +625,15 @@ RN.notify.init = function () {
       ln.addListener('localNotificationActionPerformed', function (ev) {
         var extra = ev && ev.notification && ev.notification.extra;
         if (extra && (extra.tipo === 'recordatorio' || extra.tipo === 'recordatorio-fondo')) {
-          // v5.26.1 (FIX): abrir el modal de acciones del cliente concreto
-          // (cobrar / enviar WhatsApp), en lugar de sólo ir a la pestaña Cobros.
+          // v5.27.1 (FIX): al tocar la notificación se abre el modal del cliente
+          // (cobrar / WhatsApp) pero el recordatorio NO se elimina: sigue en la
+          // bandeja hasta que el operador tome una decisión (cobrar o enviar
+          // WhatsApp), que es donde se llama RN.notify.cancelarCliente().
           if (extra.clienteId) { RN.notify._abrirAccionCliente(extra.clienteId); }
           else { try { RN.tabs.ir('cobros'); } catch (e) {} }
+          // Si el sistema retiró la notificación al abrir la app por el toque,
+          // se vuelve a publicar de inmediato (mismo ID -> reemplaza, no duplica).
+          setTimeout(function () { try { RN.notify.revisarRecordatorios(); } catch (e) {} }, 800);
         }
       });
     } catch (e) { /* no soportado */ }
