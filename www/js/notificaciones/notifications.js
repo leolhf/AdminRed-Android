@@ -244,6 +244,59 @@ RN.notify.cancelarCliente = async function (clienteId) {
   catch (e) { /* silencioso */ }
 };
 
+// --- v5.26.1: persistencia REAL de los recordatorios ---
+// Si el usuario desliza/descarta un recordatorio (o pulsa "Limpiar todo"), NO
+// debe desaparecer para el resto del día. En cada revisión comprobamos qué
+// notificaciones siguen entregadas (getDelivered) y volvemos a publicar las que
+// falten, aunque ya estuvieran marcadas como notificadas.
+RN.notify._vivas = null;
+
+RN.notify._cargarVivas = async function () {
+  var ln = RN.notify._ln();
+  if (!ln || typeof ln.getDelivered !== 'function') { RN.notify._vivas = null; return; }
+  try {
+    var d = await ln.getDelivered();
+    var s = {};
+    (d && d.notifications ? d.notifications : []).forEach(function (n) { s[n.id] = true; });
+    RN.notify._vivas = s;
+  } catch (e) { RN.notify._vivas = null; }
+};
+
+/** ¿Sigue entregada esa notificación? Sin datos devuelve true (no duplicar). */
+RN.notify._sigueViva = function (id) {
+  if (!RN.notify._vivas) return true;
+  return !!RN.notify._vivas[id];
+};
+
+// --- v5.26.1: al tocar una notificación de CLIENTE, abrir su modal de acciones ---
+RN.notify._accionCliente = function (clienteId, accion) {
+  try { RN.uiComponents.cerrarModal(); } catch (e) {}
+  if (accion === 'cobrar') { try { RN.modalCobro.abrir(clienteId); } catch (e) {} return; }
+  if (accion === 'wa') { RN.whatsapp.enviarRecordatorio(clienteId); return; }
+};
+
+RN.notify._abrirAccionCliente = function (clienteId) {
+  var c = RN.state.clients.find(function (x) { return x.id === clienteId; });
+  if (!c) { try { RN.tabs.ir('cobros'); } catch (e) {} return; }
+  try { RN.tabs.ir('cobros'); } catch (e) {}
+  var mes = RN.calc.mesActualStr();
+  var pagado = RN.calc.getStatus(c) === 'paid';
+  var html =
+    '<div class="modal-header"><h3>' + RN.render.esc(c.nombre) + '</h3>' +
+      '<button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>' +
+    '<div class="modal-body">' +
+      '<p class="muted mb-16">Corte día ' + (c.diaPago || 1) + ' · ' + RN.calc.mesTexto(mes) + '</p>' +
+      '<p>Deuda total: <b>' + RN.calc.formatCUP(RN.calc.deudaTotalCliente(c, mes)) + '</b></p>' +
+      '<p class="muted">' + (pagado ? 'Pagado este mes' : 'Pendiente de pago') + '</p>' +
+    '</div>' +
+    '<div class="modal-footer">' +
+      '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cerrar</button>' +
+      '<button class="btn" onclick="RN.notify._accionCliente(\'' + c.id + '\',\'wa\')">💬 WhatsApp</button>' +
+      '<button class="btn primary" onclick="RN.notify._accionCliente(\'' + c.id + '\',\'cobrar\')">💵 Cobrar</button>' +
+    '</div>';
+  RN.uiComponents.modal(html, {});
+};
+
 /**
  * Revisa los clientes y lanza recordatorios en 3 grupos (v5.25.1):
  *   - MOROSOS: getMora(c) > 0 (meses completos de atraso, modelo v5.10.5).
@@ -301,10 +354,14 @@ RN.notify.revisarRecordatorios = async function () {
       return;
     }
 
+    // v5.26.1: saber qué recordatorios siguen entregados antes de re-publicar.
+    await RN.notify._cargarVivas();
+
     // Grupo 1: MOROSOS (IDs 2000+i). Deuda TOTAL (servicio pendiente + equipo).
     for (var i = 0; i < morosos.length; i++) {
       var cm = morosos[i];
-      if (RN.notify._yaNotificado(cm.id, 'mora')) continue;
+      var idMora = RN.notify._idCliente(cm.id, 'mora');
+      if (RN.notify._yaNotificado(cm.id, 'mora') && RN.notify._sigueViva(idMora)) continue;
       if (RN.notifyState && RN.notifyState.estaResuelto(cm.id, cm.diaPago)) continue;
       var m = RN.calc.getMora(cm);
       await RN.notify.local(
@@ -323,7 +380,8 @@ RN.notify.revisarRecordatorios = async function () {
     // Grupo 2: COBRANZA HOY (IDs 2020+j).
     for (var j = 0; j < cobranHoy.length; j++) {
       var ch = cobranHoy[j];
-      if (RN.notify._yaNotificado(ch.id, 'hoy')) continue;
+      var idHoy = RN.notify._idCliente(ch.id, 'hoy');
+      if (RN.notify._yaNotificado(ch.id, 'hoy') && RN.notify._sigueViva(idHoy)) continue;
       if (RN.notifyState && RN.notifyState.estaResuelto(ch.id, ch.diaPago)) continue;
       await RN.notify.local(
         'Pago de hoy',
@@ -341,7 +399,8 @@ RN.notify.revisarRecordatorios = async function () {
     // Grupo 3: VENCE MAÑANA (IDs 2040+k).
     for (var k = 0; k < venceManana.length; k++) {
       var vm = venceManana[k];
-      if (RN.notify._yaNotificado(vm.id, 'manana')) continue;
+      var idMan = RN.notify._idCliente(vm.id, 'manana');
+      if (RN.notify._yaNotificado(vm.id, 'manana') && RN.notify._sigueViva(idMan)) continue;
       if (RN.notifyState && RN.notifyState.estaResuelto(vm.id, vm.diaPago)) continue;
       var diaCorte = Math.min(vm.diaPago || 1, diasMes);
       await RN.notify.local(
@@ -360,7 +419,8 @@ RN.notify.revisarRecordatorios = async function () {
     // Grupo 4 (v5.26.0): INICIO DE CICLO — recordatorio permanente del corte vigente.
     for (var m2 = 0; m2 < enCiclo.length; m2++) {
       var ec = enCiclo[m2];
-      if (RN.notify._yaNotificado(ec.id, 'ciclo')) continue;
+      var idCiclo = RN.notify._idCliente(ec.id, 'ciclo');
+      if (RN.notify._yaNotificado(ec.id, 'ciclo') && RN.notify._sigueViva(idCiclo)) continue;
       await RN.notify.local(
         'Inicia tu corte (día ' + cv.diaPago + ')',
         ec.nombre + ': tu ciclo de pago está abierto. Debes ' +
@@ -480,6 +540,14 @@ RN.notify._cancelarFondo = async function () {
 RN.notify.init = function () {
   RN.notify._crearCanales();
 
+  // v5.26.1: al volver la app a primer plano, re-evaluar los recordatorios para
+  // re-publicar los que se hayan descartado (persistencia real).
+  document.addEventListener('visibilitychange', function () {
+    if (document.visibilityState === 'visible') {
+      try { RN.notify.revisarRecordatorios(); } catch (e) {}
+    }
+  });
+
   // FIX v5.25.1: en la APK el permiso de notificaciones nunca se pedía solo —
   // requestPermiso() estaba atado exclusivamente al botón de Ajustes
   // (index.html "🔔 Activar notificaciones"). En Android 13+ (POST_NOTIFICATIONS)
@@ -513,7 +581,10 @@ RN.notify.init = function () {
       ln.addListener('localNotificationActionPerformed', function (ev) {
         var extra = ev && ev.notification && ev.notification.extra;
         if (extra && (extra.tipo === 'recordatorio' || extra.tipo === 'recordatorio-fondo')) {
-          try { RN.tabs.ir('cobros'); } catch (e) {}
+          // v5.26.1 (FIX): abrir el modal de acciones del cliente concreto
+          // (cobrar / enviar WhatsApp), en lugar de sólo ir a la pestaña Cobros.
+          if (extra.clienteId) { RN.notify._abrirAccionCliente(extra.clienteId); }
+          else { try { RN.tabs.ir('cobros'); } catch (e) {} }
         }
       });
     } catch (e) { /* no soportado */ }

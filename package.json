@@ -1,6 +1,6 @@
 {
   "name": "adminred",
-  "version": "5.26.0",
+  "version": "5.26.1",
   "description": "AdminRed (RedNet) — Administración de negocio de reventa de servicio de internet. App nativa Android (Capacitor).",
   "main": "index.js",
   "scripts": {

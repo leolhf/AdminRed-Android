@@ -313,7 +313,11 @@ RN.update.init = function () {
     try {
       ln.addListener('localNotificationActionPerformed', function (ev) {
         var extra = ev && ev.notification && ev.notification.extra;
-        var url = (extra && extra.url) || RN.update.URL_RELEASE;
+        // v5.26.1 (FIX): reaccionar SÓLO a las notificaciones de ACTUALIZACIÓN.
+        // Antes cualquier toque abría la descarga (incluidas las de clientes),
+        // porque este listener ignoraba 'extra.tipo'.
+        if (!extra || extra.tipo !== 'update') return;
+        var url = extra.url || RN.update.URL_RELEASE;
         try { window.open(url, '_blank', 'noopener'); } catch (e) {}
       });
     } catch (e) { /* no soportado */ }
