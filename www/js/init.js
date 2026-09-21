@@ -188,8 +188,11 @@ RN.init.arrancar = async function () {
   // 15. PIN (si hay)
   RN.pin.init();
 
-  // 16. Notificaciones periódicas
-  setInterval(RN.notify.revisarRecordatorios, 3600000); // cada hora
+  // 16. Notificaciones periódicas (v5.25.0: cada 4 h, con soporte nativo)
+  if (RN.notify && RN.notify.init) RN.notify.init();
+  // Revisión inicial (tras cargar) y luego cada 4 horas.
+  setTimeout(function () { try { RN.notify.revisarRecordatorios(); } catch (e) {} }, 6000);
+  setInterval(RN.notify.revisarRecordatorios, RN.notify.INTERVALO_MS); // cada 4 horas
 
   // 17. Guardar antes de salir si hay cambios
   window.addEventListener('beforeunload', (e) => {
