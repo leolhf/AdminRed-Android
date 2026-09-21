@@ -26,6 +26,11 @@ adminred-release.keystore
 *.jks
 android/keystore.properties
 
+# === Repos git auxiliares (NO subir) ===
+# El repo web usa un GIT_DIR externo para no crear www/.git
+.git-web/
+www/.git/
+
 # Sistema / editor
 .DS_Store
 Thumbs.db
