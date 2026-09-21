@@ -688,6 +688,14 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 }
 #pin-lock .lock-icon { font-size: 48px; }
 #pin-lock input { max-width: 240px; text-align: center; font-size: 22px; letter-spacing: 8px; }
+#pin-lock input.shake { animation: pin-shake .4s ease; border-color: var(--danger); }
+@keyframes pin-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-8px); }
+  40% { transform: translateX(8px); }
+  60% { transform: translateX(-5px); }
+  80% { transform: translateX(5px); }
+}
 
 /* ---------- Mobile bottom action bar (FAB) ---------- */
 .fab {

@@ -7,6 +7,7 @@ const STORAGE_KEYS = {
   CONFIG: 'adminred:config',
   THEME: 'adminred:theme',
   PIN: 'adminred:pin',
+  PIN_LEN: 'adminred:pin-len',   // longitud del PIN (para auto-confirmar al escribir)
   VERSION: 'adminred:version',
   FILE_ENCRYPTED: 'adminred:encrypted',
   RECIBO_COUNTER: 'adminred:recibo-counter',

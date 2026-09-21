@@ -18,9 +18,8 @@
     <div class="lock-icon">🔒</div>
     <h2>Acceso a AdminRed</h2>
     <p class="muted" id="pin-label">Ingresa tu PIN</p>
-    <input type="password" id="pin-input" inputmode="numeric" maxlength="8" placeholder="••••">
+    <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="8" placeholder="••••">
     <div class="flex" style="gap:10px">
-      <button class="btn primary" id="pin-unlock">Desbloquear</button>
       <button class="btn ghost" id="pin-setup-toggle" style="display:none">Configurar PIN</button>
     </div>
     <p class="muted" style="font-size:12px;max-width:300px;text-align:center" id="pin-hint">
