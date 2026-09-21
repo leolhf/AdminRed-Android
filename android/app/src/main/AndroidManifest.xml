@@ -33,6 +33,25 @@
                 android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/file_paths"></meta-data>
         </provider>
+
+        <!-- v5.27.0: Servicio en PRIMER PLANO — mantiene la app viva en segundo
+             plano y publica la notificación PERMANENTE por defecto ("AdminRed
+             activo"). En API 34 (targetSdk 34) el atributo
+             android:foregroundServiceType es OBLIGATORIO; usamos dataSync. -->
+        <service
+            android:name=".ForegroundService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
+
+        <!-- v5.27.0: Relanza el servicio tras reiniciar el equipo. -->
+        <receiver
+            android:name=".BootReceiver"
+            android:exported="true"
+            android:enabled="true">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+            </intent-filter>
+        </receiver>
     </application>
 
     <!-- Permissions -->
@@ -48,4 +67,10 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- v5.26.0: reprogramar los avisos de apertura de ciclo tras reiniciar el equipo -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- v5.27.0: servicio en primer plano (obligatorio desde Android 9 / API 28) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- v5.27.0: permiso del TIPO de servicio en primer plano (obligatorio desde API 34) -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- v5.27.0: exempte la app del ahorro de batería agresivo en su modalidad "sin restricciones" -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS" />
 </manifest>

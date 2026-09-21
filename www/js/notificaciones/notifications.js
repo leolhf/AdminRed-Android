@@ -558,6 +558,19 @@ RN.notify.init = function () {
   // muestra su diálogo oficial y recuerda la respuesta; es idempotente).
   if (RN.platform && RN.platform.esNativo()) {
     RN.notify.requestPermiso().then(function () {
+      // v5.27.0: avisar UNA vez sobre la optimización de batería. Con el
+      // servicio en primer plano nativo el proceso ya sobrevive, pero muchos
+      // fabricantes (Xiaomi, Huawei, Samsung...) siguen matando apps en
+      // segundo plano salvo que el usuario las excluya manualmente.
+      try {
+        if (!localStorage.getItem('rn_aviso_bateria_v527')) {
+          localStorage.setItem('rn_aviso_bateria_v527', '1');
+          RN.notifyUI.toast(
+            'Para que los recordatorios nunca se detengan, en Ajustes → Aplicaciones → AdminRed activa "Sin restricciones de batería" y permite el inicio automático.',
+            'warn', 12000
+          );
+        }
+      } catch (e) {}
       // FIX v5.25.1: en Android 14 (targetSdk 34) SCHEDULE_EXACT_ALARM ya no
       // viene concedida de fábrica; sin ella las programaciones exactas se
       // aplazan o no se entregan. Avisamos al usuario con instrucción clara.
