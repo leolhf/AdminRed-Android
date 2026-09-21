@@ -40,14 +40,16 @@ public class MainActivity extends BridgeActivity {
     ForegroundService.start(this);
   }
 
+  // NOTA: onResume/onPause/onDestroy son PUBLIC en BridgeActivity (Capacitor 6);
+  // sobrescribirlos como protected no compila ("weaker access privileges").
   @Override
-  protected void onResume() {
+  public void onResume() {
     super.onResume();
     appEnPrimerPlano = true;
   }
 
   @Override
-  protected void onPause() {
+  public void onPause() {
     appEnPrimerPlano = false;
     super.onPause();
   }
