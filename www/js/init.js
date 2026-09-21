@@ -138,8 +138,16 @@ RN.init.arrancar = async function () {
 
   // v5.13.12: Badge de versión clickeable para forzar la búsqueda/aplicación
   // de actualizaciones de la app (Service Worker).
+  // v5.24.0: En modo nativo (APK) no hay Service Worker; el badge consulta
+  // directamente el repositorio de releases (RN.update).
   const btnVersion = document.getElementById('btn-version');
-  if (btnVersion) btnVersion.addEventListener('click', () => RN.pwa.forzarActualizacion());
+  if (btnVersion) btnVersion.addEventListener('click', () => {
+    if (RN.platform && RN.platform.esNativo()) {
+      if (RN.update && RN.update.buscarAhora) RN.update.buscarAhora();
+    } else {
+      RN.pwa.forzarActualizacion();
+    }
+  });
 
   // FAB: botón flotante de acción rápida (móvil)
   const fab = document.getElementById('fab-action');
@@ -157,6 +165,25 @@ RN.init.arrancar = async function () {
 
   // 14b. v5.21.0: Tarjeta de descarga del APK (se oculta en modo nativo).
   if (RN.apk && RN.apk.init) RN.apk.init();
+
+  // 14c. v5.24.0: Verificación automática de actualizaciones (web y APK).
+  if (RN.update && RN.update.init) RN.update.init();
+  // Mostrar estado de la última comprobación en Ajustes.
+  (function () {
+    var el = document.getElementById('update-status');
+    if (!el) return;
+    var ult = parseInt(localStorage.getItem('adminred:update-last-check') || '0', 10) || 0;
+    var notif = localStorage.getItem('adminred:update-notified') || '';
+    var txt = 'Versión instalada: v' + APP_VERSION + '. ';
+    if (ult) {
+      var d = new Date(ult);
+      txt += 'Última comprobación: ' + d.toLocaleString() + '.';
+    } else {
+      txt += 'Aún no se ha comprobado.';
+    }
+    if (notif) txt += ' Última versión notificada: v' + notif + '.';
+    el.textContent = txt;
+  })();
 
   // 15. PIN (si hay)
   RN.pin.init();

@@ -80,6 +80,8 @@ const CORE_ASSETS = [
   './js/gastos.js',
   './js/pin.js',
   './js/pwa.js',
+  './js/apk.js',
+  './js/update.js',
   './js/init.js'
 ];
 

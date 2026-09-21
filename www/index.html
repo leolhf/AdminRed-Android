@@ -354,6 +354,18 @@
         </div>
       </div>
       <div class="card">
+        <h3>🔄 Actualizaciones</h3>
+        <p class="muted mb-16">Cuando hay conexión a internet, la app comprueba si existe una versión nueva y te avisa con una notificación. Puedes desactivar esta comprobación automática.</p>
+        <div class="form-row cols-2">
+          <div><label>Comprobar actualizaciones automáticamente</label>
+            <select id="cfg-auto-updates"><option value="true">Sí</option><option value="false">No</option></select></div>
+        </div>
+        <div class="flex wrap" style="gap:10px">
+          <button class="btn" onclick="RN.update.buscarAhora()">🔍 Buscar actualizaciones ahora</button>
+        </div>
+        <p class="mt-16 muted" id="update-status" style="font-size:12px"></p>
+      </div>
+      <div class="card">
         <h3>WhatsApp</h3>
         <button class="btn" onclick="RN.waTemplates.abrir()">✏️ Editar plantillas de mensajes</button>
       </div>
@@ -485,6 +497,7 @@
   <script src="js/pin.js"></script>
   <script src="js/pwa.js"></script>
   <script src="js/apk.js"></script>
+  <script src="js/update.js"></script>
 
   <!-- 9. INIT — debe ser el último script clásico -->
   <script src="js/tests/tests-calculo.js"></script>

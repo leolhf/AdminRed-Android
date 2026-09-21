@@ -55,6 +55,10 @@ RN.config.cargar = function () {
       if (RN.state.config.fechaTasaUsd === undefined) {
         RN.state.config.fechaTasaUsd = null;
       }
+      // v5.24.0: comprobación automática de actualizaciones (default true).
+      if (RN.state.config.autoCheckUpdates === undefined || RN.state.config.autoCheckUpdates === null) {
+        RN.state.config.autoCheckUpdates = true;
+      }
     } catch (e) { /* ignorar config corrupta */ }
   }
 };
@@ -99,6 +103,9 @@ RN.config.guardar = function () {
   // v5.17.0/v5.18.0: % de la ganancia proyectada del mes a mantener como reserva en caja
   const pctReserva = parseFloat((document.getElementById('cfg-pct-reserva-caja') || {}).value);
   RN.state.config.pctReservaCaja = isNaN(pctReserva) ? 70 : Math.max(0, Math.min(100, pctReserva));
+  // v5.24.0: comprobación automática de actualizaciones (toggle en Ajustes).
+  const autoUpdEl = document.getElementById('cfg-auto-updates');
+  if (autoUpdEl) RN.state.config.autoCheckUpdates = autoUpdEl.value === 'true';
   // v5.13.5 (ISSUE #4): Eliminar persistir() redundante. RN.storageLocal.guardar()
   // serializa TODO el estado (que incluye config) en localStorage[DATA].
   // persistir() duplicaba la escritura de config en localStorage[CONFIG].
@@ -131,4 +138,6 @@ RN.config.rellenarForm = function () {
   t('cfg-pct-ganancia-mes', c.pctRecuperacionGananciaMes || 0);
   // v5.17.0/v5.18.0: % de la ganancia proyectada del mes a mantener como reserva en caja
   t('cfg-pct-reserva-caja', (c.pctReservaCaja === undefined || c.pctReservaCaja === null) ? 70 : c.pctReservaCaja);
+  // v5.24.0: comprobación automática de actualizaciones (default true).
+  t('cfg-auto-updates', String(c.autoCheckUpdates !== false));
 };

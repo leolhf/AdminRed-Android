@@ -120,7 +120,14 @@ RN.state = {
      * automaticamente al cerrar el mes actual. Es null cuando no hay cambios
      * pendientes.
      */
-    paquetePendiente: null
+    paquetePendiente: null,
+    /**
+     * v5.24.0 — Comprobación automática de actualizaciones de la app.
+     * Cuando es true (default), la app consulta GitHub Releases al arrancar,
+     * al recuperar la conexión y al volver a primer plano, y notifica si hay
+     * una versión nueva. Se puede desactivar desde Ajustes.
+     */
+    autoCheckUpdates: true
   },
   /** Handle del archivo de datos vinculado (File System Access API) */
   fileHandle: null,
