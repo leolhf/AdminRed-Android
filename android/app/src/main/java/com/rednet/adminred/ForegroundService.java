@@ -56,6 +56,13 @@ public class ForegroundService extends Service {
   private PowerManager.WakeLock wakeLock;
   private boolean tickCorriendo = false;
 
+  /**
+   * v5.27.3: true mientras el servicio está activo (onCreate..onDestroy).
+   * Lo lee ReinicioReceiver (watchdog por alarma) para relanzar el servicio
+   * sólo cuando de verdad murió.
+   */
+  public static volatile boolean estaCorriendo = false;
+
   /** Tarea periódica: refresca notificación + pide revisión de recordatorios al WebView. */
   private final Runnable tick = new Runnable() {
     @Override
@@ -102,6 +109,7 @@ public class ForegroundService extends Service {
   @Override
   public void onCreate() {
     super.onCreate();
+    estaCorriendo = true;
     crearCanal();
     adquirirWakeLock();
   }
@@ -119,6 +127,18 @@ public class ForegroundService extends Service {
     iniciarTick();
     // START_STICKY: si el sistema mata el proceso, el servicio se recrea.
     return START_STICKY;
+  }
+
+  /**
+   * v5.27.3: el usuario deslizó la app de recientes (HyperOS/MIUI mata el
+   * proceso justo después). Antes de morir, rearmamos la alarma del watchdog
+   * (vive en el AlarmManager del SISTEMA y sobrevive a la muerte del proceso):
+   * en ≤60 s ReinicioReceiver relanzará el servicio con su notificación.
+   */
+  @Override
+  public void onTaskRemoved(Intent rootIntent) {
+    KeepAlivePlugin.programarReinicio(this);
+    super.onTaskRemoved(rootIntent);
   }
 
   /** Wake lock parcial: impide que la CPU hiberne (Doze) entre ticks. */
@@ -192,6 +212,7 @@ public class ForegroundService extends Service {
 
   @Override
   public void onDestroy() {
+    estaCorriendo = false;
     handler.removeCallbacks(tick);
     tickCorriendo = false;
     try { if (wakeLock != null && wakeLock.isHeld()) wakeLock.release(); } catch (Exception e) {}

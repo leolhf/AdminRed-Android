@@ -589,6 +589,27 @@ RN.notify.init = function () {
   // muestra su diálogo oficial y recuerda la respuesta; es idempotente).
   if (RN.platform && RN.platform.esNativo()) {
     RN.notify.requestPermiso().then(function () {
+      // v5.27.3: pedir UNA vez la exención de optimización de batería con el
+      // diálogo OFICIAL de Android (KeepAlive.pedirExencionBateria). Si el
+      // usuario la concede, HyperOS deja de matar AdminRed en segundo plano;
+      // si la rechaza, sigue el toast manual y la red de seguridad del watchdog.
+      try {
+        var ka = RN.platform.plugin('KeepAlive');
+        if (ka && !localStorage.getItem('rn_exencion_bateria_v5273')) {
+          localStorage.setItem('rn_exencion_bateria_v5273', '1');
+          if (typeof ka.pedirExencionBateria === 'function') {
+            ka.pedirExencionBateria().catch(function () {});
+          }
+        }
+      } catch (e) {}
+      // v5.27.3: rearmar el watchdog también desde JS (por si el proceso
+      // nativo se recreó sin pasar por MainActivity.onCreate).
+      try {
+        var ka2 = RN.platform.plugin('KeepAlive');
+        if (ka2 && typeof ka2.programarReinicio === 'function') {
+          ka2.programarReinicio().catch(function () {});
+        }
+      } catch (e) {}
       // v5.27.0: avisar UNA vez sobre la optimización de batería. Con el
       // servicio en primer plano nativo el proceso ya sobrevive, pero muchos
       // fabricantes (Xiaomi, Huawei, Samsung...) siguen matando apps en

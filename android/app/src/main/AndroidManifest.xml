@@ -52,6 +52,15 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
+
+        <!-- v5.27.3: Watchdog por ALARMA EXACTA del sistema. Sobrevive a la
+             muerte del proceso (HyperOS mata la app al deslizarla de
+             recientes) y relanza el servicio en ≤60 s. Se dispara mediante
+             PendingIntent explícito: no necesita intent-filter. -->
+        <receiver
+            android:name=".ReinicioReceiver"
+            android:exported="false"
+            android:enabled="true" />
     </application>
 
     <!-- Permissions -->

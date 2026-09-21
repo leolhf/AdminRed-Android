@@ -37,7 +37,11 @@ public class MainActivity extends BridgeActivity {
     super.onCreate(savedInstanceState);
     // El bridge se crea durante super.onCreate(); guardamos la referencia.
     puente = getBridge();
+    // v5.27.3: registrar el plugin nativo KeepAlive (watchdog + exención batería).
+    registerPlugin(KeepAlivePlugin.class);
     ForegroundService.start(this);
+    // v5.27.3: rearmar la alarma del watchdog en cada arranque de la app.
+    KeepAlivePlugin.programarReinicio(this);
   }
 
   // NOTA: onResume/onPause/onDestroy son PUBLIC en BridgeActivity (Capacitor 6);
