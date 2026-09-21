@@ -699,6 +699,13 @@ RN.modalCobro.confirmar = function () {
   // Notificación local
   RN.notify.local('Cobro registrado', c.nombre + ': ' + RN.calc.formatCUP(aPagar));
 
+  // v5.26.0 (Opción B): el cobro RESUELVE el ciclo -> marcar 'pagado' y cancelar
+  // el recordatorio permanente de este cliente (ya no debe seguir sonando).
+  try {
+    if (RN.notifyState) RN.notifyState.marcar(c.id, c.diaPago, 'pagado');
+    if (RN.notify && RN.notify.cancelarCliente) RN.notify.cancelarCliente(c.id);
+  } catch (e) { /* silencioso */ }
+
   // WhatsApp
   if (enviarWA && c.telefono) {
     RN.whatsapp.enviarComprobante(h.id);

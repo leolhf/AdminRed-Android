@@ -46,6 +46,15 @@ RN.whatsapp.enviarRecordatorio = function (clienteId) {
     mora: String(mora)
   };
   RN.whatsapp.enviar(c.telefono, RN.waTemplates.rellenar(tpl, ctx));
+
+  // v5.26.0 (Opción B): puente WhatsApp -> notificaciones. Al abrir el envío se
+  // marca el ciclo como 'wa' (hoy) y se cancela el recordatorio permanente del
+  // cliente, para que no reaparezca más en el día. wa.me no da callback de
+  // "enviado", así que la marca representa "se abrió el envío".
+  try {
+    if (RN.notifyState) RN.notifyState.marcar(c.id, c.diaPago, 'wa');
+    if (RN.notify && RN.notify.cancelarCliente) RN.notify.cancelarCliente(c.id);
+  } catch (e) { /* silencioso */ }
 };
 
 /** Envía comprobante de pago por WhatsApp tras registrar un cobro. */

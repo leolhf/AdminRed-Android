@@ -15,6 +15,14 @@
  *   - Además, se programan avisos en SEGUNDO PLANO cada 4 h para que sigan
  *     llegando aunque la app esté cerrada.
  *
+ * v5.26.0 (Opción B) — 4.º GRUPO "INICIO DE CICLO" + resolución por ciclo:
+ *   - Al abrirse el ciclo del corte vigente (inicioCiclo) se avisa a sus
+ *     clientes (RN.ciclos.corteVigente()/clientesPorCorte()).
+ *   - notify-state.js guarda por ciclo si el aviso está resuelto: 'wa' (enviado
+ *     por WhatsApp hoy -> se suprime 1 día), 'pagado'/'visto' (resuelto el ciclo).
+ *   - IDs por hash de cliente (RN.notify._idCliente) y cancelación individual
+ *     (RN.notify.cancelarCliente) al enviar WhatsApp o registrar el cobro.
+ *
  * v5.25.1 — Recordatorios en 3 GRUPOS (alineados con el modelo v5.10.5):
  *   1. MOROSOS (getMora > 0): clientes con meses completos de atraso — prioridad
  *      máxima, con deuda TOTAL (servicio + equipo) vía deudaTotalCliente().
@@ -204,6 +212,39 @@ RN.notify._diasDelMes = function () {
 };
 
 /**
+ * v5.26.0 (Opción B): ID ESTABLE por cliente+grupo (2000..2099).
+ * Antes se usaba 2000 + índice del array, lo que reasignaba una notificación
+ * a otro cliente cuando cambiaba la composición del grupo (ln.schedule
+ * reemplaza por id). Con un hash del clienteId, cada aviso es del mismo dueño.
+ */
+RN.notify._idCliente = function (clienteId, grupo) {
+  var s = String(clienteId) + '|' + grupo;
+  var h = 0;
+  for (var i = 0; i < s.length; i++) { h = (h * 31 + s.charCodeAt(i)) % 100; }
+  return RN.notify.ID_RECORDATORIO_BASE + h; // 2000..2099
+};
+
+/** IDs de los 4 grupos de un cliente (para cancelar todos sus avisos). */
+RN.notify._idsCliente = function (clienteId) {
+  return ['mora', 'hoy', 'manana', 'ciclo'].map(function (g) {
+    return { id: RN.notify._idCliente(clienteId, g) };
+  });
+};
+
+/**
+ * v5.26.0 (Opción B): cancela los recordatorios de UN cliente concreto.
+ * Se llama al enviar por WhatsApp y al registrar el cobro, para que su aviso
+ * permanente desaparezca de inmediato (antes sólo se cancelaba si el total
+ * global quedaba en 0).
+ */
+RN.notify.cancelarCliente = async function (clienteId) {
+  var ln = RN.notify._ln();
+  if (!ln || !ln.cancel) return;
+  try { await ln.cancel({ notifications: RN.notify._idsCliente(clienteId) }); }
+  catch (e) { /* silencioso */ }
+};
+
+/**
  * Revisa los clientes y lanza recordatorios en 3 grupos (v5.25.1):
  *   - MOROSOS: getMora(c) > 0 (meses completos de atraso, modelo v5.10.5).
  *   - HOY: su día de pago es HOY y no han pagado (getStatus ≠ paid).
@@ -220,7 +261,24 @@ RN.notify.revisarRecordatorios = async function () {
     var diasMes = RN.notify._diasDelMes();
     var manana = (hoy + 1 <= diasMes) ? hoy + 1 : 0; // 0 = cruzamos de mes: sin aviso de "mañana"
 
-    var morosos = [], cobranHoy = [], venceManana = [];
+    var morosos = [], cobranHoy = [], venceManana = [], enCiclo = [];
+
+    // v5.26.0 (Opción B): CORTE VIGENTE -> clientes de ese corte que van a pagar.
+    // Se avisa desde el INICIO del ciclo (inicioCiclo <= hoy < diaPago); el día
+    // de pago lo cubre el grupo 'hoy'. Se saltan los ya resueltos (wa/pagado/visto).
+    var cv = (RN.ciclos && RN.ciclos.corteVigente) ? RN.ciclos.corteVigente() : null;
+    if (cv) {
+      var iniC = RN.ciclos.inicioCiclo(cv.diaPago);
+      if (hoy >= iniC && hoy < cv.diaPago) {
+        RN.ciclos.clientesPorCorte(cv.diaPago, mes).forEach(function (c) {
+          var stc = RN.calc.getStatus(c);
+          if (stc === 'paid' || stc === 'inactivo' || stc === 'por-iniciar') return;
+          if (RN.notifyState && RN.notifyState.estaResuelto(c.id, c.diaPago)) return;
+          enCiclo.push(c);
+        });
+      }
+    }
+
     RN.calc.clientesActivos().forEach(function (c) {
       var st = RN.calc.getStatus(c);
       if (st === 'paid' || st === 'inactivo' || st === 'por-iniciar') return;
@@ -236,7 +294,7 @@ RN.notify.revisarRecordatorios = async function () {
       }
     });
 
-    var total = morosos.length + cobranHoy.length + venceManana.length;
+    var total = morosos.length + cobranHoy.length + venceManana.length + enCiclo.length;
     if (!total) {
       // Nada que recordar: cancelar recordatorios previos (específicos y de fondo).
       await RN.notify._cancelarRecordatorios();
@@ -247,12 +305,13 @@ RN.notify.revisarRecordatorios = async function () {
     for (var i = 0; i < morosos.length; i++) {
       var cm = morosos[i];
       if (RN.notify._yaNotificado(cm.id, 'mora')) continue;
+      if (RN.notifyState && RN.notifyState.estaResuelto(cm.id, cm.diaPago)) continue;
       var m = RN.calc.getMora(cm);
       await RN.notify.local(
         'Mora: ' + m + ' mes' + (m === 1 ? '' : 'es') + ' de atraso',
         cm.nombre + ' debe ' + RN.calc.formatCUP(RN.calc.deudaTotalCliente(cm, mes)) + ' en total. Toca para ver Cobranza.',
         {
-          id: RN.notify.ID_RECORDATORIO_BASE + i,
+          id: RN.notify._idCliente(cm.id, 'mora'),
           canal: RN.notify.CANAL_RECORDATORIOS,
           ongoing: true,
           extra: { tipo: 'recordatorio', grupo: 'mora', clienteId: cm.id }
@@ -265,11 +324,12 @@ RN.notify.revisarRecordatorios = async function () {
     for (var j = 0; j < cobranHoy.length; j++) {
       var ch = cobranHoy[j];
       if (RN.notify._yaNotificado(ch.id, 'hoy')) continue;
+      if (RN.notifyState && RN.notifyState.estaResuelto(ch.id, ch.diaPago)) continue;
       await RN.notify.local(
         'Pago de hoy',
         ch.nombre + ' debe pagar hoy (' + RN.calc.formatCUP(RN.calc.getPrecioNeto(ch, mes)) + ')',
         {
-          id: RN.notify.ID_RECORDATORIO_BASE + 20 + j,
+          id: RN.notify._idCliente(ch.id, 'hoy'),
           canal: RN.notify.CANAL_RECORDATORIOS,
           ongoing: true,
           extra: { tipo: 'recordatorio', grupo: 'hoy', clienteId: ch.id }
@@ -282,12 +342,13 @@ RN.notify.revisarRecordatorios = async function () {
     for (var k = 0; k < venceManana.length; k++) {
       var vm = venceManana[k];
       if (RN.notify._yaNotificado(vm.id, 'manana')) continue;
+      if (RN.notifyState && RN.notifyState.estaResuelto(vm.id, vm.diaPago)) continue;
       var diaCorte = Math.min(vm.diaPago || 1, diasMes);
       await RN.notify.local(
         'Vence mañana: día ' + diaCorte,
         vm.nombre + ' debe ' + RN.calc.formatCUP(RN.calc.getPrecioNeto(vm, mes)) + '. Puedes cobrarle desde hoy.',
         {
-          id: RN.notify.ID_RECORDATORIO_BASE + 40 + k,
+          id: RN.notify._idCliente(vm.id, 'manana'),
           canal: RN.notify.CANAL_RECORDATORIOS,
           ongoing: true,
           extra: { tipo: 'recordatorio', grupo: 'manana', clienteId: vm.id }
@@ -296,8 +357,27 @@ RN.notify.revisarRecordatorios = async function () {
       RN.notify._marcarNotificado(vm.id, 'manana');
     }
 
-    // Avisos en segundo plano con un resumen real de los 3 grupos.
-    var nPorCobrar = cobranHoy.length + venceManana.length;
+    // Grupo 4 (v5.26.0): INICIO DE CICLO — recordatorio permanente del corte vigente.
+    for (var m2 = 0; m2 < enCiclo.length; m2++) {
+      var ec = enCiclo[m2];
+      if (RN.notify._yaNotificado(ec.id, 'ciclo')) continue;
+      await RN.notify.local(
+        'Inicia tu corte (día ' + cv.diaPago + ')',
+        ec.nombre + ': tu ciclo de pago está abierto. Debes ' +
+          RN.calc.formatCUP(RN.calc.getPrecioNeto(ec, mes)) +
+          ' antes del día ' + cv.diaPago + '.',
+        {
+          id: RN.notify._idCliente(ec.id, 'ciclo'),
+          canal: RN.notify.CANAL_RECORDATORIOS,
+          ongoing: true,
+          extra: { tipo: 'recordatorio', grupo: 'ciclo', clienteId: ec.id }
+        }
+      );
+      RN.notify._marcarNotificado(ec.id, 'ciclo');
+    }
+
+    // Avisos en segundo plano con un resumen real de los grupos.
+    var nPorCobrar = cobranHoy.length + venceManana.length + enCiclo.length;
     var resumen = nPorCobrar
       ? (nPorCobrar + ' cliente' + (nPorCobrar === 1 ? '' : 's') + ' por cobrar')
       : '';

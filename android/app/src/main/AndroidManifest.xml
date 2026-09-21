@@ -46,4 +46,6 @@
     <!-- Programar notificaciones locales -->
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.WAKE_LOCK" />
+    <!-- v5.26.0: reprogramar los avisos de apertura de ciclo tras reiniciar el equipo -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 </manifest>
