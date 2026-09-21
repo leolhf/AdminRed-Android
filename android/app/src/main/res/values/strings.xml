@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">AdminRed</string>
+    <string name="title_activity_main">AdminRed</string>
+    <string name="package_name">com.rednet.adminred</string>
+    <string name="custom_url_scheme">com.rednet.adminred</string>
+</resources>
