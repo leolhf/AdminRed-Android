@@ -190,6 +190,9 @@ RN.storageLocal._guardarAsyncDebounced = function () {
 RN.storageLocal.guardar = function () {
   RN.checkpoint.crear();
   RN.storageLocal.persistir();
+  // v5.28.0: copia automática en Google Drive (debounce interno de 15 s).
+  // Best-effort: nunca bloquea ni interrumpe el guardado local.
+  if (RN.drive && RN.drive.onChange) { try { RN.drive.onChange(); } catch (e) {} }
   // v5.13.16 (BUG-CRITICO): Sincronizar STORAGE_KEYS.CONFIG con el estado actual.
   // Desde v5.13.5 (ISSUE #22, ISSUE #4) se eliminó la llamada explicita a
   // RN.config.persistir() en config.guardar() y modal-paquete-proveedor, lo que

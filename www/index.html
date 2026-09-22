@@ -354,6 +354,16 @@
         </div>
       </div>
       <div class="card">
+        <h3>☁️ Copia en Google Drive</h3>
+        <p class="muted mb-16">Guarda automáticamente una copia de tus datos en la carpeta privada de AdminRed en tu Drive cada vez que registras un cambio. Al abrir la APK compara la copia local con la de la nube: si son iguales solo te avisa, y si son distintas te deja elegir cuál usar.</p>
+        <p id="drive-estado" class="muted mb-16">—</p>
+        <div class="flex wrap" style="gap:10px">
+          <button class="btn primary" id="drive-btn-conectar" onclick="RN.drive.conectar()">🔗 Conectar cuenta de Google</button>
+          <button class="btn" id="drive-btn-desconectar" style="display:none" onclick="RN.drive.desconectar()">🔌 Desconectar</button>
+          <button class="btn" onclick="RN.drive.sincronizarAhora()">⬆️ Sincronizar ahora</button>
+        </div>
+      </div>
+      <div class="card">
         <h3>🔄 Actualizaciones</h3>
         <p class="muted mb-16">Cuando hay conexión a internet, la app comprueba si existe una versión nueva y te avisa con una notificación. Puedes desactivar esta comprobación automática.</p>
         <div class="form-row cols-2">
@@ -441,6 +451,7 @@
   <script src="js/storage/storage-router.js"></script>
   <script src="js/storage/export.js"></script>
   <script src="js/storage/autobackup.js"></script>
+  <script src="js/storage/drive.js"></script>
 
   <!-- 3. UI -->
   <script src="js/ui/theme.js"></script>

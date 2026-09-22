@@ -39,6 +39,8 @@ public class MainActivity extends BridgeActivity {
     puente = getBridge();
     // v5.27.3: registrar el plugin nativo KeepAlive (watchdog + exención batería).
     registerPlugin(KeepAlivePlugin.class);
+    // v5.28.0: registrar el plugin nativo GoogleDrive (copia automática appDataFolder).
+    registerPlugin(GoogleDrivePlugin.class);
     ForegroundService.start(this);
     // v5.27.3: rearmar la alarma del watchdog en cada arranque de la app.
     KeepAlivePlugin.programarReinicio(this);
