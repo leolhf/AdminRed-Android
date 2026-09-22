@@ -107,6 +107,37 @@ public class GoogleDrivePlugin extends Plugin {
     operar(call, "leer", null, cuenta);
   }
 
+  // ------- persistencia DURADERA de la cuenta (v5.28.2) -------
+  // La cuenta vivía SOLO en localStorage del WebView; en algunos dispositivos
+  // (HyperOS/MIUI fuerzan la detención, actualizaciones de la APK, limpieza del
+  // WebView) ese almacenamiento se pierde y la "vinculación" desaparecía al
+  // reabrir la app. SharedPreferences sobrevive a todo eso (salvo desinstalar).
+
+  @PluginMethod
+  public void guardarCuenta(PluginCall call) {
+    String cuenta = call.getString("cuenta");
+    if (cuenta == null || cuenta.isEmpty()) { call.reject("Falta la cuenta"); return; }
+    getContext().getSharedPreferences("adminred_drive", Activity.MODE_PRIVATE)
+        .edit().putString("cuenta", cuenta).apply();
+    JSObject r = new JSObject(); r.put("ok", true); call.resolve(r);
+  }
+
+  @PluginMethod
+  public void leerCuenta(PluginCall call) {
+    String c = getContext().getSharedPreferences("adminred_drive", Activity.MODE_PRIVATE)
+        .getString("cuenta", null);
+    JSObject r = new JSObject();
+    r.put("cuenta", (c != null) ? c : JSONObject.NULL);
+    call.resolve(r);
+  }
+
+  @PluginMethod
+  public void borrarCuenta(PluginCall call) {
+    getContext().getSharedPreferences("adminred_drive", Activity.MODE_PRIVATE)
+        .edit().remove("cuenta").apply();
+    JSObject r = new JSObject(); r.put("ok", true); call.resolve(r);
+  }
+
   // ---------------- motor (token + REST v3) ----------------
 
   /** Lanza la operación en un hilo de fondo (getToken y HTTP bloquean). */

@@ -43,6 +43,37 @@ RN.drive.plugin = function () {
   return (RN.platform && RN.platform.plugin) ? RN.platform.plugin('GoogleDrive') : null;
 };
 
+// ------- v5.28.2: vinculación DURADERA -------
+// Antes la cuenta vivía solo en localStorage del WebView; si el sistema
+// (HyperOS forzando la app, actualización de la APK, limpieza del WebView)
+// borraba ese storage, la vinculación se perdía y con ella TODAS las subidas.
+// Ahora se guarda además en SharedPreferences nativas y se restaura al arrancar.
+RN.drive._cuentaNativa = async function () {
+  var p = RN.drive.plugin();
+  if (!p || typeof p.leerCuenta !== 'function') return null;
+  try {
+    var r = await p.leerCuenta();
+    return (r && r.cuenta) ? r.cuenta : null;
+  } catch (e) { return null; }
+};
+
+RN.drive._guardarCuentaDurable = async function (cuenta) {
+  try { localStorage.setItem(RN.drive.KEY_CUENTA, cuenta); } catch (e) {}
+  var p = RN.drive.plugin();
+  if (p && typeof p.guardarCuenta === 'function') {
+    try { await p.guardarCuenta({ cuenta: cuenta }); } catch (e) {}
+  }
+};
+
+RN.drive._borrarCuentaDurable = async function () {
+  try { localStorage.removeItem(RN.drive.KEY_CUENTA); } catch (e) {}
+  try { localStorage.removeItem(RN.drive.KEY_ULT_SINCRO); } catch (e) {}
+  var p = RN.drive.plugin();
+  if (p && typeof p.borrarCuenta === 'function') {
+    try { await p.borrarCuenta(); } catch (e) {}
+  }
+};
+
 /** ¿Hay red? (best-effort; si el API no existe asumimos que sí). */
 RN.drive.hayRed = function () {
   try { return navigator.onLine !== false; } catch (e) { return true; }
@@ -95,10 +126,15 @@ RN.drive.conectar = async function () {
   try {
     var r = await p.conectar();
     if (r && r.cuenta) {
-      localStorage.setItem(RN.drive.KEY_CUENTA, r.cuenta);
+      await RN.drive._guardarCuentaDurable(r.cuenta);
       RN.notifyUI.toast('Cuenta conectada: ' + r.cuenta, 'success');
       RN.drive._refrescarUI();
-      await RN.drive.subirAutomatica(true);
+      var okSubida = await RN.drive.subirAutomatica(true);
+      // v5.28.2: si la 1.ª copia falla, avisar — antes fallaba en silencio
+      // (silencioso=true no mostraba nada) y parecía que no se sincronizaba.
+      if (!okSubida) {
+        RN.notifyUI.toast('Cuenta vinculada, pero la 1.ª copia no subió. Se reintentará solo.', 'warn', 9000);
+      }
     }
   } catch (e) {
     RN.notifyUI.toast('No se conectó la cuenta: ' + (e.message || e), 'error');
@@ -107,8 +143,7 @@ RN.drive.conectar = async function () {
 
 /** Olvida la cuenta en este dispositivo (la copia en Drive no se borra). */
 RN.drive.desconectar = function () {
-  try { localStorage.removeItem(RN.drive.KEY_CUENTA); } catch (e) {}
-  try { localStorage.removeItem(RN.drive.KEY_ULT_SINCRO); } catch (e) {}
+  RN.drive._borrarCuentaDurable();
   RN.drive._refrescarUI();
   RN.notifyUI.toast('Copia en Drive desconectada en este equipo', 'success');
 };
@@ -139,14 +174,17 @@ RN.drive.subirAutomatica = async function (silencioso) {
     var sobre = RN.drive._sobre();
     var fechaISO = (JSON.parse(sobre)).fechaISO;
     var r = await p.subir({ json: sobre, cuenta: cuenta });
-    localStorage.setItem(RN.drive.KEY_ULT_SINCRO, (r && r.fechaRemota) ? fechaISO : fechaISO);
+    localStorage.setItem(RN.drive.KEY_ULT_SINCRO, fechaISO);
     RN.drive._pendiente = false;
+    RN.drive._ultimoError = null;
     if (!silencioso) RN.notifyUI.toast('☁️ Copia subida a Google Drive', 'success');
     RN.drive._refrescarUI();
     return true;
   } catch (e) {
-    // Sin drama: queda pendiente y se reintenta al volver la red / próximo cambio.
+    // Sin drama: queda pendiente y se reintenta (v5.28.2: cada 5 min y al volver
+    // la red). El error queda visible en el estado de Ajustes.
     RN.drive._pendiente = true;
+    RN.drive._ultimoError = String((e && e.message) || e);
     console.warn('[drive] subida falló:', e);
     if (!silencioso) RN.notifyUI.toast('No se pudo subir la copia: ' + (e.message || e), 'error');
     return false;
@@ -171,9 +209,27 @@ RN.drive.init = function () {
   window.addEventListener('online', function () {
     if (RN.drive._pendiente) RN.drive.subirAutomatica(true);
   });
-  if (!RN.drive.cuenta()) { RN.drive._refrescarUI(); return; }
-  // Comparar tras cargar los datos, sin bloquear el arranque.
-  setTimeout(function () { RN.drive.compararAlArrancar(); }, 4000);
+  // v5.28.2: reintento periódico — antes solo existía el evento 'online', así
+  // que una subida fallida (token, red intermitente) quedaba pendiente para
+  // siempre. Ahora cada 5 min se reintenta si hay algo pendiente.
+  setInterval(function () {
+    if (RN.drive._pendiente && RN.drive.cuenta() && RN.drive.plugin()) {
+      RN.drive.subirAutomatica(true);
+    }
+  }, 5 * 60 * 1000);
+
+  // v5.28.2: restaurar la vinculación desde el almacenamiento NATIVO si el
+  // localStorage del WebView la perdió (causa de "al cerrar y abrir la APK
+  // pierde la vinculación").
+  RN.drive._cuentaNativa().then(function (nativa) {
+    if (nativa && !RN.drive.cuenta()) {
+      try { localStorage.setItem(RN.drive.KEY_CUENTA, nativa); } catch (e) {}
+      RN.drive._refrescarUI();
+    }
+    if (!RN.drive.cuenta()) { RN.drive._refrescarUI(); return; }
+    // Comparar tras cargar los datos, sin bloquear el arranque.
+    setTimeout(function () { RN.drive.compararAlArrancar(); }, 4000);
+  });
 };
 
 RN.drive._leerLocal = function () {
@@ -317,7 +373,10 @@ RN.drive.estado = function () {
   var c = RN.drive.cuenta();
   if (!c) return 'Sin cuenta conectada — la copia solo se guarda en este teléfono.';
   var ult = localStorage.getItem(RN.drive.KEY_ULT_SINCRO);
-  return 'Cuenta: ' + c + ' · Última copia: ' + (ult ? RN.drive._fechaCorta(ult) : 'pendiente');
+  var txt = 'Cuenta: ' + c + ' · Última copia: ' + (ult ? RN.drive._fechaCorta(ult) : 'pendiente');
+  if (RN.drive._pendiente) txt += ' · ⏳ copia pendiente de subir';
+  if (RN.drive._ultimoError) txt += ' · ⚠️ ' + RN.drive._ultimoError;
+  return txt;
 };
 
 RN.drive._refrescarUI = function () {
