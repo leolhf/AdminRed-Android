@@ -330,7 +330,11 @@ RN.notify.revisarRecordatorios = async function () {
     // de pago lo cubre el grupo 'hoy'. Se saltan los ya resueltos (wa/pagado/visto).
     var cv = (RN.ciclos && RN.ciclos.corteVigente) ? RN.ciclos.corteVigente() : null;
     if (cv) {
-      var iniC = RN.ciclos.inicioCiclo(cv.diaPago);
+      // v5.28.1: usar el inicioCiclo que YA devuelve corteVigente() (una sola
+      // fuente). Regla del modelo v5.10.4: inicioCiclo = max(1, diaPago - graciaDias);
+      // con graciaDias=5 (default), un corte del día 25 notifica desde el día 20
+      // (20..24 por el grupo 'ciclo'; el 25 lo cubre el grupo 'hoy').
+      var iniC = cv.inicioCiclo || RN.ciclos.inicioCiclo(cv.diaPago);
       if (hoy >= iniC && hoy < cv.diaPago) {
         RN.ciclos.clientesPorCorte(cv.diaPago, mes).forEach(function (c) {
           var stc = RN.calc.getStatus(c);

@@ -34,13 +34,18 @@ public class MainActivity extends BridgeActivity {
 
   @Override
   public void onCreate(Bundle savedInstanceState) {
+    // FIX v5.28.1: los plugins nativos deben registrarse ANTES de super.onCreate().
+    // En Capacitor 6, super.onCreate() construye el Bridge con la lista de plugins
+    // que exista en ESE momento; si registerPlugin() se invoca después, el plugin
+    // NO queda registrado y window.Capacitor.Plugins['GoogleDrive'] no existe en
+    // el WebView. Esa era la causa del toast "La copia en Drive solo está
+    // disponible en la APK" AUNQUE la app fuera la APK (drive.js caía en su
+    // guard porque RN.platform.plugin('GoogleDrive') devolvía null).
+    registerPlugin(KeepAlivePlugin.class);
+    registerPlugin(GoogleDrivePlugin.class);
     super.onCreate(savedInstanceState);
     // El bridge se crea durante super.onCreate(); guardamos la referencia.
     puente = getBridge();
-    // v5.27.3: registrar el plugin nativo KeepAlive (watchdog + exención batería).
-    registerPlugin(KeepAlivePlugin.class);
-    // v5.28.0: registrar el plugin nativo GoogleDrive (copia automática appDataFolder).
-    registerPlugin(GoogleDrivePlugin.class);
     ForegroundService.start(this);
     // v5.27.3: rearmar la alarma del watchdog en cada arranque de la app.
     KeepAlivePlugin.programarReinicio(this);

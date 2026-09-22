@@ -78,7 +78,20 @@ RN.drive._desempaquetar = function (contenido) {
 /** Abre el selector de cuentas de Google y hace la 1.ª sincronización. */
 RN.drive.conectar = async function () {
   var p = RN.drive.plugin();
-  if (!p) { RN.notifyUI.toast('La copia en Drive solo está disponible en la APK', 'warn'); return; }
+  if (!p) {
+    // v5.28.1: diagnóstico REAL en vez del mensaje genérico. Hay 2 causas
+    // distintas con mensajes distintos:
+    //   - Estar en el navegador/PWA (no hay plugin nativo, es lo esperado).
+    //   - Estar en la APK pero con el plugin ausente del bridge (APK antigua
+    //     a la v5.28.1, que registraba los plugins después de super.onCreate()).
+    if (!(RN.platform && RN.platform.esNativo && RN.platform.esNativo())) {
+      RN.notifyUI.toast('La copia en Drive solo está disponible en la APK (ahora estás en el navegador)', 'warn');
+    } else {
+      console.warn('[drive] window.Capacitor.Plugins.GoogleDrive no existe — ¿APK anterior a v5.28.1 o plugin sin registrar?');
+      RN.notifyUI.toast('No se encontró el módulo nativo de Drive. Descarga e instala la APK v5.28.1 o superior y vuelve a intentar.', 'error', 12000);
+    }
+    return;
+  }
   try {
     var r = await p.conectar();
     if (r && r.cuenta) {

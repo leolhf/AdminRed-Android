@@ -123,3 +123,13 @@ El workflow usa `APP_VERSION` para nombrar el APK y la release automáticamente.
 - **Deduplicación:** cada cliente+grupo se notifica máximo 1 vez al día (registro persistido en `localStorage`, clave `rn_notify_ultimo`, con poda automática de días pasados). La clasificación reutiliza `getStatus()`/`getMora()` de `calculations.js` — sin lógica duplicada.
 - **Avisos de fondo:** el resumen diario ahora es real ("2 clientes por cobrar y 1 en mora") en vez de solo una cantidad.
 - Versión subida a `5.25.1` (`version.js` + `package.json`) para invalidar la caché del SW.
+
+## Changelog
+
+### v5.28.1 — FIX: plugins nativos fuera del bridge (Drive) + ciclo verificado
+
+- **FIX crítico (Drive):** `registerPlugin(KeepAlivePlugin/GoogleDrivePlugin)` se movió ANTES de `super.onCreate()` en `MainActivity.java`. En Capacitor 6 el Bridge se construye dentro de `super.onCreate()` con la lista de plugins existente en ese momento; al registrarlos después, `window.Capacitor.Plugins['GoogleDrive']` no existía en el WebView y `drive.js` caía en el guard "La copia en Drive solo está disponible en la APK" aunque la app FUERA la APK. Era la causa exacta del mensaje al intentar conectar la cuenta de Google.
+- **Diagnóstico mejorado:** si la app es nativa pero el plugin no aparece en el bridge, el toast ahora lo dice claramente ("reinstala la APK v5.28.1 o superior"); el mensaje "solo disponible en la APK" queda reservado al navegador/PWA.
+- **Ciclo de cortes verificado (sin cambios de comportamiento):** con corte 25 y `graciaDias=5` (default), el grupo 'ciclo' notifica a los clientes del corte desde el día 20 (`inicioCiclo = max(1, diaPago - graciaDias)`, modelo v5.10.4) hasta el 24; el día 25 lo cubre el grupo 'hoy'. La revisión ahora usa `cv.inicioCiclo` directamente (una sola fuente de verdad).
+- **Nota:** el enfoque de Drive (AccountManager + appDataFolder) no requiere OAuth Client ID ni registro de huella SHA-1 en Google Cloud Console, por lo que no hacía falta tocar la consola: el problema era solo el orden de registro del plugin.
+- Versión subida a 5.28.1 (`version.js` + `package.json`).
