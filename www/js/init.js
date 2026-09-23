@@ -190,10 +190,6 @@ RN.init.arrancar = async function () {
 
   // 16. Notificaciones periódicas (v5.25.0: cada 4 h, con soporte nativo)
   if (RN.notify && RN.notify.init) RN.notify.init();
-
-  // 16b. v5.28.0: copia en Google Drive — compara local vs nube al abrir y
-  // programa la subida automática en cada cambio. Sin cuenta/red no hace nada.
-  if (RN.drive && RN.drive.init) RN.drive.init();
   // Revisión inicial (tras cargar) y luego cada 4 horas.
   setTimeout(function () { try { RN.notify.revisarRecordatorios(); } catch (e) {} }, 6000);
   setInterval(RN.notify.revisarRecordatorios, RN.notify.INTERVALO_MS); // cada 4 horas

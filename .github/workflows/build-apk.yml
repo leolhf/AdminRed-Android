@@ -72,18 +72,6 @@ jobs:
           keyPassword=${{ secrets.KEY_PASSWORD }}
           EOF
 
-      # 7b. Imprimir la huella SHA-1 real de firma (para registrar el cliente
-      #     OAuth Android en Google Cloud Console — Ajustes → Copia en Drive).
-      #     Sale en el log de este paso; el keystore es siempre el mismo
-      #     secret, así que el SHA-1 no cambia entre builds.
-      - name: Mostrar huella SHA-1 de firma (para Google Cloud Console)
-        run: |
-          keytool -list -v \
-            -keystore adminred-release.keystore \
-            -alias "${{ secrets.KEY_ALIAS }}" \
-            -storepass "${{ secrets.KEYSTORE_PASSWORD }}" \
-            2>/dev/null | grep "SHA1:"
-
       # 8. Compilar el APK de release (firmado)
       - name: Compilar APK de release
         run: |
