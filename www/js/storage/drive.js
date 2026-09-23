@@ -41,10 +41,14 @@
 RN.drive = RN.drive || {};
 
 // ---------------------------------------------------------------
-// CONFIGURACIÓN — rellenar con los datos de tu implementación de Apps Script
+// CONFIGURACIÓN — v5.29.1 (SEGURIDAD): ya NO se incrustan aquí. Se leen de
+// 'js/storage/drive-config.js', un archivo EXCLUIDO de git (.gitignore) que
+// contiene window.RN_DRIVE_CONFIG = { url, token }. Así el token no queda en
+// el historial del repositorio. Plantilla: drive-config.example.js
+// En CI, el workflow lo regenera desde los Secrets DRIVE_APPS_URL/DRIVE_APPS_TOKEN.
 // ---------------------------------------------------------------
-RN.drive.APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbxte9-ihN7WxoIBKDB5ie4yO0G8sbvBLBTpLJVUez8mVJ47bEsRTd-pohlitfoHiCa6/exec';
-RN.drive.APPS_SCRIPT_TOKEN = 'AshrdfgmdfkgdfkljglOOLJMBJGfngdfng23423ndf,jngfd,5860968';
+RN.drive.APPS_SCRIPT_URL = (window.RN_DRIVE_CONFIG && window.RN_DRIVE_CONFIG.url) || 'PEGA_AQUI_URL';
+RN.drive.APPS_SCRIPT_TOKEN = (window.RN_DRIVE_CONFIG && window.RN_DRIVE_CONFIG.token) || 'PEGA_AQUI_TOKEN';
 
 RN.drive.KEY_ACTIVO = 'rn_drive_activo'; // '1' si la sincronización está activada
 RN.drive.KEY_ULT_SINCRO = 'rn_drive_ultima_sincro'; // fechaISO que hay en la nube

@@ -57,6 +57,21 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
+      # 5b. v5.29.1: regenerar drive-config.js desde los Secrets de GitHub.
+      #     El archivo está en .gitignore (no viaja en el repo), así que el
+      #     token del Apps Script se inyecta aquí en cada build, sin quedar
+      #     nunca en el historial de git.
+      - name: Generar drive-config.js desde Secrets
+        run: |
+          if [ -n "${{ secrets.DRIVE_APPS_URL }}" ]; then
+            printf "window.RN_DRIVE_CONFIG = { url: '%s', token: '%s' };\n" \
+              "${{ secrets.DRIVE_APPS_URL }}" "${{ secrets.DRIVE_APPS_TOKEN }}" \
+              > www/js/storage/drive-config.js
+            echo "drive-config.js generado desde Secrets"
+          else
+            echo "AVISO: sin secrets DRIVE_APPS_URL/DRIVE_APPS_TOKEN; la copia en Drive quedara desactivada"
+          fi
+
       # 6. Sincronizar los assets web (www/) con el proyecto Android
       - name: Sincronizar Capacitor
         run: npx cap sync android

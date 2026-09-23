@@ -26,6 +26,11 @@ adminred-release.keystore
 *.jks
 android/keystore.properties
 
+# === SECRETOS del cliente: credenciales del Web App de Apps Script ===
+# Se cargan desde js/storage/drive-config.js (plantilla: drive-config.example.js)
+# En CI lo regenera el workflow desde los Secrets DRIVE_APPS_URL / DRIVE_APPS_TOKEN.
+www/js/storage/drive-config.js
+
 # === Repos git auxiliares (NO subir) ===
 # El repo web usa un GIT_DIR externo para no crear www/.git
 .git-web/

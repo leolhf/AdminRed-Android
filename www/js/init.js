@@ -185,6 +185,11 @@ RN.init.arrancar = async function () {
     el.textContent = txt;
   })();
 
+  // 14d. v5.29.1: Copia en Google Drive (sincronización con Apps Script).
+  //      Debe ir DESPUÉS de cargar los datos locales y ANTES de las
+  //      notificaciones: init() programa la comparación nube/local a los 4 s.
+  if (RN.drive && RN.drive.init) RN.drive.init();
+
   // 15. PIN (si hay)
   RN.pin.init();
 

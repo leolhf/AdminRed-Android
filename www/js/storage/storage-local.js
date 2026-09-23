@@ -183,6 +183,9 @@ RN.storageLocal._guardarAsyncDebounced = function () {
     if (RN.autoBackup && RN.autoBackup.guardar) {
       RN.autoBackup.guardar().catch(() => {});
     }
+    // v5.29.1: copia automática en Google Drive (debounce interno de 15 s).
+    // Best-effort: nunca bloquea ni interrumpe el guardado local.
+    if (RN.drive && RN.drive.onChange) { try { RN.drive.onChange(); } catch (e) {} }
   }, 500);
 };
 
