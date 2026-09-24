@@ -516,18 +516,9 @@ RN.calc.ingresosTotales = function () {
   return RN.state.history.reduce((s, h) => s + (h.monto || 0) + (h.montoEquipo || 0), 0);
 };
 
-/**
- * Total gastos OPERATIVOS históricos (v5.27.0: excluye retiros de caja y
- * devoluciones de inversión, que ahora viven en sus propios arrays). Se mantienen
- * por compatibilidad los filtros por flag para datos viejos.
- */
+/** Total gastos históricos. */
 RN.calc.gastosTotales = function () {
-  return (RN.state.gastos || []).reduce(function (s, g) {
-    if (!g) return s;
-    if (g.esRetiroCaja) return s;
-    if (g.esDevolucionInversion) return s; // v5.27.0: ya migrado, pero defensivo
-    return s + (g.monto || 0);
-  }, 0);
+  return RN.state.gastos.reduce((s, g) => s + (g.monto || 0), 0);
 };
 
 /** Total de depósitos históricos a la caja (v5.17.0). */
@@ -537,15 +528,49 @@ RN.calc.totalDepositos = function () {
 
 /** Total de retiros de caja históricos (v5.19.0). */
 RN.calc.totalRetiros = function () {
-  return (RN.state.retiros || []).reduce((s, r) => s + (r.totalRecibidoCUP || r.monto || 0), 0);
+  return (RN.state.retiros || []).reduce((s, r) => s + (r.monto || 0), 0);
+};
+
+/** v5.20.0: Convierte un monto a CUP según la moneda indicada, usando la tasa configurada (o la pasada explícitamente). */
+RN.calc.aCUP = function (monto, moneda, tasa) {
+  monto = +monto || 0;
+  if (moneda !== 'USD') return monto;
+  tasa = tasa || RN.state.config.tasaUsd || 0;
+  return +(monto * tasa).toFixed(2);
+};
+
+/** v5.20.0: Desglose de depósitos por moneda (CUP puro, USD original y su equivalente en CUP). */
+RN.calc.totalDepositosPorMoneda = function () {
+  var cup = 0, usdOriginal = 0, usdCUP = 0;
+  (RN.state.depositos || []).forEach(function (d) {
+    if (d.moneda === 'USD') { usdOriginal += (d.montoOriginal || 0); usdCUP += (d.monto || 0); }
+    else { cup += (d.monto || 0); }
+  });
+  return { cup: cup, usdOriginal: usdOriginal, usdCUP: usdCUP, total: cup + usdCUP };
+};
+
+/** v5.20.0: Desglose de retiros por moneda. */
+RN.calc.totalRetirosPorMoneda = function () {
+  var cup = 0, usdOriginal = 0, usdCUP = 0;
+  (RN.state.retiros || []).forEach(function (r) {
+    if (r.moneda === 'USD') { usdOriginal += (r.montoOriginal || 0); usdCUP += (r.monto || 0); }
+    else { cup += (r.monto || 0); }
+  });
+  return { cup: cup, usdOriginal: usdOriginal, usdCUP: usdCUP, total: cup + usdCUP };
 };
 
 /**
- * v5.27.0 — Total de devoluciones de préstamo (movimientos de capital).
- * Se restan del fondo de caja pero NO entran en gastosMes() ni en la utilidad.
+ * v5.20.0: Cuánto USD físico hay en la caja ahora mismo: lo cobrado a clientes
+ * en USD (h.montoPagadoUSD) + depósitos en USD − retiros en USD. El vuelto de
+ * un cobro en USD se devuelve en CUP (se descuenta del fondo en CUP, ver
+ * modal-cobro.js), así que el USD recibido de un cliente se queda íntegro en
+ * la gaveta y no hay que restarle nada aquí.
  */
-RN.calc.totalDevolucionesInversion = function () {
-  return (RN.state.devolucionesInversion || []).reduce((s, d) => s + (d.totalRecibidoCUP || d.monto || 0), 0);
+RN.calc.usdEnCaja = function () {
+  var deCobros = (RN.state.history || []).reduce(function (s, h) { return s + (h.montoPagadoUSD || 0); }, 0);
+  var deDepositos = (RN.state.depositos || []).reduce(function (s, d) { return s + (d.moneda === 'USD' ? (d.montoOriginal || 0) : 0); }, 0);
+  var deRetiros = (RN.state.retiros || []).reduce(function (s, r) { return s + (r.moneda === 'USD' ? (r.montoOriginal || 0) : 0); }, 0);
+  return +(deCobros + deDepositos - deRetiros).toFixed(2);
 };
 
 /** Excedentes (vueltos) totales entregados a clientes. */
@@ -554,16 +579,11 @@ RN.calc.excedentesTotales = function () {
 };
 
 /**
- * Fondo de caja automatico = saldo inicial + ingresos reales - gastos operativos
- * - retiros + depositos - devolucionesInversion.
- * v5.27.0: Las devoluciones de préstamo (dinero que se devuelve al prestamista)
- *   restan del fondo como cualquier otro retiro, pero NO son gastos operativos
- *   (no se cuentan en gastosTotales()). El fondo es la suma de movimientos
- *   REALES de capital: inicial + cobros + depósitos − gastos operativos
- *   − retiros − devoluciones de préstamo.
- * v5.10.1: Los ingresos (h.monto) ya registran solo el neto cobrado. El
- *   excedente (vuelto) es dinero que entra y sale inmediatamente, por lo que
- *   NO se resta del fondo.
+ * Fondo de caja automatico = saldo inicial + ingresos reales - gastos.
+ * v5.10.1: Los ingresos (h.monto) ya registran solo el neto cobrado (no el total
+ * pagado por el cliente). El excedente (vuelto) es dinero que entra y sale
+ * inmediatamente, por lo que NO se resta del fondo. Antes se restaba, lo que
+ * hacía que el fondo bajara cada vez que un cliente pagaba con vuelto.
  */
 RN.calc.fondoCaja = function () {
   var saldoInicial = RN.state.config.fondoInicial || 0;
@@ -571,25 +591,7 @@ RN.calc.fondoCaja = function () {
   var gastos = RN.calc.gastosTotales();
   var depositos = RN.calc.totalDepositos();
   var retiros = RN.calc.totalRetiros();
-  var devoluciones = RN.calc.totalDevolucionesInversion();
-  return +((saldoInicial + ingresos + depositos - gastos - retiros - devoluciones).toFixed(2));
-};
-
-/**
- * v5.27.0 — Total unificado en CUP considerando USD según tasa vigente.
- * Si el estado tiene tasa configurada (config.tasaUsd), convierte el desglose
- * USD a CUP y lo suma al monto en CUP nativo. Si un movimiento fue guardado
- * con una tasa distinta, se respeta la del momento del registro.
- */
-RN.calc.totalRecibidoCUP = function (mov) {
-  if (!mov) return 0;
-  if (mov.totalRecibidoCUP !== undefined && mov.totalRecibidoCUP !== null) {
-    return +(+mov.totalRecibidoCUP || 0);
-  }
-  var usd = +mov.montoUSD || 0;
-  var cup = +mov.montoCUP || 0;
-  var tasa = +mov.tasaUsd || +RN.state.config.tasaUsd || 0;
-  return +(cup + (tasa ? usd * tasa : 0)).toFixed(2);
+  return +((saldoInicial + ingresos + depositos - gastos - retiros).toFixed(2));
 };
 
 /**
@@ -681,26 +683,13 @@ RN.calc.reservaCaja = function (mes) {
   return b;
 };
 
-/** Gastos del mes (sólo gastos OPERATIVOS — v5.27.0: excluye devoluciones de
- * inversión que ya no viven en state.gastos). */
+/** Gastos del mes. */
 RN.calc.gastosMes = function (mes) {
   mes = mes || RN.calc.mesActualStr();
   // v5.13.1: Bug #9 — simplificada la lógica de filtrado.
   var mesNorm = mes.slice(0, 7);
   return RN.state.gastos.filter(function (g) { return (g.mes || '').slice(0, 7) === mesNorm; })
     .reduce(function (s, g) { return s + (g.monto || 0); }, 0);
-};
-
-/**
- * v5.27.0 — Devoluciones de inversión del mes (movimientos de capital).
- * Son egresos del fondo pero NO son gastos operativos.
- */
-RN.calc.devolucionesInversionMes = function (mes) {
-  mes = mes || RN.calc.mesActualStr();
-  var mesNorm = mes.slice(0, 7);
-  return (RN.state.devolucionesInversion || [])
-    .filter(function (d) { return (d.mes || '').slice(0, 7) === mesNorm; })
-    .reduce(function (s, d) { return s + (d.totalRecibidoCUP || d.monto || 0); }, 0);
 };
 
 /** Pago al proveedor de internet del mes indicado (o null si no hay). v5.8.6 */

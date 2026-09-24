@@ -375,10 +375,12 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
         '<span class="acc-label">Fondo de caja disponible ahora</span>' +
         '<span class="acc-value">' + RN.calc.formatCUP(fondoDisponible) + '</span>' +
       '</div>' +
-      + RN.moneda.bloquePagoHTML('dev-pago', { titulo: 'Monto de la devolución' }) +
       '<div class="form-row"><div>' +
-        '<label style="margin-top:8px;display:block">Sugerido (CUP): ' + RN.calc.formatCUP(Math.max(0, recuperadoNeto)) + '</label>' +
-        '<input type="hidden" id="dev-data-saldo" data-saldo="' + saldoDevolver + '" data-fondo="' + fondoDisponible + '" data-recuperado="' + recuperadoNeto + '">' +
+        '<label>Monto a devolver (CUP) *</label>' +
+        // v5.13.16 (CODE-3): data-attributes en lugar de oninput inline
+        '<input id="dev-monto" type="number" step="0.01" min="0.01" placeholder="0.00" value="' + (sugerido > 0 ? sugerido.toFixed(2) : '') + '"' +
+          ' data-saldo="' + saldoDevolver + '" data-fondo="' + fondoDisponible + '" data-recuperado="' + recuperadoNeto + '">' +
+        '<small class="muted" style="display:block;margin-top:4px">Sugerido: lo recuperado del negocio que aún no has devuelto (' + RN.calc.formatCUP(Math.max(0, recuperadoNeto)) + ').</small>' +
       '</div></div>' +
       '<div class="form-row"><div>' +
         '<label>Concepto (opcional)</label>' +
@@ -395,18 +397,15 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
       '<button class="btn primary" onclick="RN.inversion.guardarDevolucion(\'' + RN.render.escAttr(inv.id) + '\')" id="dev-btn-guardar">💨 Registrar devolución</button>' +
     '</div>';
   RN.uiComponents.modal(html);
-  RN.moneda.initBloquePago('dev-pago');
-  RN.moneda.configModoDerivado('dev-pago', null);
-  // Stock data-attrs en el input CUP para compatibilidad con validar
-  var cupIn = document.getElementById('dev-pago-monto-cup');
-  if (cupIn) {
-    cupIn.setAttribute('data-saldo', String(saldoDevolver || 0));
-    cupIn.setAttribute('data-fondo', String(fondoDisponible || 0));
-    cupIn.setAttribute('data-recuperado', String(recuperadoNeto || 0));
-    if (sugerido > 0) cupIn.value = sugerido.toFixed(2);
+  // v5.13.16 (CODE-3): event delegation vía addEventListener en lugar de oninput inline
+  var montoInput = document.getElementById('dev-monto');
+  if (montoInput) {
+    montoInput.addEventListener('input', function () {
+      RN.inversion._validarDevolucion(this);
+    });
   }
-  RN.moneda.recalcBloquePago('dev-pago');
-  RN.inversion._validarDevolucion();
+  // Validación inicial
+  RN.inversion._validarDevolucion(document.getElementById('dev-monto'));
 };
 
 /**
@@ -420,14 +419,13 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
  *   como parámetros inline, evitando problemas con formatos exponenciales.
  * @param {HTMLInputElement} input — el campo de monto con data-attributes.
  */
-RN.inversion._validarDevolucion = function () {
-  var input = document.getElementById('dev-pago-monto-cup');
+RN.inversion._validarDevolucion = function (input) {
+  if (!input) return;
+  var monto = parseFloat(input.value) || 0;
   var aviso = document.getElementById('dev-aviso');
   var btn = document.getElementById('dev-btn-guardar');
   if (!aviso) return;
-  var pago = RN.moneda.leerBloquePago('dev-pago', 0);
-  var monto = pago.totalRecibidoCUP || 0;
-  if (!input) return;
+  // v5.13.16 (CODE-3): leer valores desde data-attributes
   var saldoDevolver = parseFloat(input.getAttribute('data-saldo')) || 0;
   var fondoDisponible = parseFloat(input.getAttribute('data-fondo')) || 0;
   var recuperadoNeto = parseFloat(input.getAttribute('data-recuperado')) || 0;

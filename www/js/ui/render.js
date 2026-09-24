@@ -854,28 +854,13 @@ RN.render.inversion = function () {
   const kpi = document.getElementById('kpi-inversion');
   const pctPersonal = RN.investment.pctPersonal();
   // v5.13.2 (fusión visual): KPIs combinados de inversión + deudas en una sola grid.
-  // v5.27.0: Vista principal de caja en la parte superior (sólo si hay caja).
-  if (kpi) {
-    kpi.innerHTML = '<div class="kpi-group-title">Caja (USD/CUP unificado en CUP)</div>'
-      + '<div class="kpi-grid">'
-      + RN.render._kpiCajaDobleMonedaBlock()
-      + '</div>'
-      + RN.render._kpiInversionesBlock(_deudasActivas, _deudasConcluidas)
-      + '</div>';
-  }
-
   // v5.13.16 (UI-3): KPIs agrupados en dos bloques con sub-títulos para reducir
   //   el scroll vertical en móvil y dar contexto visual inmediato.
-  var _deudasActivas = RN.investment.deudasActivas();
-  var _deudasConcluidas = RN.investment.deudasConcluidas();
-  var _saldoDeudas = _deudasActivas.reduce(function (s, i) { return s + RN.investment.saldoADevolver(i); }, 0);
-  var _devueltoActivas = _deudasActivas.reduce(function (s, i) { return s + RN.investment.totalDevuelto(i); }, 0);
-  var _devueltoConcluidas = _deudasConcluidas.reduce(function (s, i) { return s + RN.investment.totalDevuelto(i); }, 0);
-  var _pctGananciaMes = RN.investment.pctGananciaMes();
-  var _pctRecKPI = _pctGananciaMes > 0 ? RN.investment.porcentajeRecuperacionEfectiva() : RN.investment.porcentajeRecuperacion();
-  var _totalRecKPI = _pctGananciaMes > 0 ? RN.investment.totalRecuperadoEfectivo() : RN.investment.totalRecuperado();
-
-  if (false && kpi) {
+  // v5.13.16 (LOG-1): El KPI "% recuperación" usa porcentajeRecuperacionEfectiva()
+  //   cuando pctGananciaMes > 0, para ser consistente con el "% efectivo" de cada
+  //   card. Antes usaba porcentajeRecuperacion() (solo margen de clientes) y
+  //   contradecía el porcentaje efectivo de las cards.
+  if (kpi) {
     var _deudasActivas = RN.investment.deudasActivas();
     var _deudasConcluidas = RN.investment.deudasConcluidas();
     var _saldoDeudas = _deudasActivas.reduce(function (s, i) { return s + RN.investment.saldoADevolver(i); }, 0);

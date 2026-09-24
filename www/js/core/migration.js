@@ -5,7 +5,7 @@
 
 RN.migration = RN.migration || {};
 
-RN.migration.VERSION_ESQUEMA = 11;
+RN.migration.VERSION_ESQUEMA = 10;
 
 /** Aplica migraciones al blob de datos cargado. */
 RN.migration.migrar = function (data) {
@@ -260,56 +260,6 @@ RN.migration.migrar = function (data) {
       data.gastos = _gastosRestantes;
     }
     v = 10;
-  }
-
-  // v10->v11 (v5.27.0): separar las DEVOLUCIONES DE PRÉSTAMO de los gastos
-  //   y agregar doble moneda a retiros, depósitos y devoluciones.
-  //   Antes las devoluciones vivían en state.gastos con esDevolucionInversion=true,
-  //   contaminando la utilidad neta. Ahora viven en su propio array y se resta el
-  //   totalRecibidoCUP del fondo de caja sin tocar la utilidad.
-  //   También enriquecemos retiros/depositos/devoluciones con campos de moneda:
-  //     moneda: 'CUP' | 'USD' | 'MIXTO'
-  //     montoUSD, montoCUP, montoCUPDesdeUSD, totalRecibidoCUP, tasaUsd
-  if (v < 11) {
-    data.devolucionesInversion = data.devolucionesInversion || [];
-    if (Array.isArray(data.gastos)) {
-      var _gastosRestantes2 = [];
-      data.gastos.forEach(function (g) {
-        if (g && g.esDevolucionInversion) {
-          data.devolucionesInversion.push({
-            id: g.id || ('devinv-' + Math.random().toString(36).slice(2, 9)),
-            inversionId: g.inversionId || null,
-            concepto: g.concepto || 'Devolución de préstamo',
-            monto: g.monto || 0,
-            moneda: 'CUP',
-            montoUSD: 0,
-            montoCUP: g.monto || 0,
-            montoCUPDesdeUSD: 0,
-            totalRecibidoCUP: g.monto || 0,
-            tasaUsd: 0,
-            fecha: g.fecha || null,
-            mes: g.mes || (g.fecha ? String(g.fecha).slice(0, 7) : null)
-          });
-        } else {
-          _gastosRestantes2.push(g);
-        }
-      });
-      data.gastos = _gastosRestantes2;
-    }
-    // Asegurar campos de doble moneda en retiros y depósitos ya migrados.
-    (data.retiros || []).forEach(function (r) {
-      if (!r.moneda) r.moneda = 'CUP';
-      if (r.totalRecibidoCUP === undefined) r.totalRecibidoCUP = r.monto || 0;
-      if (r.montoUSD === undefined) r.montoUSD = 0;
-      if (r.montoCUP === undefined) r.montoCUP = r.monto || 0;
-    });
-    (data.depositos || []).forEach(function (d) {
-      if (!d.moneda) d.moneda = 'CUP';
-      if (d.totalRecibidoCUP === undefined) d.totalRecibidoCUP = d.monto || 0;
-      if (d.montoUSD === undefined) d.montoUSD = 0;
-      if (d.montoCUP === undefined) d.montoCUP = d.monto || 0;
-    });
-    v = 11;
   }
 
   // Reconstruir recuperación de inversión desde el historial si está en 0.
