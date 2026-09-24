@@ -57,15 +57,9 @@ RN.caja.depositar = function () {
       <div class="kpi green" style="margin-bottom:16px">
         <div class="label">Fondo de caja actual</div>
         <div class="value">${RN.calc.formatCUP(fondoActual)}</div>
-        <div class="sub">El depósito se sumará a este fondo</div>
+        <div class="sub">El depósito se sumará a este fondo (en CUP)</div>
       </div>
-      <div class="form-row">
-        <div>
-          <label>Monto a depositar (CUP) *</label>
-          <input id="deposito-monto" type="number" step="0.01" min="0.01" placeholder="0.00"
-                 oninput="RN.caja._validarDeposito(this)">
-        </div>
-      </div>
+      ${RN.moneda.bloquePagoHTML('dep-pago', { titulo: 'Monto del depósito' })}
       <div class="form-row">
         <div>
           <label>Concepto / Origen</label>
@@ -78,15 +72,16 @@ RN.caja.depositar = function () {
           <input id="deposito-fecha" type="date" value="${new Date().toISOString().slice(0, 10)}">
         </div>
       </div>
-      <div id="deposito-aviso" style="margin-top:8px"></div>
     </div>
     <div class="modal-footer">
       <button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>
-      <button class="btn primary" onclick="RN.caja.guardarDeposito()" id="deposito-btn-guardar">
+      <button class="btn primary" onclick="RN.caja.guardarDeposito()">
         💰 Depositar
       </button>
     </div>`;
   RN.uiComponents.modal(html);
+  RN.moneda.initBloquePago('dep-pago');
+  RN.moneda.configModoDerivado('dep-pago', null);
 };
 
 /** Validación en tiempo real del monto del depósito. */
@@ -106,15 +101,21 @@ RN.caja._validarDeposito = function (input) {
   }
 };
 
-/** Guarda el depósito en el estado y refresca la UI. */
+/**
+ * v5.27.0 — Guarda el depósito con desglose de moneda (CUP, USD o MIXTO)
+ * leyendo el bloque de pago. La etiqueta pública sigue siendo RN.caja.depositar().
+ */
 RN.caja.guardarDeposito = function () {
-  var monto = parseFloat(document.getElementById('deposito-monto').value) || 0;
-  if (monto <= 0) {
-    RN.notifyUI.toast('El monto debe ser mayor que 0', 'error');
+  var pago = RN.moneda.leerBloquePago('dep-pago', 0);
+  var total = pago.totalRecibidoCUP || 0;
+  if (total <= 0) {
+    RN.notifyUI.toast('Ingresa cuánto depositaste en USD y/o CUP', 'error');
     return;
   }
-  var concepto = document.getElementById('deposito-concepto').value.trim() || 'Depósito a caja';
-  var fecha = document.getElementById('deposito-fecha').value || new Date().toISOString().slice(0, 10);
+  var concepto = (document.getElementById('deposito-concepto') || {}).value || 'Depósito a caja';
+  concepto = (concepto || '').toString().trim() || 'Depósito a caja';
+  var fecha = (document.getElementById('deposito-fecha') || {}).value
+    || new Date().toISOString().slice(0, 10);
   var fechaISO = fecha + 'T00:00:00';
   var mes = fecha.slice(0, 7);
 
@@ -122,7 +123,13 @@ RN.caja.guardarDeposito = function () {
   RN.state.depositos.push({
     id: RN.calc.uid('deposito'),
     concepto: concepto,
-    monto: monto,
+    monto: total,
+    moneda: pago.moneda,
+    montoUSD: pago.montoUSD || 0,
+    montoCUP: pago.montoCUP || 0,
+    montoCUPDesdeUSD: pago.montoCUPDesdeUSD || 0,
+    totalRecibidoCUP: total,
+    tasaUsd: pago.tasaUsd,
     fecha: fechaISO,
     mes: mes
   });
@@ -130,7 +137,11 @@ RN.caja.guardarDeposito = function () {
   RN.storageLocal.guardar();
   RN.uiComponents.cerrarModal();
   RN.render.todo();
-  RN.notifyUI.toast('Depósito registrado: ' + RN.calc.formatCUP(monto), 'success');
+  var msg = 'Depósito registrado: ' + RN.calc.formatCUP(total);
+  if ((pago.montoUSD || 0) > 0 && pago.tasaUsd > 0) {
+    msg += ' (≈ ' + RN.moneda.formatUSD(pago.montoUSD) + ' × ' + pago.tasaUsd + ')';
+  }
+  RN.notifyUI.toast(msg, 'success');
 };
 
 /** Muestra el historial de depósitos a la caja en un modal. */
@@ -235,13 +246,7 @@ RN.caja.extraer = function () {
         </div>
       </div>
       ${bolsillosHTML}
-      <div class="form-row">
-        <div>
-          <label>Monto a retirar (CUP) *</label>
-          <input id="retiro-monto" type="number" step="0.01" min="0.01" placeholder="0.00"
-                 oninput="RN.caja._validarMonto(this, ${b.retirable})">
-        </div>
-      </div>
+      ${RN.moneda.bloquePagoHTML('ret-pago', { titulo: 'Monto del retiro' })}
       <div class="form-row">
         <div>
           <label>Concepto / Motivo</label>
@@ -264,6 +269,8 @@ RN.caja.extraer = function () {
       </button>
     </div>`;
   RN.uiComponents.modal(html);
+  RN.moneda.initBloquePago('ret-pago');
+  RN.moneda.configModoDerivado('ret-pago', null);
 };
 
 /**
@@ -301,22 +308,20 @@ RN.caja._validarMonto = function (input, retirable) {
 };
 
 /**
- * Guarda el retiro en state.retiros (v5.19.0).
- * Antes se guardaba como gasto con esRetiroCaja=true, lo que ensuciaba la
- * utilidad. Ahora los retiros viven aparte y se restan SOLO del bolsillo libre.
+ * v5.27.0 — Guarda el retiro con desglose de moneda (CUP, USD o MIXTO).
+ * Las salidas (USD o CUP) totalizan a CUP según la tasa vigente al momento.
  */
 RN.caja.guardar = function () {
-  var monto = parseFloat(document.getElementById('retiro-monto').value) || 0;
+  var pago = RN.moneda.leerBloquePago('ret-pago', 0);
+  var monto = pago.totalRecibidoCUP || 0;
   if (monto <= 0) {
-    RN.notifyUI.toast('El monto debe ser mayor que 0', 'error');
+    RN.notifyUI.toast('Ingresa cuánto retiraste en USD y/o CUP', 'error');
     return;
   }
 
-  var concepto = document.getElementById('retiro-concepto').value.trim() || 'Retiro de caja';
-  var fecha = document.getElementById('retiro-fecha').value || new Date().toISOString().slice(0, 10);
-  // v5.13.5 (ISSUE #9): Construir fecha ISO sin conversión de timezone.
-  // new Date('YYYY-MM-DD').toISOString() interpreta la fecha como medianoche
-  // UTC, desplazándola un día atrás para usuarios en UTC-5 (Cuba).
+  var concepto = (document.getElementById('retiro-concepto') || {}).value || 'Retiro de caja';
+  concepto = (concepto || '').toString().trim() || 'Retiro de caja';
+  var fecha = (document.getElementById('retiro-fecha') || {}).value || new Date().toISOString().slice(0, 10);
   var fechaISO = fecha + 'T00:00:00';
   var mes = fecha.slice(0, 7);
 
@@ -325,14 +330,18 @@ RN.caja.guardar = function () {
     id: RN.calc.uid('retiro'),
     concepto: concepto,
     monto: monto,
+    moneda: pago.moneda,
+    montoUSD: pago.montoUSD || 0,
+    montoCUP: pago.montoCUP || 0,
+    montoCUPDesdeUSD: pago.montoCUPDesdeUSD || 0,
+    totalRecibidoCUP: monto,
+    tasaUsd: pago.tasaUsd,
     fecha: fechaISO,
     mes: mes
   });
 
   RN.storageLocal.guardar();
   RN.uiComponents.cerrarModal();
-  // v5.13.8 (LOG-6/CODE-7): Usar render.todo() para refrescar todas las vistas
-  // que dependen del fondo de caja (dashboard, gastos, inversion, etc.)
   RN.render.todo();
   RN.notifyUI.toast('Retiro de caja registrado: ' + RN.calc.formatCUP(monto), 'success');
 };

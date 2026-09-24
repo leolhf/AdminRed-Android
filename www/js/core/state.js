@@ -26,8 +26,20 @@ RN.state = {
    * `esRetiroCaja=true`, lo que ensuciaba la utilidad (un retiro no es un gasto
    * del negocio). Ahora viven en su propio array y se restan SOLO del bolsillo
    * libre. Cada entrada: { id, concepto, monto, fecha, mes }.
+   * v5.27.0 — Doble moneda: además de `monto` (derivado en CUP) se guardan
+   * `moneda`, `montoUSD`, `montoCUP`, `montoCUPDesdeUSD`, `totalRecibidoCUP`,
+   * `tasaUsd` para mostrar el desglose y permitir pagar en USD o mixto.
    */
   retiros: [],
+  /**
+   * v5.27.0 — Array de DEVOLUCIONES DE PRÉSTAMO (pagos al prestamista de un
+   * préstamo externo). Antes se guardaban como gastos con `esDevolucionInversion`
+   * (ensuciaban la utilidad y duplicaban el descuento del fondo). Ahora viven en
+   * su propio array: restan del fondo pero NO computan como gasto operativo.
+   * Cada entrada: { id, inversionId, concepto, monto, fecha, mes,
+   *   moneda, montoUSD, montoCUP, montoCUPDesdeUSD, totalRecibidoCUP, tasaUsd }.
+   */
+  devolucionesInversion: [],
   /** Array de lotes de material compartido */
   inventario: [],
   /** Array de consumo de inventario asignado a clientes */
