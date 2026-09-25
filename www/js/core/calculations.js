@@ -539,24 +539,120 @@ RN.calc.aCUP = function (monto, moneda, tasa) {
   return +(monto * tasa).toFixed(2);
 };
 
-/** v5.20.0: Desglose de depósitos por moneda (CUP puro, USD original y su equivalente en CUP). */
+/**
+ * v5.30.0 — Normaliza la moneda de un movimiento de caja.
+ * Los registros antiguos (antes de v5.20.0) no traen `moneda`: se asumen CUP.
+ * Solo hay tres valores válidos: 'CUP', 'USD' y 'MIXTO'.
+ */
+RN.calc.monedaMovimiento = function (m) {
+  var x = (m || {}).moneda;
+  return (x === 'USD' || x === 'MIXTO') ? x : 'CUP';
+};
+
+/**
+ * v5.30.0 — Desglose REAL de un movimiento de caja (depósito o retiro) en sus
+ * dos componentes físicas: { usd, cup }.
+ *
+ * Corrección del bug "MIXTO": antes todo lo que no fuese exactamente 'USD'
+ * caía en la rama CUP, así que la parte en dólares de un movimiento mixto
+ * NUNCA entraba a la gaveta de USD y su equivalente se contaba como si fuese
+ * CUP puro (inflando el CUP físico y descuadrando los dos saldos).
+ *
+ *  - 'CUP'   → { usd: 0, cup: monto }
+ *  - 'USD'   → { usd: montoOriginal, cup: 0 }
+ *  - 'MIXTO' → { usd: montoOriginal, cup: montoCUPDirecto }
+ *    (si el registro es antiguo y no trae montoCUPDirecto, se reconstruye
+ *     como monto − usd×tasa para no perder el dato)
+ */
+RN.calc.desgloseMovimiento = function (m) {
+  m = m || {};
+  var moneda = RN.calc.monedaMovimiento(m);
+  var tasa = (m.tasaUsada || RN.state.config.tasaUsd || 0);
+  if (moneda === 'MIXTO') {
+    var usd = +(m.montoOriginal || 0);
+    var cup = (m.montoCUPDirecto === undefined || m.montoCUPDirecto === null)
+      ? +Math.max(0, (+(m.monto || 0)) - (usd * tasa)).toFixed(2)
+      : +(m.montoCUPDirecto || 0);
+    return { moneda: 'MIXTO', usd: usd, cup: cup, cupDesdeUSD: +(usd * tasa).toFixed(2) };
+  }
+  if (moneda === 'USD') {
+    return { moneda: 'USD', usd: +(m.montoOriginal || 0), cup: 0, cupDesdeUSD: +(m.monto || 0) };
+  }
+  return { moneda: 'CUP', usd: 0, cup: +(m.monto || 0), cupDesdeUSD: 0 };
+};
+
+/** v5.20.0 / v5.30.0: Desglose de depósitos por moneda (CUP puro, USD original y su equivalente en CUP). */
 RN.calc.totalDepositosPorMoneda = function () {
   var cup = 0, usdOriginal = 0, usdCUP = 0;
   (RN.state.depositos || []).forEach(function (d) {
-    if (d.moneda === 'USD') { usdOriginal += (d.montoOriginal || 0); usdCUP += (d.monto || 0); }
-    else { cup += (d.monto || 0); }
+    var x = RN.calc.desgloseMovimiento(d);
+    var tasa = d.tasaUsada || RN.state.config.tasaUsd || 0;
+    cup += x.cup;
+    usdOriginal += x.usd;
+    usdCUP += +(x.usd * tasa).toFixed(2);
   });
-  return { cup: cup, usdOriginal: usdOriginal, usdCUP: usdCUP, total: cup + usdCUP };
+  return { cup: +cup.toFixed(2), usdOriginal: +usdOriginal.toFixed(2), usdCUP: +usdCUP.toFixed(2), total: +(cup + usdCUP).toFixed(2) };
 };
 
-/** v5.20.0: Desglose de retiros por moneda. */
+/** v5.20.0 / v5.30.0: Desglose de retiros por moneda. */
 RN.calc.totalRetirosPorMoneda = function () {
   var cup = 0, usdOriginal = 0, usdCUP = 0;
   (RN.state.retiros || []).forEach(function (r) {
-    if (r.moneda === 'USD') { usdOriginal += (r.montoOriginal || 0); usdCUP += (r.monto || 0); }
-    else { cup += (r.monto || 0); }
+    var x = RN.calc.desgloseMovimiento(r);
+    var tasa = r.tasaUsada || RN.state.config.tasaUsd || 0;
+    cup += x.cup;
+    usdOriginal += x.usd;
+    usdCUP += +(x.usd * tasa).toFixed(2);
   });
-  return { cup: cup, usdOriginal: usdOriginal, usdCUP: usdCUP, total: cup + usdCUP };
+  return { cup: +cup.toFixed(2), usdOriginal: +usdOriginal.toFixed(2), usdCUP: +usdCUP.toFixed(2), total: +(cup + usdCUP).toFixed(2) };
+};
+
+/**
+ * v5.30.0 — Saldos físicos por moneda de la caja AHORA MISMO.
+ *   usd : dólares físicos en la gaveta (cobros + depósitos − retiros, incluido MIXTO)
+ *   cup : pesos físicos en la gaveta (fondo total − equivalente del USD a la tasa vigente)
+ *   totalCUP : fondo de caja total en su equivalente CUP (RN.calc.fondoCaja())
+ * Es el objeto que usan los modales de depositar/retirar para validar moneda
+ * por moneda y para mostrar "cuánto hay de cada una".
+ */
+RN.calc.saldosMoneda = function () {
+  var usd = RN.calc.usdEnCaja();
+  var cup = RN.calc.cupEnCaja();
+  var tasa = RN.state.config.tasaUsd || 0;
+  return {
+    usd: usd,
+    cup: cup,
+    tasa: tasa,
+    usdEnCUP: +(usd * tasa).toFixed(2),
+    totalCUP: RN.calc.fondoCaja()
+  };
+};
+
+/**
+ * v5.30.0 — Valida un movimiento de caja (depósito o retiro) contra los saldos
+ * FÍSICOS reales de cada moneda. Un retiro no puede sacar más billetes de los
+ * que hay de esa moneda (ni más dólares ni más pesos), independientemente del
+ * monto total en CUP-equivalente. Un depósito nunca se bloquea.
+ *
+ * Función pura (sin DOM) para poder testearla desde Node.
+ * @param {{montoUSD:number, montoCUP:number}} datos componentes del movimiento
+ * @param {'deposito'|'retiro'} tipo
+ * @returns {{ok:boolean, motivo:string}}
+ */
+RN.calc.validarMovimientoCaja = function (datos, tipo) {
+  datos = datos || {};
+  var usd = +(datos.montoUSD || 0);
+  var cup = +(datos.montoCUP || 0);
+  if (usd < 0 || cup < 0) return { ok: false, motivo: 'El monto no puede ser negativo' };
+  if (tipo !== 'retiro') return { ok: true, motivo: '' };
+  var s = RN.calc.saldosMoneda();
+  if (usd > s.usd + 0.01) {
+    return { ok: false, motivo: 'Solo hay $' + s.usd.toFixed(2) + ' USD físico en caja y quieres retirar $' + usd.toFixed(2) + ' USD' };
+  }
+  if (cup > s.cup + 0.01) {
+    return { ok: false, motivo: 'Solo hay ' + RN.calc.formatCUP(s.cup) + ' CUP físico en caja y quieres retirar ' + RN.calc.formatCUP(cup) };
+  }
+  return { ok: true, motivo: '' };
 };
 
 /**
@@ -578,11 +674,17 @@ RN.calc.cupEnCaja = function () {
  * un cobro en USD se devuelve en CUP (se descuenta del fondo en CUP, ver
  * modal-cobro.js), así que el USD recibido de un cliente se queda íntegro en
  * la gaveta y no hay que restarle nada aquí.
+ *
+ * v5.30.0 (BUG MIXTO): también cuenta la parte en dólares de los movimientos
+ * MIXTO. Antes solo se miraba `moneda === 'USD'`, por lo que un depósito/retiro
+ * mixto (ej: $20 + 3.000 CUP) no movía ni un dólar en la gaveta de USD y su
+ * equivalente se quedaba sumado al CUP físico. Ahora se usa el desglose real
+ * (RN.calc.desgloseMovimiento).
  */
 RN.calc.usdEnCaja = function () {
   var deCobros = (RN.state.history || []).reduce(function (s, h) { return s + (h.montoPagadoUSD || 0); }, 0);
-  var deDepositos = (RN.state.depositos || []).reduce(function (s, d) { return s + (d.moneda === 'USD' ? (d.montoOriginal || 0) : 0); }, 0);
-  var deRetiros = (RN.state.retiros || []).reduce(function (s, r) { return s + (r.moneda === 'USD' ? (r.montoOriginal || 0) : 0); }, 0);
+  var deDepositos = (RN.state.depositos || []).reduce(function (s, d) { return s + RN.calc.desgloseMovimiento(d).usd; }, 0);
+  var deRetiros = (RN.state.retiros || []).reduce(function (s, r) { return s + RN.calc.desgloseMovimiento(r).usd; }, 0);
   return +(deCobros + deDepositos - deRetiros).toFixed(2);
 };
 

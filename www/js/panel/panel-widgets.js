@@ -359,6 +359,10 @@ RN.panelWidgets.renderReserva = function () {
   html += '<div class="caja-linea"><span class="muted">🔒 Reserva (intocable, ' + b.pct + '%)</span><strong style="color:' + colorRes + '">' + RN.calc.formatCUP(b.reserva) + '</strong></div>';
   html += '<div class="caja-linea"><span class="muted">💸 Libre para ti (' + (100 - b.pct) + '%)</span><strong style="color:' + (b.libre >= 0 ? 'var(--success)' : 'var(--danger)') + '">' + RN.calc.formatCUP(b.libre) + '</strong></div>';
   html += '<div class="caja-linea"><span class="muted">Fondo de caja total</span><strong>' + RN.calc.formatCUP(b.fondo) + '</strong></div>';
+  // v5.30.0: saldos FÍSICOS por moneda que hay ahora en la gaveta (el mixto ya
+  // separa su parte en dólares de su parte en pesos).
+  html += '<div class="caja-linea"><span class="muted">\ud83d\udcb5 USD físico en la gaveta</span><strong>$' + RN.calc.usdEnCaja().toFixed(2) + '</strong></div>';
+  html += '<div class="caja-linea"><span class="muted">\ud83e\ude99 CUP físico en la gaveta</span><strong>' + RN.calc.formatCUP(RN.calc.cupEnCaja()) + '</strong></div>';
   html += '<div class="caja-linea total"><span>Puedes retirar (del bolsillo libre)</span><strong style="color:' + (b.retirable > 0 ? 'var(--success)' : 'var(--danger)') + '">' + RN.calc.formatCUP(b.retirable) + '</strong></div>';
   html += '</div>';
 
@@ -386,6 +390,10 @@ RN.panelWidgets.renderReserva = function () {
   html += '<div class="flex wrap" style="gap:8px;margin-top:12px">' +
     '<button class="btn sm primary" onclick="RN.caja.depositar()">\ud83d\udcb0 Depositar</button>' +
     '<button class="btn sm" onclick="RN.caja.extraer()">\ud83d\udcb5 Retirar</button>' +
+    '<button class="btn sm ghost" onclick="RN.caja.depositar(\'USD\')">\ud83d\udcb5 Depositar USD</button>' +
+    '<button class="btn sm ghost" onclick="RN.caja.extraer(\'USD\')">\ud83d\udcb5 Retirar USD</button>' +
+    '<button class="btn sm ghost" onclick="RN.caja.depositar(\'CUP\')">\ud83e\ude99 Depositar CUP</button>' +
+    '<button class="btn sm ghost" onclick="RN.caja.extraer(\'CUP\')">\ud83e\ude99 Retirar CUP</button>' +
     '<button class="btn sm ghost" onclick="RN.caja.listarDepositos()">\ud83d\udccb Dep\u00f3sitos</button>' +
     '<button class="btn sm ghost" onclick="RN.caja.listar()">\ud83d\udccb Retiros</button>' +
     '<button class="btn sm ghost" onclick="RN.caja.resumenMonedas()">\ud83d\udcb1 Por moneda</button>' +

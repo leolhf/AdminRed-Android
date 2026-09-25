@@ -44,11 +44,55 @@
  * CUP (así fondoCaja()/gastosTotales()/etc. no cambian). Ver también
  * RN.calc.usdEnCaja(), que suma el USD físico entrado por depósitos Y por
  * cobros de clientes pagados en USD (modal-cobro.js).
+ *
+ * v5.30.0: CAJA MULTIMONEDA REAL (corrección del bug de MIXTO).
+ * Un movimiento "Mixto" (ej: $20 + 3.000 CUP) se contabilizaba ENTERO como
+ * CUP: la parte en dólares nunca entraba a la gaveta de USD y su equivalente
+ * se sumaba al CUP físico, dejando los dos saldos descuadrados. Ahora:
+ *   - El desglose real de cada movimiento vive en RN.calc.desgloseMovimiento().
+ *   - RN.calc.usdEnCaja()/totalDepositosPorMoneda()/totalRetirosPorMoneda()
+ *     SÍ separan la parte en USD de los movimientos mixtos.
+ *   - Un retiro no puede sacar más billetes de los que hay DE ESA MONEDA
+ *     (RN.calc.validarMovimientoCaja()), no solo del total en CUP: antes se
+ *     podía retirar $50 físicos sin tener ninguno.
+ *   - Los modales se abren dirigidos a una moneda: depositar('USD').
  */
 RN.caja = RN.caja || {};
 
 /** Categoría especial para distinguir retiros de caja de gastos normales. */
 RN.caja.CATEGORIA_RETIRO = 'Retiro de caja';
+
+/**
+ * v5.30.0 — Texto del monto de un movimiento respetando su moneda real
+ * (CUP, USD o MIXTO). Usa el desglose, no el total en CUP.
+ */
+RN.caja._montoTxt = function (m) {
+  var x = RN.calc.desgloseMovimiento(m);
+  var eq = '<span class="muted" style="font-size:11px">(' + RN.calc.formatCUP(m.monto) + ')</span>';
+  if (x.moneda === 'USD') return '$' + x.usd.toFixed(2) + ' USD ' + eq;
+  if (x.moneda === 'MIXTO') return '$' + x.usd.toFixed(2) + ' + ' + RN.calc.formatCUP(x.cup) + ' ' + eq;
+  return RN.calc.formatCUP(m.monto);
+};
+
+/**
+ * v5.30.0 — Tarjeta con los saldos FÍSICOS por moneda que hay AHORA en la caja.
+ * Se inserta en los modales de depósito y retiro para que el usuario sepa de
+ * qué moneda puede disponer realmente.
+ */
+RN.caja._saldosHTML = function () {
+  var s = RN.calc.saldosMoneda();
+  return ''
+    + '<div class="flex wrap" style="gap:8px;margin-bottom:14px">'
+    +   '<div class="kpi blue" style="flex:1;min-width:130px;margin:0">'
+    +     '<div class="label">💵 USD en la gaveta</div>'
+    +     '<div class="value">$' + s.usd.toFixed(2) + '</div>'
+    +   '</div>'
+    +   '<div class="kpi" style="flex:1;min-width:130px;margin:0">'
+    +     '<div class="label">🪙 CUP en la gaveta</div>'
+    +     '<div class="value">' + RN.calc.formatCUP(s.cup) + '</div>'
+    +   '</div>'
+    + '</div>';
+};
 
 /**
  * v5.17.0 — Abre el modal para registrar un DEPÓSITO a la caja.
@@ -57,7 +101,7 @@ RN.caja.CATEGORIA_RETIRO = 'Retiro de caja';
  * A diferencia de los gastos, los depósitos SUMAN al fondo de caja.
  * v5.20.0: admite CUP, USD o mixto, vía el bloque de moneda reutilizable.
  */
-RN.caja.depositar = function () {
+RN.caja.depositar = function (monedaInicial) {
   var fondoActual = RN.calc.fondoCaja();
   var html = `
     <div class="modal-header">
@@ -70,6 +114,7 @@ RN.caja.depositar = function () {
         <div class="value">${RN.calc.formatCUP(fondoActual)}</div>
         <div class="sub" id="deposito-fondo-preview">El depósito se sumará a este fondo</div>
       </div>
+      ${RN.caja._saldosHTML()}
       ${RN.moneda.bloquePagoHTML('deposito', { titulo: 'Monto a depositar' })}
       <div class="form-row">
         <div>
@@ -92,7 +137,7 @@ RN.caja.depositar = function () {
       </button>
     </div>`;
   RN.uiComponents.modal(html);
-  RN.moneda.initBloquePago('deposito');
+  RN.moneda.initBloquePago('deposito', monedaInicial);
   RN.moneda.configModoDerivado('deposito', function (montoCUP) {
     var prev = document.getElementById('deposito-fondo-preview');
     if (prev) {
@@ -108,6 +153,12 @@ RN.caja.guardarDeposito = function () {
   var datos = RN.moneda.leerBloquePago('deposito', 0);
   if (datos.totalRecibidoCUP <= 0) {
     RN.notifyUI.toast('Ingresa un monto válido mayor que 0', 'error');
+    return;
+  }
+  // v5.30.0: coherencia del desglose (montos no negativos).
+  var chkDep = RN.calc.validarMovimientoCaja(datos, 'deposito');
+  if (!chkDep.ok) {
+    RN.notifyUI.toast(chkDep.motivo, 'error');
     return;
   }
   var concepto = document.getElementById('deposito-concepto').value.trim() || 'Depósito a caja';
@@ -149,11 +200,7 @@ RN.caja.listarDepositos = function () {
     ? '<p class="muted" style="text-align:center;padding:24px">No hay depósitos registrados</p>'
     : depositos.map(function (d) {
         var fecha = new Date(d.fecha).toLocaleDateString('es-CU');
-        var montoTxt = d.moneda === 'USD'
-          ? '$' + (d.montoOriginal || 0).toFixed(2) + ' USD <span class="muted" style="font-size:11px">(' + RN.calc.formatCUP(d.monto) + ')</span>'
-          : (d.moneda === 'MIXTO'
-              ? '$' + (d.montoOriginal || 0).toFixed(2) + ' + ' + RN.calc.formatCUP(d.montoCUPDirecto || 0) + ' <span class="muted" style="font-size:11px">(' + RN.calc.formatCUP(d.monto) + ')</span>'
-              : RN.calc.formatCUP(d.monto));
+        var montoTxt = RN.caja._montoTxt(d);
         return '<tr>' +
           '<td>' + fecha + '</td>' +
           '<td>' + RN.render.esc(d.concepto) + '</td>' +
@@ -171,7 +218,7 @@ RN.caja.listarDepositos = function () {
       <div class="kpi green" style="margin-bottom:16px">
         <div class="label">Total depositado</div>
         <div class="value">${RN.calc.formatCUP(total)}</div>
-        <div class="sub">${depositos.length} depósito(s) · CUP: ${RN.calc.formatCUP(pm.cup)} · USD: $${pm.usdOriginal.toFixed(2)} (${RN.calc.formatCUP(pm.usdCUP)})</div>
+        <div class="sub">${depositos.length} depósito(s) · CUP físico: ${RN.calc.formatCUP(pm.cup)} · USD físico: $${pm.usdOriginal.toFixed(2)} (${RN.calc.formatCUP(pm.usdCUP)})</div>
       </div>
       <table class="table" style="width:100%">
         <thead>
@@ -225,10 +272,12 @@ RN.caja.resumenMonedas = function () {
       </div>
 
       <div class="flex wrap" style="gap:8px;margin-bottom:20px">
-        <button class="btn sm" onclick="RN.uiComponents.cerrarModal(); RN.caja.extraer(); setTimeout(function(){RN.moneda.setMonedaBloque('retiro','USD');},0)">💵 Retirar USD</button>
-        <button class="btn sm" onclick="RN.uiComponents.cerrarModal(); RN.caja.extraer(); setTimeout(function(){RN.moneda.setMonedaBloque('retiro','CUP');},0)">🪙 Retirar CUP</button>
-        <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar(); setTimeout(function(){RN.moneda.setMonedaBloque('deposito','USD');},0)">💵 Depositar USD</button>
-        <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar(); setTimeout(function(){RN.moneda.setMonedaBloque('deposito','CUP');},0)">🪙 Depositar CUP</button>
+        <button class="btn sm" onclick="RN.uiComponents.cerrarModal(); RN.caja.extraer('USD')">💵 Retirar USD</button>
+        <button class="btn sm" onclick="RN.uiComponents.cerrarModal(); RN.caja.extraer('CUP')">🪙 Retirar CUP</button>
+        <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar('USD')">💵 Depositar USD</button>
+        <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar('CUP')">🪙 Depositar CUP</button>
+        <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.extraer('MIXTO')">🔀 Retirar mixto</button>
+        <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar('MIXTO')">🔀 Depositar mixto</button>
       </div>
 
       <div class="card" style="margin:0;padding:14px;background:var(--bg)">
@@ -347,7 +396,7 @@ RN.caja.eliminarDeposito = function (id) {
  * Muestra el fondo disponible y permite ingresar el monto a retirar.
  * v5.20.0: admite CUP, USD o mixto, y muestra cuánto USD físico hay en caja.
  */
-RN.caja.extraer = function () {
+RN.caja.extraer = function (monedaInicial) {
   var fondoDisponible = RN.calc.fondoCaja();
   var fondoFormateado = RN.calc.formatCUP(fondoDisponible);
   // v5.19.0: modelo "dos bolsillos". Solo se puede retirar del bolsillo LIBRE.
@@ -386,6 +435,7 @@ RN.caja.extraer = function () {
         </div>
       </div>
       ${bolsillosHTML}
+      ${RN.caja._saldosHTML()}
       ${RN.moneda.bloquePagoHTML('retiro', { titulo: 'Monto a retirar' })}
       <div id="retiro-aviso" style="margin-top:8px"></div>
       <div class="form-row">
@@ -410,7 +460,7 @@ RN.caja.extraer = function () {
       </button>
     </div>`;
   RN.uiComponents.modal(html);
-  RN.moneda.initBloquePago('retiro');
+  RN.moneda.initBloquePago('retiro', monedaInicial);
   RN.moneda.configModoDerivado('retiro', function (montoCUP) {
     RN.caja._validarRetiroDerivado(montoCUP, b.retirable);
   });
@@ -435,17 +485,28 @@ RN.caja._validarRetiroDerivado = function (montoCUP, retirable) {
       ' del bolsillo reservado.</span></div>';
   }
 
+  // v5.30.0: además del bolsillo libre, se valida el dinero FÍSICO por moneda.
+  var datos = RN.moneda.leerBloquePago('retiro', 0);
+  var chk = RN.calc.validarMovimientoCaja(datos, 'retiro');
+  var fisicoTxt = '';
+  if (datos.montoUSD > 0) fisicoTxt += 'Sacarás $' + datos.montoUSD.toFixed(2) + ' USD de la gaveta de dólares. ';
+  if (datos.montoCUP > 0) fisicoTxt += 'Sacarás ' + RN.calc.formatCUP(datos.montoCUP) + ' de la gaveta de pesos. ';
+  fisicoTxt = fisicoTxt ? '<div class="muted" style="font-size:12px;margin-top:4px">' + fisicoTxt + '</div>' : '';
+
   if (montoCUP <= 0) {
     aviso.innerHTML = '<span class="badge warn">Ingresa un monto válido mayor que 0</span>';
     if (btn) btn.disabled = true;
+  } else if (!chk.ok) {
+    aviso.innerHTML = '<span class="badge due">🚫 ' + chk.motivo + '</span>' + avisoReserva;
+    if (btn) btn.disabled = true; // v5.30.0: bloquea — no hay billetes de esa moneda
   } else if (montoCUP > retirable) {
     aviso.innerHTML = '<span class="badge due">⚠️ El monto excede el bolsillo libre (' +
-      RN.calc.formatCUP(retirable) + ').</span>' + avisoReserva;
+      RN.calc.formatCUP(retirable) + ').</span>' + avisoReserva + fisicoTxt;
     if (btn) btn.disabled = false; // permitimos pero advertimos
   } else {
     var restante = +(retirable - montoCUP).toFixed(2);
     aviso.innerHTML = '<span class="badge ok">✓ Bolsillo libre restante después del retiro: ' +
-      RN.calc.formatCUP(restante) + '</span>' + avisoReserva;
+      RN.calc.formatCUP(restante) + '</span>' + avisoReserva + fisicoTxt;
     if (btn) btn.disabled = false;
   }
 };
@@ -460,6 +521,13 @@ RN.caja.guardar = function () {
   var datos = RN.moneda.leerBloquePago('retiro', 0);
   if (datos.totalRecibidoCUP <= 0) {
     RN.notifyUI.toast('El monto debe ser mayor que 0', 'error');
+    return;
+  }
+
+  // v5.30.0: bloqueo real por moneda — no se retiran billetes que no existen.
+  var chkRet = RN.calc.validarMovimientoCaja(datos, 'retiro');
+  if (!chkRet.ok) {
+    RN.notifyUI.toast(chkRet.motivo, 'error');
     return;
   }
 
@@ -509,11 +577,7 @@ RN.caja.listar = function () {
     ? '<p class="muted" style="text-align:center;padding:24px">No hay retiros registrados</p>'
     : retiros.map(function (r) {
         var fecha = new Date(r.fecha).toLocaleDateString('es-CU');
-        var montoTxt = r.moneda === 'USD'
-          ? '$' + (r.montoOriginal || 0).toFixed(2) + ' USD <span class="muted" style="font-size:11px">(' + RN.calc.formatCUP(r.monto) + ')</span>'
-          : (r.moneda === 'MIXTO'
-              ? '$' + (r.montoOriginal || 0).toFixed(2) + ' + ' + RN.calc.formatCUP(r.montoCUPDirecto || 0) + ' <span class="muted" style="font-size:11px">(' + RN.calc.formatCUP(r.monto) + ')</span>'
-              : RN.calc.formatCUP(r.monto));
+        var montoTxt = RN.caja._montoTxt(r);
         return '<tr>' +
           '<td>' + fecha + '</td>' +
           '<td>' + RN.render.esc(r.concepto) + '</td>' +
@@ -531,7 +595,7 @@ RN.caja.listar = function () {
       <div class="kpi red" style="margin-bottom:16px">
         <div class="label">Total retirado</div>
         <div class="value">${RN.calc.formatCUP(total)}</div>
-        <div class="sub">${retiros.length} retiro(s) · CUP: ${RN.calc.formatCUP(pm.cup)} · USD: $${pm.usdOriginal.toFixed(2)} (${RN.calc.formatCUP(pm.usdCUP)})</div>
+        <div class="sub">${retiros.length} retiro(s) · CUP físico: ${RN.calc.formatCUP(pm.cup)} · USD físico: $${pm.usdOriginal.toFixed(2)} (${RN.calc.formatCUP(pm.usdCUP)})</div>
       </div>
       <table class="table" style="width:100%">
         <thead>

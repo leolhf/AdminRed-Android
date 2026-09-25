@@ -147,14 +147,29 @@ RN.moneda.bloquePagoHTML = function (prefix, opts) {
     + '</div>';
 };
 
-/** Inicializa el estado del bloque de moneda (moneda='CUP'). */
-RN.moneda.initBloquePago = function (prefix) {
+/**
+ * Inicializa el estado del bloque de moneda.
+ * v5.30.0: acepta una moneda inicial ('CUP' | 'USD' | 'MIXTO') para que los
+ * modales de caja puedan abrirse ya en USD ("Retirar USD") sin hacks de
+ * setTimeout desde fuera.
+ */
+RN.moneda.initBloquePago = function (prefix, monedaInicial) {
   RN.moneda._bloqueState[prefix] = { moneda: 'CUP' };
+  if (monedaInicial && monedaInicial !== 'CUP') {
+    RN.moneda.setMonedaBloque(prefix, monedaInicial);
+  }
 };
 
 /** Cambia la moneda seleccionada en el bloque. */
 RN.moneda.setMonedaBloque = function (prefix, moneda) {
   RN.moneda._bloqueState[prefix] = RN.moneda._bloqueState[prefix] || { moneda: 'CUP' };
+  // v5.30.0: sin tasa USD configurada, USD y Mixto no tienen sentido.
+  if ((moneda === 'USD' || moneda === 'MIXTO') && !RN.moneda.tasa()) {
+    if (RN.notifyUI && RN.notifyUI.toast) {
+      RN.notifyUI.toast('Configura la tasa USD en Ajustes para usar USD o Mixto', 'warn');
+    }
+    moneda = 'CUP';
+  }
   RN.moneda._bloqueState[prefix].moneda = moneda;
   var toggle = document.getElementById(prefix + '-moneda-toggle');
   if (toggle) {
@@ -283,11 +298,24 @@ RN.moneda.leerBloquePago = function (prefix, aPagarCUP) {
     moneda: moneda,
     montoUSD: usd,
     montoCUP: cup,
+    // v5.30.0: alias explícito — es la parte pagada EN PESOS (no la equivalente).
+    montoCUPDirecto: cup,
     montoCUPDesdeUSD: cupDesdeUSD,
     totalRecibidoCUP: totalRecibidoCUP,
     tasaUsd: tasa,
     completo: Math.abs(diff) < 0.01
   };
+};
+
+/**
+ * v5.30.0 — ¿El pago quedó partido entre USD y CUP?
+ * Se calcula SIEMPRE a partir de los montos reales (no del toggle), de modo que
+ * "Mixto" nunca pueda comportarse como un simple pago en dólares: si hay pesos
+ * y dólares, es MIXTO, y ambas partes se contabilizan por separado.
+ */
+RN.moneda.esMixto = function (datos) {
+  datos = datos || {};
+  return (+(datos.montoUSD || 0) > 0) && (+(datos.montoCUP || 0) > 0);
 };
 
 /**
