@@ -388,6 +388,7 @@ RN.panelWidgets.renderReserva = function () {
     '<button class="btn sm" onclick="RN.caja.extraer()">\ud83d\udcb5 Retirar</button>' +
     '<button class="btn sm ghost" onclick="RN.caja.listarDepositos()">\ud83d\udccb Dep\u00f3sitos</button>' +
     '<button class="btn sm ghost" onclick="RN.caja.listar()">\ud83d\udccb Retiros</button>' +
+    '<button class="btn sm ghost" onclick="RN.caja.resumenMonedas()">\ud83d\udcb1 Por moneda</button>' +
     '</div>';
 
   cont.innerHTML = html;

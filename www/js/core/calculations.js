@@ -560,6 +560,24 @@ RN.calc.totalRetirosPorMoneda = function () {
 };
 
 /**
+ * v5.28.0: Desglose de lo COBRADO A CLIENTES por moneda (servicio + equipo).
+ * A diferencia de totalDepositosPorMoneda/totalRetirosPorMoneda (donde un
+ * movimiento es de una sola moneda salvo MIXTO), un cobro a cliente puede
+ * traer USD y CUP a la vez en el mismo registro de history, así que aquí
+ * simplemente se suman los campos montoPagadoUSD / montoPagadoCUP /
+ * montoPagadoCUPDesdeUSD de cada h, sin depender de h.moneda.
+ */
+RN.calc.cobrosPorMoneda = function () {
+  var cup = 0, usdOriginal = 0, usdCUP = 0;
+  (RN.state.history || []).forEach(function (h) {
+    usdOriginal += (h.montoPagadoUSD || 0);
+    usdCUP += (h.montoPagadoCUPDesdeUSD || 0);
+    cup += (h.montoPagadoCUP || 0);
+  });
+  return { cup: cup, usdOriginal: usdOriginal, usdCUP: usdCUP, total: cup + usdCUP };
+};
+
+/**
  * v5.20.0: Cuánto USD físico hay en la caja ahora mismo: lo cobrado a clientes
  * en USD (h.montoPagadoUSD) + depósitos en USD − retiros en USD. El vuelto de
  * un cobro en USD se devuelve en CUP (se descuenta del fondo en CUP, ver
