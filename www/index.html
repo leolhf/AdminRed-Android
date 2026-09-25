@@ -361,9 +361,11 @@
             <select id="cfg-auto-updates"><option value="true">Sí</option><option value="false">No</option></select></div>
         </div>
         <div class="flex wrap" style="gap:10px">
-          <button class="btn" onclick="RN.update.buscarAhora()">🔍 Buscar actualizaciones ahora</button>
+          <button class="btn primary" onclick="RN.update.buscarAhora()">🔍 Buscar actualizaciones ahora</button>
+          <button class="btn" onclick="RN.update.diagnostico()">🧩 Diagnóstico de actualizaciones</button>
+          <button class="btn ghost" onclick="RN.update.abrirReleases()">📋 Ver todas las versiones</button>
         </div>
-        <p class="mt-16 muted" id="update-status" style="font-size:12px"></p>
+        <div class="mt-16 muted" id="update-status" style="font-size:12px"></div>
       </div>
       <div class="card">
         <h3>WhatsApp</h3>

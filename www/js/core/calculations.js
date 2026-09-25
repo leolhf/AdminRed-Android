@@ -685,7 +685,56 @@ RN.calc.usdEnCaja = function () {
   var deCobros = (RN.state.history || []).reduce(function (s, h) { return s + (h.montoPagadoUSD || 0); }, 0);
   var deDepositos = (RN.state.depositos || []).reduce(function (s, d) { return s + RN.calc.desgloseMovimiento(d).usd; }, 0);
   var deRetiros = (RN.state.retiros || []).reduce(function (s, r) { return s + RN.calc.desgloseMovimiento(r).usd; }, 0);
-  return +(deCobros + deDepositos - deRetiros).toFixed(2);
+  // v5.31.0: un cuadre de caja hecho en dólares también mueve la gaveta de USD.
+  var deCuadres = RN.calc.usdCuadreAjuste();
+  return +(deCobros + deDepositos - deRetiros - deCuadres).toFixed(2);
+};
+
+/**
+ * v5.31.0 — Ajuste de USD físico provocado por los cuadres de caja en dólares.
+ *
+ * Un cuadre con `cuadreMoneda === 'USD'` guarda `montoCuadreUSD` FIRMADO:
+ *   +X → faltaron X USD (salen de la gaveta)
+ *   −X → sobraron X USD (entran a la gaveta)
+ * Por eso usdEnCaja() lo RESTA. Los cuadres anteriores a v5.31.0 no traen
+ * `cuadreMoneda` (eran siempre en CUP) y no tocan esta gaveta, así que los
+ * datos ya guardados siguen cuadrando igual que antes.
+ */
+RN.calc.usdCuadreAjuste = function () {
+  return +(RN.state.gastos || []).reduce(function (s, g) {
+    if (!g || !g.esCuadreCaja || g.cuadreMoneda !== 'USD') return s;
+    return s + (+(g.montoCuadreUSD || 0));
+  }, 0).toFixed(2);
+};
+
+/**
+ * v5.31.0 — Neto de descuadres de caja POR MONEDA (lo usa el historial de cuadres).
+ *   cup      : neto en PESOS       (+ faltante CUP, − sobrante CUP)
+ *   usd      : neto en DÓLARES     (+ faltante USD, − sobrante USD)
+ *   usdEnCUP : equivalente en CUP del neto en dólares (a la tasa de cada registro)
+ *   totalCUP : neto equivalente en CUP (coincide con el impacto en fondoCaja())
+ *   cantidad : número de cuadres registrados
+ * Los registros anteriores a v5.31.0 (sin `cuadreMoneda`) se cuentan como CUP.
+ */
+RN.calc.descuadresPorMoneda = function () {
+  var cup = 0, usd = 0, usdEnCUP = 0, n = 0;
+  (RN.state.gastos || []).forEach(function (g) {
+    if (!g || !g.esCuadreCaja) return;
+    n++;
+    if (g.cuadreMoneda === 'USD') {
+      usd += +(g.montoCuadreUSD || 0);
+      usdEnCUP += +(g.monto || 0); // ya está en CUP, a la tasa usada al registrar
+    } else {
+      cup += +(g.monto || 0);
+    }
+  });
+  return {
+    cup: +cup.toFixed(2),
+    usd: +usd.toFixed(2),
+    usdEnCUP: +usdEnCUP.toFixed(2),
+    totalCUP: +(cup + usdEnCUP).toFixed(2),
+    cantidad: n
+  };
 };
 
 /** Excedentes (vueltos) totales entregados a clientes. */

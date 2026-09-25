@@ -1079,10 +1079,17 @@ RN.render.gastos = function () {
     var esCuadre = !!g.esCuadreCaja;
     var esSobrante = esCuadre && g.tipoCuadre === 'sobrante';
     var cuadreIcon = esCuadre ? ' 🧮' : '';
-    var cuadreBadge = esCuadre ? '<span class="badge ' + (esSobrante ? 'ok' : 'due') + '" style="margin-left:4px">' + (esSobrante ? 'Sobrante de caja' : 'Faltante de caja') + '</span>' : '';
+    // v5.31.0: un cuadre puede ser en CUP o en USD (cuadreMoneda). En USD se
+    // muestra el monto real en dólares, con su equivalente en CUP entre
+    // paréntesis, para que no se confunda con un descuadre de pesos.
+    var cuadreMoneda = (esCuadre && g.cuadreMoneda === 'USD') ? 'USD' : 'CUP';
+    var cuadreBadge = esCuadre ? '<span class="badge ' + (esSobrante ? 'ok' : 'due') + '" style="margin-left:4px">' + (esSobrante ? 'Sobrante de caja' : 'Faltante de caja') + ' · ' + cuadreMoneda + '</span>' : '';
     var montoAbs = esCuadre ? Math.abs(g.monto) : g.monto;
     var montoLabel = esCuadre ? (esSobrante ? 'Sobrante' : 'Faltante') : 'Gasto';
     var montoColor = esSobrante ? 'style="color:var(--green,#16a34a)"' : '';
+    var montoTxt = (esCuadre && cuadreMoneda === 'USD')
+      ? RN.moneda.formatUSD(Math.abs(g.montoCuadreUSD || 0)) + ' <span class="muted" style="font-size:11px">(' + RN.calc.formatCUP(montoAbs) + ')</span>'
+      : RN.calc.formatCUP(montoAbs);
     return '<div class="acc-card" id="acc-gas-' + g.id + '">' +
       '<div class="acc-summary" onclick="RN.render.toggleCard(\'acc-gas-' + g.id + '\')">' +
         '<span class="acc-dot due"></span>' +
@@ -1091,7 +1098,7 @@ RN.render.gastos = function () {
           '<div class="acc-summary-sub">' + RN.render.esc((g.fecha || '').slice(0, 10)) + ' · ' + RN.render.esc(g.categoria || 'General') + '</div>' +
         '</div>' +
         '<div class="acc-summary-total">' +
-          '<div class="amt" ' + montoColor + '>' + (esSobrante ? '+' : '') + RN.calc.formatCUP(montoAbs) + '</div>' +
+          '<div class="amt" ' + montoColor + '>' + (esSobrante ? '+' : '') + montoTxt + '</div>' +
           '<div class="lbl">' + montoLabel + '</div>' +
         '</div>' +
         '<span class="acc-chevron">▼</span>' +
@@ -1100,7 +1107,7 @@ RN.render.gastos = function () {
         '<div class="acc-row"><span class="acc-label">Fecha</span><span class="acc-value">' + RN.render.esc((g.fecha || '').slice(0, 10)) + '</span></div>' +
         '<div class="acc-row"><span class="acc-label">Concepto</span><span class="acc-value">' + RN.render.esc(g.concepto) + provIcon + '</span></div>' +
         '<div class="acc-row"><span class="acc-label">Categoría</span><span class="acc-value">' + catBadge + retiroBadge + cuadreBadge + '</span></div>' +
-        '<div class="acc-row"><span class="acc-label">Monto</span><span class="acc-value" ' + montoColor + '>' + (esSobrante ? '+' : '') + RN.calc.formatCUP(montoAbs) + '</span></div>' +
+        '<div class="acc-row"><span class="acc-label">Monto</span><span class="acc-value" ' + montoColor + '>' + (esSobrante ? '+' : '') + montoTxt + '</span></div>' +
         '<div class="acc-actions">' +
           '<button class="btn sm danger" onclick="RN.gastos.eliminar(\'' + g.id + '\')">🗑</button>' +
         '</div>' +
