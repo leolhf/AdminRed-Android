@@ -131,7 +131,8 @@ RN.moneda.bloquePagoHTML = function (prefix, opts) {
     +     '<div class="moneda-toggle" id="' + prefix + '-moneda-toggle">'
     +       '<button type="button" class="btn sm primary" data-moneda="CUP" onclick="RN.moneda.setMonedaBloque(\'' + prefix + '\',\'CUP\')">CUP</button>'
     +       '<button type="button" class="btn sm" data-moneda="USD" onclick="RN.moneda.setMonedaBloque(\'' + prefix + '\',\'USD\')" ' + usdDisabled + '>USD</button>'
-    +       '<button type="button" class="btn sm" data-moneda="MIXTO" onclick="RN.moneda.setMonedaBloque(\'' + prefix + '\',\'MIXTO\')" ' + usdDisabled + '>Mixto</button>'
+    +       '<!-- Oculto: el negocio ya opera en USD, no se necesita mixto para movimientos nuevos -->'
+    +       '<button type="button" class="btn sm" data-moneda="MIXTO" onclick="RN.moneda.setMonedaBloque(\'' + prefix + '\',\'MIXTO\')" ' + usdDisabled + ' style="display:none">Mixto</button>'
     +     '</div>'
     +   '</div>'
     +   avisoTasa

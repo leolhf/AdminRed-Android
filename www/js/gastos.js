@@ -26,7 +26,8 @@ RN.gastos.abrirNuevo = function () {
           <div class="moneda-toggle" id="g-moneda-toggle">
             <button type="button" class="btn sm primary" data-moneda="CUP" onclick="RN.gastos.setMoneda('CUP')">CUP</button>
             <button type="button" class="btn sm" data-moneda="USD" onclick="RN.gastos.setMoneda('USD')" ${tasa ? '' : 'disabled title=\"Configura la tasa USD en Ajustes\"'}>USD</button>
-            <button type="button" class="btn sm" data-moneda="MIXTO" onclick="RN.gastos.setMoneda('MIXTO')" ${tasa ? '' : 'disabled title=\"Configura la tasa USD en Ajustes\"'}>Mixto</button>
+            <!-- Oculto: el negocio ya opera en USD, no se necesita mixto para gastos nuevos -->
+            <button type="button" class="btn sm" data-moneda="MIXTO" onclick="RN.gastos.setMoneda('MIXTO')" ${tasa ? '' : 'disabled title=\"Configura la tasa USD en Ajustes\"'} style="display:none">Mixto</button>
           </div>
         </div>
         ${tasa ? `<div class="muted" style="font-size:12px;margin-bottom:10px">Tasa vigente: <strong>1 USD = ${tasa} CUP</strong></div>` : `<div class="muted" style="font-size:12px;margin-bottom:10px;color:var(--danger)">\u26a0 No hay tasa USD configurada. Config\u00farala en Ajustes para pagar en USD.</div>`}

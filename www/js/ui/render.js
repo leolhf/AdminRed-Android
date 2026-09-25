@@ -162,12 +162,25 @@ RN.render.subUSD = function (cup, subTxt) {
  * Reutiliza los estilos .recup-* definidos en styles.css.
  * @returns {string} HTML del bloque
  */
-RN.render.barraRecuperacion = function (inv, rec, pctParam) {
+RN.render.barraRecuperacion = function (inv, rec, pctParam, opts) {
   // v5.13.6 (DUP-3): acepta valores pre-calculados para evitar recalcular.
   // Si no se pasan, calcula aquí (compatibilidad con llamadas externas).
   var invertido = (inv !== undefined) ? inv : RN.investment.totalInvertido();
   var recuperado = (rec !== undefined) ? rec : RN.investment.totalRecuperado();
   var pct = (pctParam !== undefined) ? pctParam : RN.investment.porcentajeRecuperacion();
+  // v5.32.0: opts permite reutilizar esta misma barra para otros totales
+  // (ej. deudas personales) cambiando solo los textos, sin duplicar el HTML.
+  opts = opts || {};
+  var icono = opts.icono || '📈';
+  var titulo = opts.titulo || 'Recuperación de la inversión';
+  var labelInvertido = opts.labelInvertido || 'Invertido';
+  var labelRecuperado = opts.labelRecuperado || 'Recuperado';
+  var labelFaltante = opts.labelFaltante || 'Por recuperar';
+  var textoVacio = opts.textoVacio || 'Sin inversiones registradas';
+  var textoCompleto = opts.textoCompleto || '✓ Inversión recuperada';
+  var textoProceso = opts.textoProceso || 'En proceso de recuperación';
+  var avisoCosto = (opts.avisoCosto !== false); // por defecto muestra el aviso de costo de mega sin configurar
+
   // Limitar el ancho visual a 100% aunque el % supere 100 (recuperada)
   var pctVisual = Math.min(100, Math.max(0, pct));
   var faltante = Math.max(0, +(invertido - recuperado).toFixed(2));
@@ -180,28 +193,30 @@ RN.render.barraRecuperacion = function (inv, rec, pctParam) {
   else cls = 'recup-red';
 
   var estadoTxt;
-  if (invertido <= 0) estadoTxt = '<span class="muted">Sin inversiones registradas</span>';
-  else if (pct >= 100) estadoTxt = '<span style="color:var(--green)">✓ Inversión recuperada</span>';
-  else estadoTxt = '<span class="muted">En proceso de recuperación</span>';
+  if (invertido <= 0) estadoTxt = '<span class="muted">' + textoVacio + '</span>';
+  else if (pct >= 100) estadoTxt = '<span style="color:var(--green)">' + textoCompleto + '</span>';
+  else estadoTxt = '<span class="muted">' + textoProceso + '</span>';
 
   // v5.13.4: Bug #17 - Advertencia visible cuando no hay precio de proveedor
   // configurado. Sin ese dato, el margen y el % de recuperacion se calculan
   // asumiendo costo 0, por lo que estan inflados. La auditoria v5.13.0 (Bug #17)
   // pedia que la UI advirtiera al usuario; la funcion costoMegaConfigurado()
   // ya existia desde v5.13.1 pero no se usaba en la UI.
-  var sinCosto = !RN.investment.costoMegaConfigurado();
+  // v5.32.0: solo aplica a la barra de inversión (avisoCosto=false para deudas,
+  // que no dependen del costo del mega).
+  var sinCosto = avisoCosto && !RN.investment.costoMegaConfigurado();
 
   var html = '';
   html += '<div class="recup-card">';
   html += '  <div class="recup-head">';
-  html += '    <div class="recup-titulo"><span class="recup-ico">📈</span> <strong>Recuperación de la inversión</strong></div>';
+  html += '    <div class="recup-titulo"><span class="recup-ico">' + icono + '</span> <strong>' + titulo + '</strong></div>';
   html += '    <div class="recup-pct"><strong>' + pct + '%</strong>' + (sinCosto ? ' <span class="muted" style="font-size:11px">(estimado)</span>' : '') + '</div>';
   html += '  </div>';
   html += '  <div class="recup-bar"><div class="recup-fill ' + cls + '" data-pct="' + pctVisual + '" style="width:0%"></div></div>';
   html += '  <div class="recup-datos">';
-  html += '    <div class="recup-dato"><span class="muted">Invertido</span><strong>' + RN.calc.formatCUP(invertido) + '</strong></div>';
-  html += '    <div class="recup-dato"><span class="muted">Recuperado</span><strong style="color:var(--green)">' + RN.calc.formatCUP(recuperado) + '</strong></div>';
-  html += '    <div class="recup-dato"><span class="muted">Por recuperar</span><strong style="color:var(--danger)">' + RN.calc.formatCUP(faltante) + '</strong></div>';
+  html += '    <div class="recup-dato"><span class="muted">' + labelInvertido + '</span><strong>' + RN.calc.formatCUP(invertido) + '</strong></div>';
+  html += '    <div class="recup-dato"><span class="muted">' + labelRecuperado + '</span><strong style="color:var(--green)">' + RN.calc.formatCUP(recuperado) + '</strong></div>';
+  html += '    <div class="recup-dato"><span class="muted">' + labelFaltante + '</span><strong style="color:var(--danger)">' + RN.calc.formatCUP(faltante) + '</strong></div>';
   html += '  </div>';
   html += '  <div class="recup-estado">' + estadoTxt + '</div>';
   if (sinCosto) {
@@ -909,6 +924,35 @@ RN.render.inversion = function () {
       recupInvEl.innerHTML = RN.render.barraRecuperacion();
     } else {
       recupInvCard.style.display = 'none';
+    }
+  }
+
+  // v5.32.0: barra gemela de devolución global de deudas personales activas
+  // (préstamos externos). Se muestra solo si hay deudas activas registradas.
+  const recupDeudasEl = document.getElementById('deudas-recuperacion');
+  const recupDeudasCard = document.getElementById('card-recuperacion-deudas');
+  if (recupDeudasEl && recupDeudasCard) {
+    var totalPrestadoActivas = RN.investment.totalPrestadoActivas();
+    if (totalPrestadoActivas > 0) {
+      recupDeudasCard.style.display = '';
+      recupDeudasEl.innerHTML = RN.render.barraRecuperacion(
+        totalPrestadoActivas,
+        RN.investment.totalDevueltoActivas(),
+        RN.investment.porcentajeDevueltoDeudas(),
+        {
+          icono: '🤝',
+          titulo: 'Deudas personales activas',
+          labelInvertido: 'Prestado',
+          labelRecuperado: 'Devuelto',
+          labelFaltante: 'Por devolver',
+          textoVacio: 'Sin deudas personales activas',
+          textoCompleto: '✓ Deuda devuelta',
+          textoProceso: 'En proceso de devolución',
+          avisoCosto: false
+        }
+      );
+    } else {
+      recupDeudasCard.style.display = 'none';
     }
   }
 

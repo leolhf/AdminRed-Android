@@ -717,3 +717,33 @@ RN.investment.totalDevueltoConcluidas = function () {
     return s + RN.investment.totalDevuelto(i);
   }, 0);
 };
+
+/**
+ * v5.32.0 — Total prestado de las deudas ACTIVAS (excluye concluidas, para
+ * que la barra de "Deudas personales activas" no arrastre deudas ya saldadas).
+ */
+RN.investment.totalPrestadoActivas = function () {
+  return RN.investment.deudasActivas().reduce(function (s, i) {
+    return s + (i.monto || 0);
+  }, 0);
+};
+
+/**
+ * v5.32.0 — Total ya devuelto de las deudas ACTIVAS.
+ */
+RN.investment.totalDevueltoActivas = function () {
+  return RN.investment.deudasActivas().reduce(function (s, i) {
+    return s + RN.investment.totalDevuelto(i);
+  }, 0);
+};
+
+/**
+ * v5.32.0 — Porcentaje devuelto de las deudas personales activas, para la
+ * barra "Deudas personales activas" (mismo patrón que porcentajeRecuperacion,
+ * pero solo sobre préstamos externos activos).
+ */
+RN.investment.porcentajeDevueltoDeudas = function () {
+  var total = RN.investment.totalPrestadoActivas();
+  if (!total) return 0;
+  return +(RN.investment.totalDevueltoActivas() / total * 100).toFixed(1);
+};

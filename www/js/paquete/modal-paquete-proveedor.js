@@ -121,7 +121,8 @@ RN.paqueteProveedor.abrir = function () {
       '<div style="display:flex;gap:8px">' +
         '<button class="cobro-moneda-btn active" id="prov-moneda-cup" onclick="RN.paqueteProveedor.setMoneda(\'CUP\')">CUP</button>' +
         '<button class="cobro-moneda-btn" id="prov-moneda-usd" onclick="RN.paqueteProveedor.setMoneda(\'USD\')">USD</button>' +
-        '<button class="cobro-moneda-btn" id="prov-moneda-mixto" onclick="RN.paqueteProveedor.setMoneda(\'MIXTO\')">Mixto</button>' +
+        '<!-- Oculto: el negocio ya opera en USD, no se necesita mixto para pagos nuevos -->' +
+        '<button class="cobro-moneda-btn" id="prov-moneda-mixto" onclick="RN.paqueteProveedor.setMoneda(\'MIXTO\')" style="display:none">Mixto</button>' +
       '</div></div></div>' +
 
       '<div class="form-row" id="prov-grupo-usd" style="display:none"><div><label>Monto en USD</label>' +

@@ -276,8 +276,9 @@ RN.caja.resumenMonedas = function () {
         <button class="btn sm" onclick="RN.uiComponents.cerrarModal(); RN.caja.extraer('CUP')">🪙 Retirar CUP</button>
         <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar('USD')">💵 Depositar USD</button>
         <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar('CUP')">🪙 Depositar CUP</button>
-        <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.extraer('MIXTO')">🔀 Retirar mixto</button>
-        <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar('MIXTO')">🔀 Depositar mixto</button>
+        <!-- Ocultos: el negocio ya opera en USD, no se necesitan atajos de retiro/depósito mixto -->
+        <button class="btn sm ghost" style="display:none" onclick="RN.uiComponents.cerrarModal(); RN.caja.extraer('MIXTO')">🔀 Retirar mixto</button>
+        <button class="btn sm ghost" style="display:none" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar('MIXTO')">🔀 Depositar mixto</button>
       </div>
 
       <div class="card" style="margin:0;padding:14px;background:var(--bg)">
