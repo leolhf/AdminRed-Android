@@ -193,34 +193,16 @@ RN.caja.listarDepositos = function () {
 };
 
 /**
- * v5.28.0 — Modal "Caja por moneda": muestra cuánto se ha cobrado a clientes,
- * depositado y retirado, desglosado en USD físico vs CUP directo, más un
- * conversor rápido USD↔CUP con la tasa vigente. Es una vista de solo lectura
- * (no registra movimientos), pensada como complemento a Depositar/Retirar.
+ * v5.29.0 — Modal "Caja por moneda": muestra cuánto USD físico y cuánto CUP
+ * tienes disponibles EN ESTE MOMENTO en la caja (no un historial acumulado),
+ * para decidir en cuál retirar/depositar. También permite CONVERTIR de una
+ * moneda a otra dentro de la caja (ej: 20 USD → CUP a la tasa vigente), lo
+ * cual sí mueve dinero de verdad, no es solo una calculadora.
  */
 RN.caja.resumenMonedas = function () {
-  var cobros = RN.calc.cobrosPorMoneda();
-  var dep = RN.calc.totalDepositosPorMoneda();
-  var ret = RN.calc.totalRetirosPorMoneda();
-  var usdC = RN.calc.usdEnCaja();
+  var usd = RN.calc.usdEnCaja();
+  var cup = RN.calc.cupEnCaja();
   var tasa = RN.moneda.tasa();
-
-  var fila = function (icono, titulo, r) {
-    return '<tr>' +
-      '<td>' + icono + ' ' + titulo + '</td>' +
-      '<td style="text-align:right">' + (r.usdOriginal > 0 ? '$' + r.usdOriginal.toFixed(2) : '—') + '</td>' +
-      '<td style="text-align:right">' + (r.cup > 0 ? RN.calc.formatCUP(r.cup) : '—') + '</td>' +
-      '<td style="text-align:right;font-weight:bold">' + RN.calc.formatCUP(r.total) + '</td>' +
-      '</tr>';
-  };
-
-  var tabla = '<table class="table" style="width:100%">' +
-    '<thead><tr><th>Concepto</th><th style="text-align:right">USD físico</th><th style="text-align:right">CUP directo</th><th style="text-align:right">Total (CUP)</th></tr></thead>' +
-    '<tbody>' +
-      fila('👥', 'Cobrado a clientes', cobros) +
-      fila('💰', 'Depositado', dep) +
-      fila('💵', 'Retirado', ret) +
-    '</tbody></table>';
 
   var html = `
     <div class="modal-header">
@@ -228,56 +210,125 @@ RN.caja.resumenMonedas = function () {
       <button class="close" onclick="RN.uiComponents.cerrarModal()">×</button>
     </div>
     <div class="modal-body">
-      <div class="kpi blue" style="margin-bottom:16px">
-        <div class="label">USD físico en caja ahora</div>
-        <div class="value">$${usdC.toFixed(2)} USD</div>
-        <div class="sub">${tasa ? 'Tasa vigente: 1 USD = ' + tasa + ' CUP' : '⚠ No hay tasa USD configurada — configúrala en Ajustes'}</div>
-      </div>
-      ${tabla}
-      <div class="card" style="margin:16px 0 0;padding:14px;background:var(--bg)">
-        <strong style="font-size:14px">🔁 Conversor rápido</strong>
-        <div class="form-row" style="margin-top:10px">
-          <div>
-            <label>Monto</label>
-            <input id="rm-conv-monto" type="number" step="0.01" placeholder="0.00" oninput="RN.caja._recalcConversor()">
-          </div>
-          <div>
-            <label>Dirección</label>
-            <select id="rm-conv-moneda" onchange="RN.caja._recalcConversor()">
-              <option value="USD">USD → CUP</option>
-              <option value="CUP">CUP → USD</option>
-            </select>
-          </div>
+      <div class="flex wrap" style="gap:10px;margin-bottom:8px">
+        <div class="kpi blue" style="flex:1;min-width:140px">
+          <div class="label">💵 USD físico</div>
+          <div class="value">$${usd.toFixed(2)}</div>
         </div>
-        <div id="rm-conv-resultado" class="muted" style="margin-top:8px;font-size:14px">Ingresa un monto para convertir</div>
+        <div class="kpi" style="flex:1;min-width:140px">
+          <div class="label">🪙 CUP</div>
+          <div class="value">${RN.calc.formatCUP(cup)}</div>
+        </div>
+      </div>
+      <div class="muted" style="font-size:12px;margin-bottom:18px">
+        ${tasa ? 'Tasa vigente: 1 USD = ' + tasa + ' CUP' : '⚠ No hay tasa USD configurada — configúrala en Ajustes'}
+      </div>
+
+      <div class="flex wrap" style="gap:8px;margin-bottom:20px">
+        <button class="btn sm" onclick="RN.uiComponents.cerrarModal(); RN.caja.extraer(); setTimeout(function(){RN.moneda.setMonedaBloque('retiro','USD');},0)">💵 Retirar USD</button>
+        <button class="btn sm" onclick="RN.uiComponents.cerrarModal(); RN.caja.extraer(); setTimeout(function(){RN.moneda.setMonedaBloque('retiro','CUP');},0)">🪙 Retirar CUP</button>
+        <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar(); setTimeout(function(){RN.moneda.setMonedaBloque('deposito','USD');},0)">💵 Depositar USD</button>
+        <button class="btn sm ghost" onclick="RN.uiComponents.cerrarModal(); RN.caja.depositar(); setTimeout(function(){RN.moneda.setMonedaBloque('deposito','CUP');},0)">🪙 Depositar CUP</button>
+      </div>
+
+      <div class="card" style="margin:0;padding:14px;background:var(--bg)">
+        <strong style="font-size:14px">🔁 Convertir moneda en caja</strong>
+        <p class="muted" style="font-size:12px;margin:6px 0 12px">Cambia billetes físicos de una moneda a otra dentro de la caja (no entra ni sale dinero del negocio, solo cambia cuánto tienes en cada moneda).</p>
+        <div class="moneda-toggle" id="rm-conv-dir" style="margin-bottom:10px">
+          <button type="button" class="btn sm primary" data-dir="USD_A_CUP" onclick="RN.caja._setDireccionConversion('USD_A_CUP')">USD → CUP</button>
+          <button type="button" class="btn sm" data-dir="CUP_A_USD" onclick="RN.caja._setDireccionConversion('CUP_A_USD')">CUP → USD</button>
+        </div>
+        <label id="rm-conv-label">Monto en USD a convertir</label>
+        <input id="rm-conv-monto" type="number" step="0.01" placeholder="0.00" oninput="RN.caja._previsualizarConversion()">
+        <div id="rm-conv-preview" class="muted" style="margin-top:8px;font-size:14px">Ingresa un monto para convertir</div>
+        <button class="btn primary sm" style="margin-top:12px" onclick="RN.caja._confirmarConversion()">🔁 Confirmar conversión</button>
       </div>
     </div>
     <div class="modal-footer">
       <button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cerrar</button>
     </div>`;
+  RN.caja._conversionDir = 'USD_A_CUP';
   RN.uiComponents.modal(html);
 };
 
-/** Recalcula el resultado del conversor rápido dentro de resumenMonedas(). */
-RN.caja._recalcConversor = function () {
-  var out = document.getElementById('rm-conv-resultado');
+/** Cambia la dirección seleccionada del conversor (USD→CUP o CUP→USD). */
+RN.caja._setDireccionConversion = function (dir) {
+  RN.caja._conversionDir = dir;
+  var toggle = document.getElementById('rm-conv-dir');
+  if (toggle) {
+    toggle.querySelectorAll('button').forEach(function (b) {
+      b.classList.toggle('primary', b.dataset.dir === dir);
+    });
+  }
+  var label = document.getElementById('rm-conv-label');
+  if (label) label.textContent = dir === 'USD_A_CUP' ? 'Monto en USD a convertir' : 'Monto en CUP a convertir';
+  RN.caja._previsualizarConversion();
+};
+
+/** Vista previa en vivo del resultado de la conversión (sin guardar nada todavía). */
+RN.caja._previsualizarConversion = function () {
+  var out = document.getElementById('rm-conv-preview');
   if (!out) return;
   var monto = parseFloat((document.getElementById('rm-conv-monto') || {}).value) || 0;
-  var dir = (document.getElementById('rm-conv-moneda') || {}).value || 'USD';
+  var dir = RN.caja._conversionDir || 'USD_A_CUP';
   var tasa = RN.moneda.tasa();
-  if (!tasa) {
-    out.innerHTML = '<span style="color:var(--danger)">⚠ Configura la tasa USD en Ajustes para poder convertir.</span>';
-    return;
-  }
-  if (monto <= 0) {
-    out.innerHTML = 'Ingresa un monto para convertir';
-    return;
-  }
-  if (dir === 'USD') {
-    out.innerHTML = '$' + monto.toFixed(2) + ' USD = <strong>' + RN.calc.formatCUP(+(monto * tasa).toFixed(2)) + '</strong>';
+  if (!tasa) { out.innerHTML = '<span style="color:var(--danger)">⚠ Configura la tasa USD en Ajustes.</span>'; return; }
+  if (monto <= 0) { out.innerHTML = 'Ingresa un monto para convertir'; return; }
+  if (dir === 'USD_A_CUP') {
+    var dispUsd = RN.calc.usdEnCaja();
+    var resultadoCup = +(monto * tasa).toFixed(2);
+    out.innerHTML = '$' + monto.toFixed(2) + ' USD = <strong>' + RN.calc.formatCUP(resultadoCup) + '</strong>' +
+      (monto > dispUsd ? ' <span style="color:var(--danger)">— solo hay $' + dispUsd.toFixed(2) + ' USD en caja</span>' : '');
   } else {
-    out.innerHTML = RN.calc.formatCUP(monto) + ' = <strong>$' + (monto / tasa).toFixed(2) + ' USD</strong>';
+    var dispCup = RN.calc.cupEnCaja();
+    var resultadoUsd = +(monto / tasa).toFixed(2);
+    out.innerHTML = RN.calc.formatCUP(monto) + ' = <strong>$' + resultadoUsd.toFixed(2) + ' USD</strong>' +
+      (monto > dispCup ? ' <span style="color:var(--danger)">— solo hay ' + RN.calc.formatCUP(dispCup) + ' en caja</span>' : '');
   }
+};
+
+/**
+ * Ejecuta la conversión de verdad: se registra como un retiro + un depósito
+ * simultáneos por el mismo valor en CUP (mismo mecanismo que ya usan
+ * fondoCaja()/usdEnCaja()/cupEnCaja()), así el fondo total NO cambia, pero
+ * sí se mueve cuánto hay en USD físico vs CUP. Queda en los historiales de
+ * Depósitos y Retiros con el concepto "🔁 Cambio USD→CUP" / "🔁 Cambio CUP→USD".
+ */
+RN.caja._confirmarConversion = function () {
+  var monto = parseFloat((document.getElementById('rm-conv-monto') || {}).value) || 0;
+  var dir = RN.caja._conversionDir || 'USD_A_CUP';
+  var tasa = RN.moneda.tasa();
+  if (!tasa) { RN.notifyUI.toast('Configura la tasa USD en Ajustes primero', 'error'); return; }
+  if (monto <= 0) { RN.notifyUI.toast('Ingresa un monto válido', 'error'); return; }
+
+  var fechaISO = new Date().toISOString().slice(0, 10) + 'T00:00:00';
+  var mes = fechaISO.slice(0, 7);
+  RN.state.retiros = RN.state.retiros || [];
+  RN.state.depositos = RN.state.depositos || [];
+
+  if (dir === 'USD_A_CUP') {
+    if (monto > RN.calc.usdEnCaja() + 0.01) {
+      RN.notifyUI.toast('No hay suficiente USD físico en caja', 'error');
+      return;
+    }
+    var montoCUP = +(monto * tasa).toFixed(2);
+    RN.state.retiros.push({ id: RN.calc.uid('retiro'), concepto: '🔁 Cambio USD→CUP', monto: montoCUP, moneda: 'USD', montoOriginal: monto, montoCUPDirecto: 0, tasaUsada: tasa, fecha: fechaISO, mes: mes });
+    RN.state.depositos.push({ id: RN.calc.uid('deposito'), concepto: '🔁 Cambio USD→CUP', monto: montoCUP, moneda: 'CUP', montoOriginal: 0, montoCUPDirecto: montoCUP, tasaUsada: tasa, fecha: fechaISO, mes: mes });
+    RN.notifyUI.toast('Convertidos $' + monto.toFixed(2) + ' USD a ' + RN.calc.formatCUP(montoCUP), 'success');
+  } else {
+    if (monto > RN.calc.cupEnCaja() + 0.01) {
+      RN.notifyUI.toast('No hay suficiente CUP en caja', 'error');
+      return;
+    }
+    var montoUSD = +(monto / tasa).toFixed(2);
+    RN.state.retiros.push({ id: RN.calc.uid('retiro'), concepto: '🔁 Cambio CUP→USD', monto: monto, moneda: 'CUP', montoOriginal: 0, montoCUPDirecto: monto, tasaUsada: tasa, fecha: fechaISO, mes: mes });
+    RN.state.depositos.push({ id: RN.calc.uid('deposito'), concepto: '🔁 Cambio CUP→USD', monto: monto, moneda: 'USD', montoOriginal: montoUSD, montoCUPDirecto: 0, tasaUsada: tasa, fecha: fechaISO, mes: mes });
+    RN.notifyUI.toast('Convertidos ' + RN.calc.formatCUP(monto) + ' a $' + montoUSD.toFixed(2) + ' USD', 'success');
+  }
+
+  RN.storageLocal.guardar();
+  RN.uiComponents.cerrarModal();
+  RN.render.todo();
 };
 
 /** Elimina un depósito del historial. */

@@ -560,21 +560,16 @@ RN.calc.totalRetirosPorMoneda = function () {
 };
 
 /**
- * v5.28.0: Desglose de lo COBRADO A CLIENTES por moneda (servicio + equipo).
- * A diferencia de totalDepositosPorMoneda/totalRetirosPorMoneda (donde un
- * movimiento es de una sola moneda salvo MIXTO), un cobro a cliente puede
- * traer USD y CUP a la vez en el mismo registro de history, así que aquí
- * simplemente se suman los campos montoPagadoUSD / montoPagadoCUP /
- * montoPagadoCUPDesdeUSD de cada h, sin depender de h.moneda.
+ * v5.29.0: CUP físico disponible en la caja ahora mismo = fondo total en
+ * CUP-equivalente menos el valor (a la tasa vigente) del USD físico que
+ * hay guardado. Es la contraparte de usdEnCaja(): entre los dos dan el
+ * desglose real de qué moneda tienes físicamente en la gaveta.
  */
-RN.calc.cobrosPorMoneda = function () {
-  var cup = 0, usdOriginal = 0, usdCUP = 0;
-  (RN.state.history || []).forEach(function (h) {
-    usdOriginal += (h.montoPagadoUSD || 0);
-    usdCUP += (h.montoPagadoCUPDesdeUSD || 0);
-    cup += (h.montoPagadoCUP || 0);
-  });
-  return { cup: cup, usdOriginal: usdOriginal, usdCUP: usdCUP, total: cup + usdCUP };
+RN.calc.cupEnCaja = function () {
+  var tasa = RN.state.config.tasaUsd || 0;
+  var usdFisico = RN.calc.usdEnCaja();
+  var equivalenteEnCUP = tasa ? +(usdFisico * tasa).toFixed(2) : 0;
+  return +Math.max(0, RN.calc.fondoCaja() - equivalenteEnCUP).toFixed(2);
 };
 
 /**
