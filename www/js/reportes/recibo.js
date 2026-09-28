@@ -33,17 +33,10 @@ RN.recibo._html = function (h) {
   } else if (h.tipo === 'servicio' || neto > 0) {
     // v5.13.9 (LOG-4): Mes legible (mesTexto) en lugar de ISO crudo
     var mesTxt = h.mes ? RN.calc.mesTexto(h.mes) : '';
-    // v5.31.3: evitar doble conteo visual de mora.
-    // - Registros nuevos: h.monto ya incluye la mora → restar montoMora para la línea de servicio.
-    // - Registros viejos: h.monto era solo el neto del mes → no restar.
-    var montoMora = h.montoMora || 0;
-    var servicioMes = neto;
-    if (montoMora > 0 && neto >= montoMora - 0.01) {
-      servicioMes = +(neto - montoMora).toFixed(2);
-    }
-    lineas.push(`<div class="row"><span>Servicio mensual ${RN.render.esc(mesTxt)}</span><span>${RN.calc.formatCUP(servicioMes)}</span></div>`);
-    if (montoMora > 0) {
-      lineas.push(`<div class="row" style="color:#c62828"><span>Mora (${h.mora || 0} mes${(h.mora || 0) !== 1 ? 'es' : ''} de atraso)</span><span>${RN.calc.formatCUP(montoMora)}</span></div>`);
+    lineas.push(`<div class="row"><span>Servicio mensual ${RN.render.esc(mesTxt)}</span><span>${RN.calc.formatCUP(neto)}</span></div>`);
+    // v5.13.8: Mostrar mora (meses atrasados) si el cobro incluye mora
+    if (h.montoMora && h.montoMora > 0) {
+      lineas.push(`<div class="row" style="color:#c62828"><span>Mora (${h.mora || 0} mes${(h.mora || 0) !== 1 ? 'es' : ''} de atraso)</span><span>${RN.calc.formatCUP(h.montoMora)}</span></div>`);
     }
     if (h.descuentoRecurrente) lineas.push(`<div class="row muted" style="font-size:12px"><span>Descuento recurrente</span><span>− ${RN.calc.formatCUP(h.descuentoRecurrente)}</span></div>`);
   }

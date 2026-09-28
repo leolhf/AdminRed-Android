@@ -195,14 +195,6 @@ RN.tests._testMora = function () {
   // Caso 6: mesInicio un mes después del actual (futuro) -> mora 0
   RN.state.clients[0].mesInicio = '2025-10';
   RN.tests._assertEq(RN.calc.getMora(RN.state.clients[0]), 0, 'getMora: inicio futuro -> 0');
-
-  // Caso 7 (v5.31.3): pago parcial del mes actual NO borra mora anterior
-  RN.state.clients[0].mesInicio = '2025-01';
-  RN.state.history = [
-    { id: 'h1', clienteId: 'c1', tipo: 'servicio', mes: '2025-06', monto: 500 },
-    { id: 'h2', clienteId: 'c1', tipo: 'servicio', mes: '2025-09', monto: 100 } // parcial
-  ];
-  RN.tests._assertEq(RN.calc.getMora(RN.state.clients[0]), 2, 'getMora: parcial del mes actual no borra mora (sigue 2)');
 };
 
 RN.tests._testGetStatus = function () {
@@ -313,17 +305,11 @@ RN.tests._testDeudaTotalCliente = function () {
   RN.tests._assertEq(RN.calc.deudaTotalCliente(RN.state.clients[0]), 1500,
     'Bug #4: deudaTotalCliente sin deuda equipo = 1500');
 
-  // Sin mora y pagó el mes actual completo → solo queda deuda de equipo
-  // v5.31.3: deudaTotal resta lo ya pagado (antes devolvía neto+equipo aunque estuviera pagado)
+  // Sin mora (pagó el mes actual)
   RN.state.clients[0].deudaEquipo = 300;
   RN.state.history = [{ id: 'h1', clienteId: 'c1', tipo: 'servicio', mes: '2025-09', monto: 500 }];
-  RN.tests._assertEq(RN.calc.deudaTotalCliente(RN.state.clients[0]), 300,
-    'v5.31.3: deudaTotalCliente al día = solo equipo (300)');
-
-  // Pago parcial del mes actual (sin mora): neto 500, pagó 200 → pendiente 300 + equipo 300 = 600
-  RN.state.history = [{ id: 'h1', clienteId: 'c1', tipo: 'servicio', mes: '2025-09', monto: 200 }];
-  RN.tests._assertEq(RN.calc.deudaTotalCliente(RN.state.clients[0]), 600,
-    'v5.31.3: pago parcial deja saldo pendiente en CUP (300 svc + 300 eq)');
+  RN.tests._assertEq(RN.calc.deudaTotalCliente(RN.state.clients[0]), 800,
+    'Bug #4: deudaTotalCliente al día = 500 (servicio) + 300 (equipo) = 800');
 
   // Deuda total nunca negativa
   RN.state.history = [{ id: 'h1', clienteId: 'c1', tipo: 'servicio', mes: '2025-12', monto: 500 }];

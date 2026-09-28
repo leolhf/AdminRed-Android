@@ -1,20 +1,24 @@
 {
   "name": "adminred",
-  "version": "5.31.3",
-  "description": "AdminRed (RedNet) — Administración de negocio de reventa de servicio de internet. App nativa Android (Capacitor).",
-  "main": "index.js",
+  "version": "5.40.1",
+  "description": "AdminRed (RedNet) — Administración de negocio de reventa de servicio de internet. App nativa Android (Capacitor) y de escritorio (Electron).",
+  "main": "main.js",
   "scripts": {
     "sync": "cap sync android",
     "copy": "cap copy android",
     "open": "cap open android",
     "build:debug": "cd android && ./gradlew assembleDebug",
-    "build:release": "cd android && ./gradlew assembleRelease"
+    "build:release": "cd android && ./gradlew assembleRelease",
+    "electron:start": "electron .",
+    "dist:win": "electron-builder --win",
+    "dist:win:portable": "electron-builder --win portable"
   },
   "keywords": [
     "adminred",
     "rednet",
     "isp",
-    "capacitor"
+    "capacitor",
+    "electron"
   ],
   "author": "RedNet",
   "license": "ISC",
@@ -26,5 +30,44 @@
     "@capacitor/core": "^6.2.2",
     "@capacitor/filesystem": "^6.0.4",
     "@capacitor/local-notifications": "^6.1.3"
+  },
+  "devDependencies": {
+    "electron": "^44.0.0",
+    "electron-builder": "^26.0.0"
+  },
+  "build": {
+    "appId": "com.rednet.adminred",
+    "productName": "AdminRed",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "main.js",
+      "www/**/*",
+      "!www/**/*.map"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.ico"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
   }
 }

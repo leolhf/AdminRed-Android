@@ -583,37 +583,32 @@ RN.modalCobro.confirmar = function () {
 
   // ====== Si hay excedente (vuelto), registrar para referencia ======
   var fondoAntes = RN.calc.fondoCaja();
+  // v5.10.1: El excedente NO se descuenta del fondo porque los ingresos (h.monto)
+  // ya registran solo el neto. El vuelto entra y sale, no afecta la ganancia.
+  var fondoDespues = +(fondoAntes + neto).toFixed(2);
 
-  // v5.13.1 + v5.31.3: separar servicio y equipo.
-  // h.monto = solo servicio (incluye mora cobrada en este cobro).
-  // h.montoEquipo = solo equipo realmente pagado.
-  // v5.31.3 FIX: cuando hay mora, el monto de servicio registrado debe
-  // reflejar lo realmente cobrado por servicio (neto × (mora+1) o la parte
-  // proporcional en pagos parciales). Antes solo se registraba `neto` del
-  // mes actual y el dinero de la mora desaparecía de ingresos/caja.
-  var deudaServicio = +(neto * (mora + 1)).toFixed(2);
+  // v5.13.1: Bug #2 y #3 — separar consistentemente servicio y equipo.
+  // Antes: pago parcial registraba pagadoCUP (servicio+equipo mezclados) en h.monto,
+  // causando doble conteo en ingresosMes() y equipo no descontado.
+  // Ahora: h.monto SIEMPRE es solo servicio, h.montoEquipo SIEMPRE es solo equipo pagado.
   var montoServicioRegistrado = neto;
   var montoEquipoPagado = montoEq;
-
   if (tipoPago === 'parcial') {
-    // Respetar el montoEquipo ingresado por el usuario si lo especificó.
+    // v5.13.5 (ISSUE #6/#7): Respetar el montoEquipo ingresado por el usuario
+    // cuando lo especificó explícitamente. Antes el código siempre recalculaba
+    // montoEquipoPagado = max(0, pagadoCUP - neto), ignorando la intención del
+    // usuario (ej: pagar solo el equipo este mes) y no reduciendo la deuda de
+    // equipo como esperaba.
     if (montoEq > 0) {
+      // El usuario especificó cuánto va al equipo — respetarlo
       montoEquipoPagado = Math.min(montoEq, pagadoCUP);
-      montoServicioRegistrado = Math.max(0, +(pagadoCUP - montoEquipoPagado).toFixed(2));
+      montoServicioRegistrado = Math.max(0, pagadoCUP - montoEquipoPagado);
     } else {
-      // Aplicar al servicio primero (incluye mora), remanente al equipo
-      montoServicioRegistrado = Math.min(pagadoCUP, deudaServicio);
-      montoEquipoPagado = Math.max(0, +(pagadoCUP - deudaServicio).toFixed(2));
+      // Sin especificación: aplicar al servicio primero, remanente al equipo
+      montoServicioRegistrado = Math.min(pagadoCUP, neto);
+      montoEquipoPagado = Math.max(0, pagadoCUP - neto);
     }
-  } else {
-    // completo o excedente: registrar el servicio completo (mes + mora)
-    montoServicioRegistrado = deudaServicio;
-    montoEquipoPagado = montoEq;
   }
-
-  // El fondo solo aumenta con lo realmente ingresado (servicio + equipo).
-  // El vuelto (excedente) entra y sale, no afecta la ganancia.
-  var fondoDespues = +(fondoAntes + montoServicioRegistrado + montoEquipoPagado).toFixed(2);
 
   // v5.13.8 (BUG-4): Pre-computar descuentos a aplicar una sola vez
   // (antes se filtraba dos veces: al construir h y al marcar como aplicado)
