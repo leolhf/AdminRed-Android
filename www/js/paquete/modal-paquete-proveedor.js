@@ -68,10 +68,10 @@ RN.paqueteProveedor.actualizarAviso = function () {
   var excedido = tope > 0 && vendidos > tope;
   var pct = tope > 0 ? Math.min(100, Math.round(vendidos / tope * 100)) : 0;
   var estadoTxt = excedido
-    ? '<strong style="color:#c62828">\u26a0 Excedido: vendes ' + vendidos + 'M y tu tope es ' + tope + 'M</strong>. Reduce clientes o sube la sobreventa.'
+    ? '<strong style="color:var(--danger)">\u26a0 Excedido: vendes ' + vendidos + 'M y tu tope es ' + tope + 'M</strong>. Reduce clientes o sube la sobreventa.'
     : (pct >= 80
-        ? '<strong style="color:#e6a700">Cerca del tope: ' + vendidos + 'M / ' + tope + 'M (' + pct + '%)</strong>. Vigila tu capacidad.'
-        : '<strong style="color:#2e7d32">\u2713 Capacidad ok: ' + vendidos + 'M vendidos / ' + tope + 'M disponibles (' + pct + '%)</strong>.');
+        ? '<strong style="color:var(--warn)">Cerca del tope: ' + vendidos + 'M / ' + tope + 'M (' + pct + '%)</strong>. Vigila tu capacidad.'
+        : '<strong style="color:var(--success)">\u2713 Capacidad ok: ' + vendidos + 'M vendidos / ' + tope + 'M disponibles (' + pct + '%)</strong>.');
   aviso.innerHTML = 'Tope vendible: <strong>' + tope + 'M</strong> (' + c.megas + 'M paquete + ' + sobreventa + 'M sobreventa) \u00b7 ' + estadoTxt;
   aviso.className = 'prov-cap-aviso' + (excedido ? ' prov-cap-alert' : (pct >= 80 ? ' prov-cap-warn' : ' prov-cap-ok'));
 
@@ -227,7 +227,7 @@ RN.paqueteProveedor.recalcular = function () {
   html += '<div class="cobro-desglose-row"><strong>Total a pagar: ' + RN.calc.formatCUP(totalCUP) + '</strong></div>';
 
   if (paquete) {
-    var color = totalCUP >= paquete ? '#2e7d32' : '#c62828';
+    var color = totalCUP >= paquete ? 'var(--success)' : 'var(--danger)';
     var txt = totalCUP >= paquete ? 'Cubierto \u2713' : 'Falta ' + RN.calc.formatCUP(paquete - totalCUP);
     html += '<div class="cobro-desglose-row" style="color:' + color + '">Paquete: ' + RN.calc.formatCUP(paquete) + ' \u00b7 ' + txt + '</div>';
   }

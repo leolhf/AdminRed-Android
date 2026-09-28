@@ -19,6 +19,9 @@ RN.theme.toggle = function () {
 };
 
 RN.theme.init = function () {
-  const saved = localStorage.getItem(STORAGE_KEYS.THEME) || 'light';
+  // El lenguaje visual "Neo Glass" está diseñado sobre fondo oscuro, por lo
+  // que el tema oscuro es el predeterminado. La preferencia guardada del
+  // usuario tiene prioridad sobre este valor.
+  const saved = localStorage.getItem(STORAGE_KEYS.THEME) || 'dark';
   RN.theme.aplicar(saved);
 };

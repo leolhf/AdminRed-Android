@@ -220,7 +220,7 @@ RN.render.barraRecuperacion = function (inv, rec, pctParam, opts) {
   html += '  </div>';
   html += '  <div class="recup-estado">' + estadoTxt + '</div>';
   if (sinCosto) {
-    html += '  <div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);font-size:12px;color:#e6a700">';
+    html += '  <div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);font-size:12px;color:var(--warn)">';
     html += '    \u26a0\ufe0f El % de recuperación está <strong>inflado</strong>: no hay precio de proveedor por mega configurado, por lo que el margen se calcula asumiendo costo 0. Configura el precio del mega en Ajustes \u2192 Proveedor para ver la recuperación real.';
     html += '  </div>';
   }
@@ -381,7 +381,7 @@ RN.render.dashboard = function () {
       const paqueteCambio = (megasPagados !== (+cfg.proveedorMegas || 0)) || (precioPagado !== (+cfg.proveedorPrecioMega || 0));
       html += '<div class="prov-widget-row prov-paid"><span class="badge paid">✓ Pagado este mes</span> <span class="muted">' + RN.calc.formatCUP(pagoMes.monto) + ' · ' + fecha + '</span></div>';
       if (paqueteCambio) {
-        html += '<div class="prov-widget-row" style="color:#e6a700"><span class="badge warn" style="margin-right:6px">Paquete actualizado</span> <span class="muted">Pagaste ' + megasPagados + 'M × ' + precioPagado + ' CUP/M. El paquete actual es ' + (cfg.proveedorMegas || 0) + 'M × ' + (cfg.proveedorPrecioMega || 0) + ' CUP/M = ' + RN.calc.formatCUP(montoPaquete) + '.</span></div>';
+        html += '<div class="prov-widget-row" style="color:var(--warn)"><span class="badge warn" style="margin-right:6px">Paquete actualizado</span> <span class="muted">Pagaste ' + megasPagados + 'M × ' + precioPagado + ' CUP/M. El paquete actual es ' + (cfg.proveedorMegas || 0) + 'M × ' + (cfg.proveedorPrecioMega || 0) + ' CUP/M = ' + RN.calc.formatCUP(montoPaquete) + '.</span></div>';
         html += '<div class="prov-widget-actions"><button class="btn sm primary" onclick="RN.paqueteProveedor.abrir()">Gestionar y pagar</button></div>';
       } else {
         html += '<div class="prov-widget-actions"><button class="btn sm primary" onclick="RN.paqueteProveedor.abrir()">Gestionar servicio</button></div>';
@@ -399,8 +399,8 @@ RN.render.dashboard = function () {
       const cap = RN.calc.estadoCapacidad();
       const cls = cap.excedido ? 'bar-red' : (cap.pct >= 80 ? 'bar-amber' : 'bar-green');
       const estadoTxt = cap.excedido
-        ? '<span style="color:#c62828">⚠ Excedido</span>'
-        : (cap.pct >= 80 ? '<span style="color:#e6a700">Cerca del tope</span>' : '<span style="color:#2e7d32">✓ Capacidad ok</span>');
+        ? '<span style="color:var(--danger)">⚠ Excedido</span>'
+        : (cap.pct >= 80 ? '<span style="color:var(--warn)">Cerca del tope</span>' : '<span style="color:var(--success)">✓ Capacidad ok</span>');
       html += '<div class="prov-cap">';
       html += '<div class="prov-cap-label"><span class="muted">Capacidad de red</span> <strong>' + cap.vendidos + 'M vendidos / ' + cap.tope + 'M</strong> (' + cap.pct + '%) ' + estadoTxt + '</div>';
       html += '<div class="prov-cap-bar"><div class="prov-cap-fill ' + cls + '" style="width:' + (cap.pct || 1) + '%"></div></div>';
@@ -412,8 +412,8 @@ RN.render.dashboard = function () {
     if (cfg.paquetePendiente) {
       const pp = cfg.paquetePendiente;
       const mesProx = RN.calc.mesSiguiente(RN.calc.mesActualStr());
-      html += '<div class="prov-widget-row" style="color:#1565c0;border-top:1px solid var(--border);padding-top:8px;margin-top:4px">';
-      html += '<span class="badge" style="background:#e3f2fd;color:#1565c0;margin-right:6px">⏳ Pendiente para ' + RN.calc.mesTexto(mesProx) + '</span>';
+      html += '<div class="prov-widget-row" style="color:var(--primary);border-top:1px solid var(--border);padding-top:8px;margin-top:4px">';
+      html += '<span class="badge" style="background:var(--primary-soft);color:var(--primary);margin-right:6px">⏳ Pendiente para ' + RN.calc.mesTexto(mesProx) + '</span>';
       html += '<span class="muted">Próximo paquete: ' + (pp.megas || 0) + 'M × ' + (pp.precioMega || 0) + ' CUP/M';
       if (pp.sobreventa !== undefined) html += ' · sobreventa ' + pp.sobreventa + 'M';
       html += '. Se aplicará al cerrar el mes.</span></div>';
@@ -662,7 +662,7 @@ RN.render._cardCobroRealizado = function (h) {
   var mesActual = RN.calc.mesActualStr();
   var esAdelantado = h.mes && h.mes > mesActual && h.tipo === 'servicio';
   var adelantadoBadge = esAdelantado
-    ? ' <span class="badge" style="background:#e3f2fd;color:#1565c0;font-size:10px;vertical-align:middle">Adelantado</span>'
+    ? ' <span class="badge" style="background:var(--primary-soft);color:var(--primary);font-size:10px;vertical-align:middle">Adelantado</span>'
     : '';
 
   var monedaTxt = h.moneda || 'CUP';
@@ -670,9 +670,9 @@ RN.render._cardCobroRealizado = function (h) {
   // v5.13.9 (UI-6): Badge de pago combinado USD+CUP
   var monedaBadge = '';
   if (h.moneda === 'MIXTO' && (h.montoPagadoUSD || 0) > 0 && (h.montoPagadoCUP || 0) > 0) {
-    monedaBadge = ' <span class="pill" style="background:#e8f5e9;color:#2e7d32;font-size:10px">USD+CUP</span>';
+    monedaBadge = ' <span class="pill" style="background:var(--success-soft);color:var(--success);font-size:10px">USD+CUP</span>';
   } else if ((h.montoPagadoUSD || 0) > 0 && (h.montoPagadoCUP || 0) > 0) {
-    monedaBadge = ' <span class="pill" style="background:#e8f5e9;color:#2e7d32;font-size:10px">USD+CUP</span>';
+    monedaBadge = ' <span class="pill" style="background:var(--success-soft);color:var(--success);font-size:10px">USD+CUP</span>';
   }
 
   // v5.13.9 (UI-9): Pill de recibo clickeable
@@ -692,7 +692,7 @@ RN.render._cardCobroRealizado = function (h) {
   if (h.tipo === 'servicio') {
     desgloseHtml += '<div class="acc-row"><span class="acc-label">Servicio</span><span class="acc-value">' + RN.calc.formatCUP(h.monto || 0) + '</span></div>';
     if (h.montoMora && h.montoMora > 0) {
-      desgloseHtml += '<div class="acc-row"><span class="acc-label">Mora</span><span class="acc-value" style="color:#c62828">' + RN.calc.formatCUP(h.montoMora) + ' (' + (h.mora || 0) + 'm)</span></div>';
+      desgloseHtml += '<div class="acc-row"><span class="acc-label">Mora</span><span class="acc-value" style="color:var(--danger)">' + RN.calc.formatCUP(h.montoMora) + ' (' + (h.mora || 0) + 'm)</span></div>';
     }
     if (h.descuentoRecurrente) {
       desgloseHtml += '<div class="acc-row"><span class="acc-label">Desc. recurrente</span><span class="acc-value muted">− ' + RN.calc.formatCUP(h.descuentoRecurrente) + '</span></div>';
