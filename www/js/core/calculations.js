@@ -147,31 +147,44 @@ RN.calc.getStatus = function (cliente, mes) {
  * Meses de mora (atraso) real de un cliente. v5.10.5: corregido.
  * Mora = meses completos que el cliente DEBE sin pagar (excluyendo el mes
  * actual, que está en curso y se gestiona vía getStatus/diaPago/gracia):
- *   - Si ha pagado algún mes: meses posteriores al último pagado, menos 1
- *     (excluye el mes actual). Ej: pagó hasta junio, en septiembre → jul+ago = 2.
- *     Si el último pagado >= mes actual, mora = 0.
+ *   - Si ha pagado algún mes COMPLETO: meses posteriores al último pagado
+ *     completo, menos 1 (excluye el mes actual). Ej: pagó hasta junio, en
+ *     septiembre → jul+ago = 2. Si el último pagado completo >= mes actual,
+ *     mora = 0.
  *   - Si nunca ha pagado: meses desde su mesInicio (incluido como primer mes
  *     esperado) hasta el mes actual (excluido). Convención aprobada:
  *     mesInicio=2026-09 → sep:0, oct:1 (debe sep), nov:2 (debe sep+oct).
  *     Mínimo 0. Así un cliente dado de alta este mes o con mesInicio futuro
  *     no aparece como moroso.
+ *
+ * v5.31.3: Un mes solo cuenta como "pagado" si la suma de montos de servicio
+ * de ese mes es >= neto esperado (aprox. con el neto actual). Así un pago
+ * parcial del mes actual ya no borra la mora de meses anteriores.
  */
 RN.calc.getMora = function (cliente) {
   const mes = RN.calc.mesActualStr();
-  const pagados = RN.state.history
-    .filter(h => h.clienteId === cliente.id && h.tipo === 'servicio')
-    .map(h => h.mes);
-  if (pagados.length > 0) {
-    const ultimoPagado = pagados.sort().pop();
+  // Neto de referencia (se usa el del mes actual; no hay histórico de precios)
+  const netoRef = RN.calc.getPrecioNeto(cliente, mes);
+  const cobros = RN.state.history.filter(h =>
+    h.clienteId === cliente.id && h.tipo === 'servicio'
+  );
+  // Agrupar montos por mes
+  var porMes = {};
+  cobros.forEach(function (h) {
+    if (!h.mes) return;
+    porMes[h.mes] = (porMes[h.mes] || 0) + (h.monto || 0);
+  });
+  // Solo meses con pago suficiente (>= neto - tolerancia)
+  var mesesCompletos = Object.keys(porMes)
+    .filter(function (m) { return porMes[m] >= netoRef - 0.01; })
+    .sort();
+  if (mesesCompletos.length > 0) {
+    const ultimoPagado = mesesCompletos[mesesCompletos.length - 1];
     if (ultimoPagado >= mes) return 0;
-    // Meses debidos = meses posteriores al último pagado, excluyendo el mes
-    // actual (en curso). Ej: pagó hasta junio, en septiembre debe jul+ago = 2.
     var d = RN.calc.mesesEntre(ultimoPagado, mes) - 1;
     return d > 0 ? d : 0;
   }
-  // Nunca ha pagado: contar desde el mes de inicio de cobro (incluido como
-  // primer mes esperado), excluyendo el mes actual (en curso).
-  // Convención aprobada: mesInicio=2026-09 → sep:0, oct:1 (debe sep), nov:2 (debe sep+oct).
+  // Nunca ha pagado un mes completo: contar desde mesInicio
   var mesInicio = RN.calc.mesInicioCliente(cliente);
   var diff = RN.calc.mesesEntre(mesInicio, mes);
   return diff > 0 ? diff : 0;
@@ -202,16 +215,33 @@ RN.calc.mesesEntre = function (a, b) {
 };
 
 /**
- * Deuda total de un cliente = servicio pendiente (mes actual + meses en mora)
- * + deuda de equipo. v5.13.1: Bug #4 — nueva función centralizada para que
- * todas las vistas (mora, cobranza, render, calendario) usen el mismo cálculo
- * en lugar de getPrecioNeto(c) sin mes + getCuotaEquipo dispersos.
+ * Suma de montos de servicio ya registrados para un cliente en un mes.
+ * v5.31.3: helper para calcular saldo pendiente real tras pagos parciales.
+ */
+RN.calc.pagadoServicioMes = function (cliente, mes) {
+  if (!cliente) return 0;
+  mes = mes || RN.calc.mesActualStr();
+  return (RN.state.history || [])
+    .filter(function (h) {
+      return h.clienteId === cliente.id && h.tipo === 'servicio' && h.mes === mes;
+    })
+    .reduce(function (s, h) { return s + (h.monto || 0); }, 0);
+};
+
+/**
+ * Deuda total de un cliente = servicio AÚN PENDIENTE (mes actual + meses en
+ * mora, menos lo ya pagado este mes) + deuda de equipo.
+ * v5.13.1: Bug #4 — función centralizada.
+ * v5.31.3: resta lo ya abonado en el mes actual (pagos parciales dejan saldo
+ * real en CUP; no se ignora el abono).
  */
 RN.calc.deudaTotalCliente = function (cliente, mes) {
   mes = mes || RN.calc.mesActualStr();
   var mora = RN.calc.getMora(cliente);
   var netoMes = RN.calc.getPrecioNeto(cliente, mes);
-  var servicioPendiente = netoMes * (mora + 1);
+  var esperado = +(netoMes * (mora + 1)).toFixed(2);
+  var pagado = RN.calc.pagadoServicioMes(cliente, mes);
+  var servicioPendiente = Math.max(0, +(esperado - pagado).toFixed(2));
   var deudaEquipo = RN.investment.getDeudaEquipoCliente(cliente);
   return +(servicioPendiente + deudaEquipo).toFixed(2);
 };

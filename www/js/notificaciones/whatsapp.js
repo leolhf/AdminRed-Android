@@ -35,12 +35,17 @@ RN.whatsapp.enviarRecordatorio = function (clienteId) {
   const mes = RN.calc.mesActualStr();
   const mora = RN.calc.getMora(c);
   const tpl = mora > 0 ? tpls.mora : tpls.recordatorio;
+  // v5.31.3: en mora, {precioNeto} refleja la deuda total pendiente (servicio
+  // + mora − abonos + equipo), no solo el neto del mes actual.
+  const montoCtx = mora > 0
+    ? RN.calc.deudaTotalCliente(c, mes)
+    : RN.calc.getPrecioNeto(c, mes);
   const ctx = {
     nombre: c.nombre,
     precioBase: RN.calc.formatCUP(RN.calc.getPrecioBase(c)),
     descuentoRecurrente: RN.calc.formatCUP(RN.calc.getDescuentoRecurrente(c)),
     descuentoLinea: RN.calc.formatCUP(RN.calc.getDescuentosPuntualesMes(c.id, mes)),
-    precioNeto: RN.calc.formatCUP(RN.calc.getPrecioNeto(c, mes)),
+    precioNeto: RN.calc.formatCUP(montoCtx),
     mes: RN.calc.mesTexto(RN.calc.mesActualStr()),
     diaPago: c.diaPago || 1,
     mora: String(mora)

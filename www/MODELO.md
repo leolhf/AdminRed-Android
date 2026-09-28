@@ -45,13 +45,18 @@ puntuales se evaluarían contra el mes del sistema en lugar del mes operativo.
 
 ### 2.2 Mes operativo vs mes real
 
-- **`RN.state.mesActual`**: mes operativo, establecido por el botón "Cerrar mes".
-  Formato `YYYY-MM`. Se persiste en localStorage.
-- **`RN.calc.mesActualStr()`**: devuelve `RN.state.mesActual` si es válido,
-  si no cae al reloj del sistema (`new Date()`). Desde v5.13.1 (Bug #1) este
-  campo es funcional: al cerrar mes, la app avanza de verdad.
-- **`RN.calc.mesRealStr()`**: siempre el mes del reloj (ignora `mesActual`).
-- **`RN.calc.sincronizarMesReal()`**: iguala `mesActual` al mes real.
+**Desde v5.13.20** el mes operativo es **siempre el mes del reloj del sistema**.
+Cerrar el mes solo genera un snapshot; **no adelanta** el mes.
+
+- **`RN.calc.mesActualStr()`**: siempre el mes del reloj (`new Date()` → `YYYY-MM`).
+  Idéntico a `mesRealStr()`.
+- **`RN.calc.mesRealStr()`**: mes del reloj (igual que `mesActualStr()`).
+- **`RN.state.mesActual`**: se guarda como referencia al sincronizar; **ya no
+  controla** el mes operativo.
+- **`RN.calc.sincronizarMesReal()`**: escribe el mes del reloj en `RN.state.mesActual`
+  (compatibilidad / persistencia).
+- **Cierre de mes** (`month-reset.js`): genera snapshot, anula descuentos
+  puntuales del mes, aplica paquete pendiente. Bloquea doble cierre del mismo mes.
 
 ### 2.3 Mes de inicio de cobro
 
@@ -89,25 +94,38 @@ garantiza en `modal-cobro.js` separando `montoServicioRegistrado` y
 
 ---
 
-## 4. Mora
+## 4. Mora y deuda pendiente
 
-`RN.calc.getMora(cliente)` cuenta los **meses de atraso** (meses que el cliente
-debió pagar pero no pagó), excluyendo el mes actual (en curso):
+### 4.1 Meses de mora (`getMora`)
 
-- Si ha pagado alguna vez: `mesesEntre(ultimoMesPagado, mesActual) - 1`.
-  Ej: pagó hasta junio, en septiembre → debe julio+agosto = 2.
-- Si nunca ha pagado: `mesesEntre(mesInicio, mesActual)`.
-  Ej: inicio enero, en septiembre → debe 8 meses.
+`RN.calc.getMora(cliente)` cuenta los **meses de atraso** (excluyendo el mes
+actual en curso). **v5.31.3:** un mes solo cuenta como pagado si la suma de
+`h.monto` de servicio de ese mes es ≥ neto esperado (con tolerancia 0,01).
+Así un abono parcial del mes actual **no borra** la mora de meses previos.
 
-La **deuda total** del cliente combina mora de servicio + deuda de equipo:
+- Si hay meses con pago completo: `mesesEntre(ultimoMesCompleto, mesActual) - 1`.
+  Ej: pagó completo hasta junio, en septiembre → julio+agosto = 2.
+- Si nunca pagó un mes completo: `mesesEntre(mesInicio, mesActual)`.
+  Ej: inicio enero, en septiembre → 8.
+
+### 4.2 Deuda total en CUP (`deudaTotalCliente`)
+
+**v5.31.3:** la deuda es el saldo **aún pendiente**, no el cargo teórico:
 
 ```
-deudaTotal = precioNeto(mes) × (mora + 1) + deudaEquipo
+esperadoServicio = precioNeto(mes) × (mora + 1)
+pagadoEsteMes    = Σ h.monto de servicio del mes actual
+servicioPendiente = max(0, esperadoServicio − pagadoEsteMes)
+deudaTotal        = servicioPendiente + deudaEquipo
 ```
 
-Función centralizada: `RN.calc.deudaTotalCliente(cliente, mes)` (v5.13.1, Bug #4).
-Todas las vistas (mora, cobranza, render, calendario) deben usar esta función
-en lugar de calcular la deuda de forma dispersa.
+Helpers: `RN.calc.pagadoServicioMes(cliente, mes)` y
+`RN.calc.deudaTotalCliente(cliente, mes)` (v5.13.1 Bug #4, refinada en v5.31.3).
+
+Ejemplos:
+- Mora 2, neto 500, sin abonos → 1500 + equipo.
+- Mora 0, neto 500, abonó 200 → pendiente servicio 300 + equipo.
+- Pagó el mes completo → solo queda deuda de equipo (si la hay).
 
 ---
 
@@ -116,20 +134,25 @@ en lugar de calcular la deuda de forma dispersa.
 Al confirmar un cobro (`modal-cobro.js → confirmar()`), se crea una entrada en
 `RN.state.history` con:
 
-- `h.monto`: **siempre solo el servicio** pagado (v5.13.1, Bug #2).
-- `h.montoEquipo`: **siempre solo el equipo** realmente pagado (v5.13.1, Bug #2/#3).
-- `h.tipo`: `'servicio'` (cobro mensual), o tipo de venta de inventario.
-- `h.mes`: mes al que corresponde el cobro (`YYYY-MM`).
+- `h.monto`: **solo servicio** (nunca equipo). **v5.31.3:** en cobros con mora
+  incluye lo cobrado por meses atrasados (`neto × (mora+1)` en pago completo,
+  o la parte proporcional en parcial). Así la mora entra en ingresos y caja.
+- `h.montoEquipo`: solo equipo realmente pagado.
+- `h.montoMora`: parte informativa de mora (para recibo); en registros nuevos
+  ya va incluida dentro de `h.monto`.
+- `h.tipo`: `'servicio'` o venta de inventario.
+- `h.mes`: mes del cobro (`YYYY-MM`).
 - `h.tipoPago`: `'completo'`, `'parcial'` o `'excedente'`.
 
 ### 5.1 Pago parcial: asignación servicio → equipo
 
-En un pago parcial, el monto pagado se asigna **primero al servicio** y el
-resto al equipo:
+El monto pagado se asigna **primero al servicio** (incluyendo mora si la hay)
+y el resto al equipo:
 
 ```
-montoServicioRegistrado = min(pagadoCUP, neto)
-montoEquipoPagado       = max(0, pagadoCUP - neto)
+deudaServicio           = neto × (mora + 1)
+montoServicioRegistrado = min(pagadoCUP, deudaServicio)   // o respeta montoEq si el usuario lo fijó
+montoEquipoPagado       = max(0, pagadoCUP − montoServicioRegistrado)
 ```
 
 ### 5.2 Descuento de deuda de equipo
@@ -377,10 +400,11 @@ revertir cambios de configuración que el usuario no intentaba deshacer
 
 | Función | Archivo | Descripción |
 |---------|---------|-------------|
-| `RN.calc.mesActualStr()` | calculations.js | Mes operativo (respeta `mesActual`) |
+| `RN.calc.mesActualStr()` | calculations.js | Mes del reloj del sistema (YYYY-MM) |
 | `RN.calc.getPrecioNeto(c, mes)` | calculations.js | Precio neto a cobrar (con descuentos) |
-| `RN.calc.getMora(c)` | calculations.js | Meses de atraso |
-| `RN.calc.deudaTotalCliente(c, mes)` | calculations.js | Servicio pendiente + deuda equipo |
+| `RN.calc.getMora(c)` | calculations.js | Meses de atraso (solo meses con pago completo) |
+| `RN.calc.pagadoServicioMes(c, mes)` | calculations.js | Suma de abonos de servicio del mes |
+| `RN.calc.deudaTotalCliente(c, mes)` | calculations.js | Saldo pendiente real (servicio − abonos + equipo) |
 | `RN.calc.getStatus(c)` | calculations.js | Estado del cliente (paid/parcial/due...) |
 | `RN.calc.ingresosMes(mes)` | calculations.js | Ingresos del mes |
 | `RN.calc.prediccionIngresos()` | calculations.js | Predicción (regresión lineal) |
@@ -404,3 +428,9 @@ revertir cambios de configuración que el usuario no intentaba deshacer
   (Bug #17, parte UI), panel de auditoría financiera (Mejora #2), este
   documento (Mejora #7), validación al importar (Mejora #8), tests ampliados
   (Mejora #1).
+- **v5.13.20**: El mes operativo pasa a ser siempre el del reloj; el cierre
+  de mes ya no adelanta `mesActual`.
+- **v5.31.3**: Contabilidad de mora corregida (`h.monto` incluye mora cobrada);
+  `getMora` exige pago completo del mes; `deudaTotalCliente` resta abonos
+  parciales (saldo real en CUP); recibo sin doble conteo de mora; WhatsApp
+  de mora usa deuda total pendiente. Ver `CHANGELOG_v5.31.3.md`.

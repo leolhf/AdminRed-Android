@@ -1,33 +1,37 @@
 /**
- * storage/drive.js — Copia automática en Google Drive vía Apps Script (v5.29.0).
+ * storage/drive.js — Copia automática en Google Drive vía Apps Script (v5.32.0).
  *
  * REEMPLAZA al plugin nativo Android (AccountManager + appDataFolder), que
  * daba error 403 "insufficient permissions for this file" de forma persistente.
  *
- * Ahora la sincronización pasa por un Web App de Google Apps Script (ver
- * Code.gs) que corre siempre con la cuenta hfleo975@gmail.com — ya no
+ * La sincronización pasa por un Web App de Google Apps Script (ver Code.gs)
+ * que corre siempre con la cuenta configurada en drive-config.js — no
  * depende del cliente OAuth Android, del SHA-1 del APK firmado, ni de
  * scopes/appDataFolder. Funciona igual en la APK y en el navegador/PWA.
  *
  * ============================================================
- * CONFIGURACIÓN (rellenar antes de compilar)
+ * CONFIGURACIÓN
  * ============================================================
- * Después de desplegar Code.gs como Web App (ver instrucciones en ese
- * archivo), pega aquí abajo:
- *   - APPS_SCRIPT_URL: la URL que termina en /exec
- *   - APPS_SCRIPT_TOKEN: el mismo valor que pusiste en la propiedad TOKEN
- *     del script
+ * La URL y el TOKEN del Web App se leen de 'js/storage/drive-config.js'
+ * (excluido de git; ver drive-config.example.js). En CI se regenera desde
+ * los Secrets DRIVE_APPS_URL/DRIVE_APPS_TOKEN.
  * ============================================================
  *
  * Complementa al almacenamiento local: cada cambio de datos se sube (con
  * debounce de 15 s) al respaldo remoto.
  *
- * Al abrir la APK compara la copia LOCAL con la de la NUBE:
- *   - IGUALES (ninguna cambió desde la última sincronización) → solo un toast.
- *   - La nube es más nueva → diálogo para elegir qué copia trabajará la APK.
- *   - Ambas cambiaron (conflicto) → diálogo con las 2 fechas y 3 opciones:
- *     usar la nube / usar esta APK / cancelar.
- *   - La local es más nueva → se sube sola (silencioso).
+ * v5.32.0 — COMPARACIÓN Y FUSIÓN GRANULAR (antes: "todo local" o "toda la
+ * nube", con riesgo de perder registros si había cambios a ambos lados).
+ * Ahora, al detectar diferencias, se comparan las 13 secciones de datos
+ * (clientes, cobros, gastos, depósitos, retiros, inventario, asignaciones,
+ * inversiones, planes, equipos de red, descuentos, eventos y snapshots) por
+ * cantidad de registros y por contenido (id a id), y se ofrece:
+ *   - Reemplazar local con la copia de Drive.
+ *   - Sobrescribir Drive con la copia local.
+ *   - Fusionar: combina ambos lados sin perder ningún registro (si un mismo
+ *     id cambió en los dos lados, gana la versión de Drive).
+ * Se puede entrar al detalle de cada sección para ver, registro a registro,
+ * qué cambió, campo por campo.
  *
  * Nunca bloquea el arranque: sin red o con error de Drive la app funciona
  * igual con sus datos locales y reintenta después.
@@ -41,11 +45,11 @@
 RN.drive = RN.drive || {};
 
 // ---------------------------------------------------------------
-// CONFIGURACIÓN — v5.29.1 (SEGURIDAD): ya NO se incrustan aquí. Se leen de
-// 'js/storage/drive-config.js', un archivo EXCLUIDO de git (.gitignore) que
-// contiene window.RN_DRIVE_CONFIG = { url, token }. Así el token no queda en
-// el historial del repositorio. Plantilla: drive-config.example.js
-// En CI, el workflow lo regenera desde los Secrets DRIVE_APPS_URL/DRIVE_APPS_TOKEN.
+// CONFIGURACIÓN — se lee de 'js/storage/drive-config.js', un archivo
+// EXCLUIDO de git (.gitignore) que contiene window.RN_DRIVE_CONFIG =
+// { url, token }. Así el token no queda en el historial del repositorio.
+// Plantilla: drive-config.example.js. En CI, el workflow lo regenera desde
+// los Secrets DRIVE_APPS_URL/DRIVE_APPS_TOKEN.
 // ---------------------------------------------------------------
 RN.drive.APPS_SCRIPT_URL = (window.RN_DRIVE_CONFIG && window.RN_DRIVE_CONFIG.url) || 'PEGA_AQUI_URL';
 RN.drive.APPS_SCRIPT_TOKEN = (window.RN_DRIVE_CONFIG && window.RN_DRIVE_CONFIG.token) || 'PEGA_AQUI_TOKEN';
@@ -58,6 +62,8 @@ RN.drive.DEBOUNCE_MS = 15000; // sube como máx. 1 vez cada 15 s tras un cambio
 RN.drive._timer = null;
 RN.drive._pendiente = false;
 RN.drive._ultimoError = null;
+RN.drive._datosRemotosPendientes = null; // paquete {fechaISO, data} en conflicto, a la espera de resolución
+RN.drive._conflictoAbierto = false; // evita subir por encima de un conflicto sin resolver
 
 /** ¿Sincronización activada en este equipo? */
 RN.drive.cuenta = function () {
@@ -157,6 +163,9 @@ RN.drive.desconectar = function () {
 RN.drive.onChange = function () {
   try { localStorage.setItem(RN.drive.KEY_ULT_CAMBIO, new Date().toISOString()); } catch (e) {}
   if (!RN.drive.cuenta()) return;
+  // Si hay un conflicto sin resolver en pantalla, no auto-subir por encima:
+  // podría pisar la decisión pendiente del usuario.
+  if (RN.drive._conflictoAbierto) return;
   RN.drive._pendiente = true;
   if (RN.drive._timer) return; // debounce: ya hay una subida programada
   RN.drive._timer = setTimeout(function () {
@@ -204,19 +213,26 @@ RN.drive.sincronizarAhora = function () {
   });
 };
 
+/** Botón "Comparar con la nube ahora" de Ajustes (fuerza el chequeo de conflictos). */
+RN.drive.compararAhora = function () {
+  if (!RN.drive.cuenta()) { RN.drive.conectar(); return; }
+  RN.notifyUI.toast('Comparando con Google Drive…', 'info');
+  return RN.drive.compararAlArrancar();
+};
+
 // ---------------------------------------------------------------
-// Comparación local vs nube al abrir la APK
+// Arranque / reintentos
 // ---------------------------------------------------------------
 
 RN.drive.init = function () {
   // Reintento cuando vuelva la red (subida pendiente por estar offline).
   window.addEventListener('online', function () {
-    if (RN.drive._pendiente) RN.drive.subirAutomatica(true);
+    if (RN.drive._pendiente && !RN.drive._conflictoAbierto) RN.drive.subirAutomatica(true);
   });
   // Reintento periódico — si una subida falla (red intermitente, error del
   // script) queda pendiente para siempre si solo dependiéramos de 'online'.
   setInterval(function () {
-    if (RN.drive._pendiente && RN.drive.cuenta()) {
+    if (RN.drive._pendiente && RN.drive.cuenta() && !RN.drive._conflictoAbierto) {
       RN.drive.subirAutomatica(true);
     }
   }, 5 * 60 * 1000);
@@ -235,10 +251,319 @@ RN.drive._leerLocal = function () {
   };
 };
 
+// ---------------------------------------------------------------
+// Comparación local vs nube — v5.32.0: diff granular por sección/registro
+// ---------------------------------------------------------------
+
+/** Secciones con arrays de registros con id único, en el orden en que se muestran. */
+RN.drive.SECCIONES = [
+  { key: 'clients', label: 'Clientes', icon: '👤' },
+  { key: 'history', label: 'Cobros', icon: '💵' },
+  { key: 'gastos', label: 'Gastos', icon: '🧾' },
+  { key: 'depositos', label: 'Depósitos', icon: '➕' },
+  { key: 'retiros', label: 'Retiros', icon: '➖' },
+  { key: 'inventario', label: 'Inventario', icon: '📦' },
+  { key: 'asignacionesInventario', label: 'Asignaciones', icon: '🔧' },
+  { key: 'investments', label: 'Inversiones', icon: '💰' },
+  { key: 'planes', label: 'Planes', icon: '📶' },
+  { key: 'equiposRed', label: 'Equipos de red', icon: '🛰️' },
+  { key: 'descuentos', label: 'Descuentos', icon: '🏷️' },
+  { key: 'eventos', label: 'Eventos', icon: '📋' },
+  { key: 'snapshots', label: 'Snapshots', icon: '📸' }
+];
+
+/** Etiqueta legible de un registro según su sección. Tolerante a campos ausentes. */
+RN.drive._labelReg = function (key, r) {
+  if (!r) return '—';
+  var esc = RN.render.esc;
+  switch (key) {
+    case 'clients':
+      return '<strong>' + esc(r.nombre || '?') + '</strong> · Tel: ' + esc(r.telefono || '—') + (r.activo === false ? ' · <span class="badge muted">Inactivo</span>' : '');
+    case 'history':
+      return (r.fecha || '?') + ' · Cliente: ' + esc(r.clienteId || '?') + ' · $' + (r.monto ?? '?');
+    case 'gastos':
+      return '<strong>' + esc(r.concepto || '?') + '</strong> · ' + (r.fecha || '?') + ' · $' + (r.montoCup ?? r.monto ?? '?');
+    case 'depositos':
+      return '<strong>' + esc(r.concepto || '?') + '</strong> · ' + (r.fecha || '?') + ' · $' + (r.monto ?? '?');
+    case 'retiros':
+      return '<strong>' + esc(r.concepto || '?') + '</strong> · ' + (r.fecha || '?') + ' · $' + (r.monto ?? '?');
+    case 'inventario':
+      return '<strong>' + esc(r.nombre || '?') + '</strong> · Cant: ' + (r.cantidad ?? '?') + ' · Costo: $' + (r.costo ?? '?');
+    case 'asignacionesInventario':
+      return 'Cliente: ' + esc(r.clienteId || '?') + ' · Cant: ' + (r.cantidad ?? '?') + ' · ' + (r.fecha || '?');
+    case 'investments':
+      return '<strong>' + esc(r.nombre || r.concepto || '?') + '</strong> · $' + (r.monto ?? '?') + (r.externo ? ' · Préstamo externo' : '');
+    case 'planes':
+      return '<strong>' + esc(r.nombre || '?') + '</strong> · ' + (r.megas ?? '?') + 'M · $' + (r.precio ?? '?');
+    case 'equiposRed':
+      return esc(r.tipo || '?') + (r.modelo ? ' ' + esc(r.modelo) : '') + ' · Cliente: ' + esc(r.clienteId || '?');
+    case 'descuentos':
+      return 'Cliente: ' + esc(r.clienteId || '?') + ' · $' + (r.monto ?? '?') + ' · ' + (r.fecha || '?');
+    case 'eventos':
+      return (r.fecha || '?') + ' · ' + esc(r.tipo_evento || '?') + ' · Cliente: ' + esc(r.clienteId || '—');
+    case 'snapshots':
+      return (r.mes || r.fecha || '?') + ' · ID ' + esc(String(r.id ?? '?'));
+    default:
+      return JSON.stringify(r).slice(0, 80);
+  }
+};
+
+/** Compara dos snapshots de datos {clients, history, ...} sección por sección. */
+RN.drive._diff = function (local, remoto) {
+  var resumen = [];
+  var hasDiff = false;
+
+  var filas = RN.drive.SECCIONES.map(function (s) {
+    var lArr = local[s.key] || [];
+    var dArr = remoto[s.key] || [];
+    var d = dArr.length - lArr.length;
+    var contenidoDistinto = d === 0 && JSON.stringify(lArr) !== JSON.stringify(dArr);
+    var igual = d === 0 && !contenidoDistinto;
+    if (d !== 0) { hasDiff = true; resumen.push(s.label + ': local ' + lArr.length + ' vs Drive ' + dArr.length); }
+    else if (contenidoDistinto) { hasDiff = true; resumen.push(s.label + ': contenido distinto'); }
+    return Object.assign({}, s, { local: lArr.length, drive: dArr.length, diff: d, contenidoDistinto: contenidoDistinto, igual: igual });
+  });
+
+  // Configuración del negocio (objeto único, no array de registros con id).
+  var configIgual = JSON.stringify(local.config || {}) === JSON.stringify(remoto.config || {});
+  if (!configIgual) { hasDiff = true; resumen.push('Configuración: distinta'); }
+
+  return { hasDiff: hasDiff, resumen: resumen, filas: filas, configIgual: configIgual };
+};
+
+/** Muestra el modal de comparación con la tabla de secciones. */
+RN.drive._mostrarConflicto = function (diff, fechaLocalISO, fechaNubeISO) {
+  RN.drive._conflictoAbierto = true;
+  var fmt = RN.drive._fechaCorta;
+
+  var filasHtml = diff.filas.map(function (f) {
+    var mas = f.diff > 0;
+    var badge = f.igual
+      ? '<span class="badge ok">Igual</span>'
+      : (f.diff !== 0
+          ? '<span class="badge ' + (mas ? 'paid' : 'warn') + '">' + (mas ? '+' + f.diff + ' en Drive' : (f.diff) + ' en Drive') + '</span>'
+          : '<span class="badge warn">Contenido distinto</span>');
+    var clickable = !f.igual;
+    return '<tr' + (clickable ? ' style="cursor:pointer" onclick="RN.drive._mostrarDetalle(\'' + f.key + '\')"' : '') + '>' +
+      '<td>' + f.icon + ' ' + f.label + (clickable ? ' <span class="muted" style="font-size:11px">Ver detalle →</span>' : '') + '</td>' +
+      '<td style="text-align:center">' + f.drive + '</td>' +
+      '<td style="text-align:center">' + f.local + '</td>' +
+      '<td style="text-align:center">' + badge + '</td>' +
+    '</tr>';
+  }).join('');
+
+  var filaConfig = '<tr' + (diff.configIgual ? '' : ' style="cursor:pointer" onclick="RN.drive._mostrarDetalleConfig()"') + '>' +
+    '<td>⚙️ Configuración' + (diff.configIgual ? '' : ' <span class="muted" style="font-size:11px">Ver detalle →</span>') + '</td>' +
+    '<td style="text-align:center" colspan="2">—</td>' +
+    '<td style="text-align:center">' + (diff.configIgual ? '<span class="badge ok">Igual</span>' : '<span class="badge warn">Distinta</span>') + '</td>' +
+  '</tr>';
+
+  var html =
+    '<div class="modal-header"><h3>☁️ Diferencias con Google Drive</h3><button class="close" onclick="RN.drive._cerrarConflictoSinResolver()">×</button></div>' +
+    '<div class="modal-body">' +
+      '<div class="flex wrap" style="gap:10px;margin-bottom:14px">' +
+        '<div class="card" style="flex:1;min-width:160px;padding:10px 12px"><div class="muted" style="font-size:11px">📱 Guardado local</div><div style="font-weight:600">' + fmt(fechaLocalISO) + '</div></div>' +
+        '<div class="card" style="flex:1;min-width:160px;padding:10px 12px"><div class="muted" style="font-size:11px">☁️ Guardado en Drive</div><div style="font-weight:600">' + fmt(fechaNubeISO) + '</div></div>' +
+      '</div>' +
+      '<table style="width:100%;border-collapse:collapse;font-size:13px">' +
+        '<thead><tr><th style="text-align:left">Sección</th><th>☁️ Drive</th><th>📱 Local</th><th>Estado</th></tr></thead>' +
+        '<tbody>' + filasHtml + filaConfig + '</tbody>' +
+      '</table>' +
+      '<p class="muted mt-16" style="font-size:12px">Toca una sección con diferencias para ver el detalle registro por registro.</p>' +
+    '</div>' +
+    '<div class="modal-footer" style="flex-wrap:wrap">' +
+      '<button class="btn ghost" onclick="RN.drive._cerrarConflictoSinResolver()">Decidir después</button>' +
+      '<button class="btn" onclick="RN.drive._confirmarSobrescribirDrive()">📱 Sobrescribir Drive</button>' +
+      '<button class="btn" onclick="RN.drive._confirmarReemplazarLocal()">☁️ Reemplazar local</button>' +
+      '<button class="btn primary" onclick="RN.drive._confirmarFusionar()">🔀 Fusionar (recomendado)</button>' +
+    '</div>';
+
+  RN.uiComponents.modal(html, { lg: true });
+};
+
+/** Detalle campo por campo de una sección, con registros solo-en-Drive / solo-local / modificados. */
+RN.drive._mostrarDetalle = function (key) {
+  if (!RN.drive._datosRemotosPendientes) return;
+  var local = RN.drive._datosLocalesActuales;
+  var remoto = RN.drive._datosRemotosPendientes.data;
+  var lArr = local[key] || [];
+  var dArr = remoto[key] || [];
+
+  var lMap = {}; lArr.forEach(function (r) { if (r.id != null) lMap[r.id] = r; });
+  var dMap = {}; dArr.forEach(function (r) { if (r.id != null) dMap[r.id] = r; });
+  var todosIds = Array.from(new Set(lArr.map(function (r) { return r.id; }).concat(dArr.map(function (r) { return r.id; }))));
+
+  var soloEnDrive = [], soloEnLocal = [], modificados = [];
+  todosIds.forEach(function (id) {
+    var l = lMap[id], d = dMap[id];
+    if (!l && d) { soloEnDrive.push(d); return; }
+    if (l && !d) { soloEnLocal.push(l); return; }
+    if (JSON.stringify(l) !== JSON.stringify(d)) modificados.push({ local: l, drive: d });
+  });
+
+  var sec = RN.drive.SECCIONES.find(function (s) { return s.key === key; }) || { label: key, icon: '·' };
+  var html = RN.drive._renderDetalleHtml(sec, lArr.length, dArr.length, soloEnDrive, soloEnLocal, modificados, key);
+  RN.uiComponents.modal(html, { lg: true });
+};
+
+RN.drive._mostrarDetalleConfig = function () {
+  if (!RN.drive._datosRemotosPendientes) return;
+  var local = RN.drive._datosLocalesActuales.config || {};
+  var remoto = RN.drive._datosRemotosPendientes.data.config || {};
+  var html =
+    '<div class="modal-header"><h3>⚙️ Configuración — detalle</h3><button class="close" onclick="RN.drive._mostrarConflicto(RN.drive._ultimoDiff, RN.drive._ultimaFechaLocal, RN.drive._ultimaFechaNube)">×</button></div>' +
+    '<div class="modal-body">' + RN.drive._diffCampos(local, remoto) + '</div>' +
+    '<div class="modal-footer"><button class="btn ghost" onclick="RN.drive._mostrarConflicto(RN.drive._ultimoDiff, RN.drive._ultimaFechaLocal, RN.drive._ultimaFechaNube)">← Volver</button></div>';
+  RN.uiComponents.modal(html, { lg: true });
+};
+
+RN.drive._renderDetalleHtml = function (sec, nLocal, nDrive, soloEnDrive, soloEnLocal, modificados, key) {
+  var esc = RN.render.esc;
+  var html = '<div class="modal-header"><h3>' + sec.icon + ' ' + esc(sec.label) + ' — detalle</h3><button class="close" onclick="RN.drive._mostrarConflicto(RN.drive._ultimoDiff, RN.drive._ultimaFechaLocal, RN.drive._ultimaFechaNube)">×</button></div>';
+  html += '<div class="modal-body">';
+  html += '<p class="muted" style="font-size:12px">📱 Local: ' + nLocal + ' · ☁️ Drive: ' + nDrive + '</p>';
+
+  if (soloEnDrive.length) {
+    html += '<h4 style="margin-top:14px">☁️ Solo en Drive (' + soloEnDrive.length + ')</h4>';
+    html += soloEnDrive.map(function (r) { return '<div class="card" style="padding:8px 12px;margin-bottom:5px;font-size:13px">' + RN.drive._labelReg(key, r) + '</div>'; }).join('');
+  }
+  if (soloEnLocal.length) {
+    html += '<h4 style="margin-top:14px">📱 Solo en local (' + soloEnLocal.length + ')</h4>';
+    html += soloEnLocal.map(function (r) { return '<div class="card" style="padding:8px 12px;margin-bottom:5px;font-size:13px">' + RN.drive._labelReg(key, r) + '</div>'; }).join('');
+  }
+  if (modificados.length) {
+    html += '<h4 style="margin-top:14px">⚡ Modificados (' + modificados.length + ')</h4>';
+    html += modificados.map(function (m) {
+      return '<details style="margin-bottom:8px" class="card">' +
+        '<summary style="cursor:pointer;padding:6px 0">' + RN.drive._labelReg(key, m.local) + '</summary>' +
+        '<div style="padding-top:8px">' + RN.drive._diffCampos(m.local, m.drive) + '</div>' +
+      '</details>';
+    }).join('');
+  }
+  if (!soloEnDrive.length && !soloEnLocal.length && !modificados.length) {
+    html += '<p class="muted">Los registros son idénticos en contenido.</p>';
+  }
+  html += '</div><div class="modal-footer"><button class="btn ghost" onclick="RN.drive._mostrarConflicto(RN.drive._ultimoDiff, RN.drive._ultimaFechaLocal, RN.drive._ultimaFechaNube)">← Volver</button></div>';
+  return html;
+};
+
+/** Tabla de campos que cambiaron entre dos versiones de un mismo registro/objeto. */
+RN.drive._diffCampos = function (l, d) {
+  l = l || {}; d = d || {};
+  var claves = Array.from(new Set(Object.keys(l).concat(Object.keys(d)))).filter(function (k) { return k !== 'id'; });
+  var cambiadas = claves.filter(function (k) { return JSON.stringify(l[k]) !== JSON.stringify(d[k]); });
+  if (!cambiadas.length) return '<p class="muted" style="font-size:12px">Sin diferencias en campos.</p>';
+  return cambiadas.map(function (k) {
+    var lv = l[k] !== undefined ? JSON.stringify(l[k]) : '—';
+    var dv = d[k] !== undefined ? JSON.stringify(d[k]) : '—';
+    return '<div style="display:grid;grid-template-columns:100px 1fr 1fr;gap:6px;padding:5px 0;border-bottom:1px solid var(--border);font-size:12px">' +
+      '<span class="muted">' + k + '</span>' +
+      '<div style="word-break:break-all"><span class="muted" style="font-size:10px">📱 Local</span><br>' + RN.render.esc(lv) + '</div>' +
+      '<div style="word-break:break-all"><span class="muted" style="font-size:10px">☁️ Drive</span><br>' + RN.render.esc(dv) + '</div>' +
+    '</div>';
+  }).join('');
+};
+
+/** Cierra el modal de conflicto sin resolver: se vuelve a preguntar en el próximo arranque/comparación. */
+RN.drive._cerrarConflictoSinResolver = function () {
+  RN.uiComponents.cerrarModal();
+  RN.drive._conflictoAbierto = false;
+};
+
+RN.drive._confirmarReemplazarLocal = function () {
+  RN.uiComponents.confirm(
+    'Reemplazar datos locales',
+    '¿Seguro? Los datos de este equipo serán reemplazados con los de Google Drive. Esta acción no se puede deshacer.',
+    function () { RN.drive._reemplazarLocal(); },
+    { danger: true }
+  );
+};
+
+RN.drive._confirmarSobrescribirDrive = function () {
+  RN.uiComponents.confirm(
+    'Sobrescribir Google Drive',
+    '¿Seguro? Los datos en Drive serán reemplazados con los de este equipo. Los registros que solo existan en Drive se perderán.',
+    function () { RN.drive._sobrescribirDrive(); },
+    { danger: true }
+  );
+};
+
+RN.drive._confirmarFusionar = function () {
+  RN.uiComponents.confirm(
+    'Fusionar datos',
+    'Se combinarán los datos de Drive y los de este equipo. Si un mismo registro cambió en los dos lados, se conservará la versión de Drive. No se perderá ningún registro.',
+    function () { RN.drive._fusionar(); }
+  );
+};
+
+/** Reemplaza los datos locales con los de Drive. */
+RN.drive._reemplazarLocal = function () {
+  var paquete = RN.drive._datosRemotosPendientes;
+  if (!paquete) return;
+  RN.drive._aplicarDatos(paquete.data);
+  var fecha = paquete.fechaISO || new Date().toISOString();
+  localStorage.setItem(RN.drive.KEY_ULT_SINCRO, fecha);
+  localStorage.setItem(RN.drive.KEY_ULT_CAMBIO, fecha);
+  RN.drive._datosRemotosPendientes = null;
+  RN.drive._conflictoAbierto = false;
+  RN.uiComponents.cerrarModal();
+  RN.notifyUI.toast('✅ Datos reemplazados con la versión de Google Drive', 'success');
+  setTimeout(function () { location.reload(); }, 800);
+};
+
+/** Sube los datos locales tal cual, sobrescribiendo Drive. */
+RN.drive._sobrescribirDrive = async function () {
+  RN.drive._datosRemotosPendientes = null;
+  RN.drive._conflictoAbierto = false;
+  RN.uiComponents.cerrarModal();
+  await RN.drive.subirAutomatica(false);
+};
+
+/** Fusiona Drive + local sección por sección (unión por id; empata gana Drive). */
+RN.drive._fusionar = async function () {
+  var paquete = RN.drive._datosRemotosPendientes;
+  if (!paquete) return;
+  var remoto = paquete.data;
+  var local = RN.drive._datosLocalesActuales;
+  var merged = Object.assign({}, local);
+
+  RN.drive.SECCIONES.forEach(function (s) {
+    var localArr = local[s.key] || [];
+    var driveArr = remoto[s.key] || [];
+    if (!localArr.length && !driveArr.length) { merged[s.key] = []; return; }
+
+    var localMap = {}; localArr.forEach(function (r) { if (r.id != null) localMap[r.id] = r; });
+    var driveMap = {}; driveArr.forEach(function (r) { if (r.id != null) driveMap[r.id] = r; });
+    var allIds = Array.from(new Set(localArr.map(function (r) { return r.id; }).concat(driveArr.map(function (r) { return r.id; }))));
+
+    // Drive tiene prioridad en caso de que el mismo id exista en ambos lados con contenido distinto.
+    merged[s.key] = allIds.map(function (id) { return driveMap[id] || localMap[id]; }).filter(Boolean);
+  });
+
+  // Configuración: se conserva la local (contiene tasa de cambio y ajustes que
+  // se suelen tocar desde varios equipos; el usuario puede reconfigurar si
+  // prefiere los valores de Drive).
+  merged.config = local.config;
+  merged.reciboCounter = Math.max(local.reciboCounter || 0, remoto.reciboCounter || 0);
+  merged.mesActual = local.mesActual || remoto.mesActual;
+
+  RN.drive._aplicarDatos(merged);
+  RN.drive._datosRemotosPendientes = null;
+  RN.drive._conflictoAbierto = false;
+  RN.uiComponents.cerrarModal();
+
+  RN.notifyUI.toast('🔀 Fusionando y guardando en Drive…', 'info');
+  await RN.drive.subirAutomatica(true);
+  RN.notifyUI.toast('✅ Datos fusionados correctamente', 'success');
+  setTimeout(function () { location.reload(); }, 800);
+};
+
+/** Compara local vs nube al abrir la app (o al pedirlo manualmente). */
 RN.drive.compararAlArrancar = async function () {
   var local = RN.drive._leerLocal();
   if (!local.cuenta || !RN.drive._configurado()) return;
   if (!RN.drive.hayRed()) { RN.drive._pendiente = true; return; }
+
   var remoto;
   try {
     remoto = await RN.drive._apiLeer();
@@ -260,71 +585,22 @@ RN.drive.compararAlArrancar = async function () {
   try { paquete = RN.drive._desempaquetar(remoto.json); }
   catch (e) { RN.notifyUI.toast('Copia en Drive ilegible: ' + e.message, 'error'); return; }
 
-  var fechaNube = paquete.fechaISO || remoto.fechaRemota || null;
-  var cambioLocal = local.ultCambio;
-  var ultimaSincro = local.ultSincro;
+  var datosLocales = JSON.parse(RN.storageLocal.serializar());
+  var diff = RN.drive._diff(datosLocales, paquete.data);
 
-  var nubeNueva = !!(fechaNube && ultimaSincro && fechaNube > ultimaSincro);
-  var localNuevo = !!(cambioLocal && (!ultimaSincro || cambioLocal > ultimaSincro));
-
-  if (!nubeNueva && !localNuevo) {
-    // IGUALES: nada cambió en ningún lado desde la última sincronización.
-    RN.notifyUI.toast('☁️ Copia de Google Drive al día (' + RN.drive._fechaCorta(fechaNube) + ')', 'info');
+  if (!diff.hasDiff) {
+    RN.notifyUI.toast('☁️ Copia de Google Drive al día (' + RN.drive._fechaCorta(paquete.fechaISO) + ')', 'info');
+    RN.drive._refrescarUI();
     return;
   }
-  if (localNuevo && !nubeNueva) {
-    // Solo cambió lo local: subir sin preguntar.
-    await RN.drive.subirAutomatica(true);
-    return;
-  }
-  // La nube es más nueva, o AMBAS cambiaron (conflicto): preguntar al usuario.
-  RN.drive._dialogoEleccion(fechaNube, cambioLocal, nubeNueva && localNuevo);
-};
 
-/** Diálogo: ¿qué copia trabajará la APK? Muestra las fechas de ambas. */
-RN.drive._dialogoEleccion = function (fechaNube, fechaLocal, conflicto) {
-  try { RN.uiComponents.cerrarModal(); } catch (e) {}
-  var titulo = conflicto ? '⚠️ Copias distintas (conflicto)' : '☁️ Copia más nueva en Google Drive';
-  var html =
-    '<div class="modal-header"><h3>' + titulo + '</h3>' +
-      '<button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>' +
-    '<div class="modal-body">' +
-      '<p>La copia de <b>Google Drive</b> es del <b>' + RN.drive._fechaCorta(fechaNube) + '</b>.</p>' +
-      '<p>Los datos de <b>esta APK (local)</b> son del <b>' +
-        (fechaLocal ? RN.drive._fechaCorta(fechaLocal) : 'nunca (sin cambios registrados)') + '</b>.</p>' +
-      (conflicto ? '<p class="muted">Ambas copias cambiaron desde la última sincronización. Elige cuál quieres usar.</p>' : '') +
-    '</div>' +
-    '<div class="modal-footer">' +
-      '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar (usar local sin subir)</button>' +
-      '<button class="btn" onclick="RN.drive._usarLocal()">📱 Usar esta APK (sube a la nube)</button>' +
-      '<button class="btn primary" onclick="RN.drive._usarNube()">☁️ Usar la copia de Drive</button>' +
-    '</div>';
-  RN.uiComponents.modal(html, {});
-};
-
-/** Elige NUBE: restaura los datos remotos en la APK. */
-RN.drive._usarNube = async function () {
-  try {
-    try { RN.uiComponents.cerrarModal(); } catch (e) {}
-    var remoto = await RN.drive._apiLeer();
-    if (!remoto || !remoto.json) { RN.notifyUI.toast('No hay copia en la nube', 'warn'); return; }
-    var paquete = RN.drive._desempaquetar(remoto.json);
-    RN.drive._aplicarDatos(paquete.data);
-    var fecha = paquete.fechaISO || new Date().toISOString();
-    localStorage.setItem(RN.drive.KEY_ULT_SINCRO, fecha);
-    localStorage.setItem(RN.drive.KEY_ULT_CAMBIO, fecha); // la local ahora ES esa copia
-    RN.notifyUI.toast('☁️ Datos restaurados desde Google Drive', 'success');
-    setTimeout(function () { location.reload(); }, 800);
-  } catch (e) {
-    RN.notifyUI.toast('No se pudo restaurar: ' + (e.message || e), 'error');
-  }
-};
-
-/** Elige LOCAL: sube el estado actual y deja la nube igualada. */
-RN.drive._usarLocal = async function () {
-  try { RN.uiComponents.cerrarModal(); } catch (e) {}
-  var ok = await RN.drive.subirAutomatica(true);
-  if (ok) RN.notifyUI.toast('📱 Datos de la APK subidos a la nube', 'success');
+  // Hay diferencias: guardar el estado para el modal y mostrar comparación.
+  RN.drive._datosLocalesActuales = datosLocales;
+  RN.drive._datosRemotosPendientes = paquete;
+  RN.drive._ultimoDiff = diff;
+  RN.drive._ultimaFechaLocal = local.ultCambio;
+  RN.drive._ultimaFechaNube = paquete.fechaISO;
+  RN.drive._mostrarConflicto(diff, local.ultCambio, paquete.fechaISO);
 };
 
 /** Aplica un objeto de datos (ya desempaquetado) al estado y persiste. */
@@ -369,6 +645,7 @@ RN.drive.estado = function () {
   if (!c) return 'Copia en Drive desactivada — la copia solo se guarda en este teléfono.';
   var ult = localStorage.getItem(RN.drive.KEY_ULT_SINCRO);
   var txt = 'Cuenta: ' + c + ' · Última copia: ' + (ult ? RN.drive._fechaCorta(ult) : 'pendiente');
+  if (RN.drive._conflictoAbierto) txt += ' · ⚠️ hay diferencias sin resolver con Drive';
   if (RN.drive._pendiente) txt += ' · ⏳ copia pendiente de subir';
   if (RN.drive._ultimoError) txt += ' · ⚠️ ' + RN.drive._ultimoError;
   return txt;
