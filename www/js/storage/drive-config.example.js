@@ -6,8 +6,8 @@
  *
  *   cp www/js/storage/drive-config.example.js www/js/storage/drive-config.js
  *
- * En GitHub Actions el archivo drive-config.js se genera automáticamente desde
- * los Secrets DRIVE_APPS_URL y DRIVE_APPS_TOKEN (ver .github/workflows/build-apk.yml).
+ * OPCIONAL (solo desarrollo). En la app normal la URL y el token se introducen
+ * en Ajustes → Copia en Google Drive → Configurar, y no van dentro de la APK.
  */
 window.RN_DRIVE_CONFIG = {
   url: 'PEGA_AQUI_URL',
