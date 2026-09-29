@@ -57,20 +57,10 @@ jobs:
       - name: Instalar dependencias
         run: npm ci
 
-      # 5b. v5.29.1: regenerar drive-config.js desde los Secrets de GitHub.
-      #     El archivo está en .gitignore (no viaja en el repo), así que el
-      #     token del Apps Script se inyecta aquí en cada build, sin quedar
-      #     nunca en el historial de git.
-      - name: Generar drive-config.js desde Secrets
-        run: |
-          if [ -n "${{ secrets.DRIVE_APPS_URL }}" ]; then
-            printf "window.RN_DRIVE_CONFIG = { url: '%s', token: '%s' };\n" \
-              "${{ secrets.DRIVE_APPS_URL }}" "${{ secrets.DRIVE_APPS_TOKEN }}" \
-              > www/js/storage/drive-config.js
-            echo "drive-config.js generado desde Secrets"
-          else
-            echo "AVISO: sin secrets DRIVE_APPS_URL/DRIVE_APPS_TOKEN; la copia en Drive quedara desactivada"
-          fi
+      # 5b. v5.40.1: YA NO se inyecta el token de Drive en la APK. Las releases
+      #     son públicas y cualquiera podría extraerlo; ahora el usuario lo
+      #     introduce en la app (Ajustes → Copia en Google Drive) y queda solo
+      #     en su dispositivo.
 
       # 6. Sincronizar los assets web (www/) con el proyecto Android
       - name: Sincronizar Capacitor
@@ -126,4 +116,55 @@ jobs:
 
             Descarga el archivo `.apk` de abajo e instálalo en tu teléfono Android.
           files: AdminRed_v*.apk
+          fail_on_unmatched_files: true
+
+  # ============================================================
+  # Versión de escritorio para Windows (.exe) con Electron.
+  # Corre DESPUÉS del job del APK para que la release ya exista y
+  # solo se le adjunten los .exe (no se pisan los archivos ni el texto).
+  # ============================================================
+  windows:
+    name: Compilar .exe (Windows)
+    runs-on: windows-latest
+    needs: build
+
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Instalar dependencias
+        run: npm ci
+
+      # Genera: instalador (NSIS) y versión portable, ambos x64.
+      # --publish never: la publicación la hace el paso de release de abajo.
+      - name: Compilar instalador y portable
+        run: npx electron-builder --win --publish never
+
+      - name: Leer versión
+        id: ver
+        shell: bash
+        run: |
+          VERSION=$(node -p "require('fs').readFileSync('www/js/version.js','utf8').match(/APP_VERSION\s*=\s*'([^']+)'/)[1]")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          ls -la dist-electron/*.exe
+
+      - name: Subir .exe como artefacto
+        uses: actions/upload-artifact@v4
+        with:
+          name: AdminRed-Windows
+          path: dist-electron/AdminRed_*.exe
+          retention-days: 90
+
+      # Adjunta los .exe a la MISMA release del APK (mismo tag).
+      - name: Adjuntar .exe a la release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.version }}
+          files: dist-electron/AdminRed_*.exe
           fail_on_unmatched_files: true

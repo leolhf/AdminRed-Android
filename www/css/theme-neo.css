@@ -1,0 +1,769 @@
+/* ============================================================
+   theme-neo.css — Capa visual "Neo Glass" para AdminRed
+   ------------------------------------------------------------
+   Se carga DESPUÉS de styles.css. Sólo define apariencia
+   (paleta, tipografía, sombras, radios, sparklines). No altera
+   ninguna lógica de negocio, cálculo ni almacenamiento.
+
+   Paleta extraída del diseño de referencia:
+     fondo   : azul marino profundo con halos #0B1020 → #070B16
+     tarjetas: vidrio translúcido + borde hairline
+     acentos : azul #3B82F6 · verde #22C55E · ámbar #F59E0B
+               rojo #EF4444 · violeta #8B5CF6 · cian #22D3EE
+   ============================================================ */
+
+/* ============================================================
+   1. TOKENS (una sola fuente de verdad)
+   ============================================================ */
+:root {
+  /* Paleta base del sistema neo */
+  --neo-ink-0:   #070B16;
+  --neo-ink-1:   #0B1020;
+  --neo-ink-2:   #141F38;
+  --neo-ink-3:   #1B253B;
+
+  --neo-blue:    #3B82F6;
+  --neo-blue-2:  #2563EB;
+  --neo-blue-3:  #1D4ED8;
+  --neo-cyan:    #22D3EE;
+  --neo-green:   #22C55E;
+  --neo-green-2: #16A34A;
+  --neo-amber:   #F59E0B;
+  --neo-red:     #EF4444;
+  --neo-violet:  #8B5CF6;
+
+  /* Geometría y movimiento */
+  --neo-r:       16px;
+  --neo-r-sm:    12px;
+  --neo-r-pill:  999px;
+  --neo-blur:    blur(14px) saturate(150%);
+  --neo-ease:    cubic-bezier(.32,.72,0,1);
+
+  /* Tipografía del sistema neo */
+  --neo-font: -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", Roboto,
+              "Helvetica Neue", Arial, sans-serif;
+  --neo-mono: ui-monospace, "SF Mono", "Cascadia Code", "JetBrains Mono", monospace;
+}
+
+/* ------------------------------------------------------------
+   2. TEMA OSCURO (por defecto) — tokens semánticos
+   ------------------------------------------------------------ */
+[data-theme="dark"] {
+  --neo-hi:            rgba(255,255,255,.07);   /* brillo superior */
+  --neo-panel:         linear-gradient(180deg, rgba(39,52,80,.72), rgba(21,30,50,.80));
+  --neo-panel-flat:    rgba(27,37,59,.62);
+  --neo-panel-soft:    rgba(33,45,71,.55);
+  --neo-stroke:        rgba(148,163,184,.16);
+  --neo-stroke-strong: rgba(148,163,184,.30);
+  --neo-txt:           #EAF0FF;
+  --neo-txt-muted:     #93A2BE;
+  --neo-shadow-1:      0 10px 30px rgba(2,6,23,.45);
+  --neo-shadow-2:      0 18px 50px rgba(2,6,23,.60);
+
+  /* Puente con las variables históricas de styles.css */
+  --bg:            #0B1020;
+  --surface:       #161F33;
+  --surface-2:     rgba(33,45,71,.62);
+  --bg-alt:        rgba(20,31,56,.72);
+  --border:        rgba(148,163,184,.18);
+  --text:          var(--neo-txt);
+  --text-muted:    var(--neo-txt-muted);
+  --primary:       var(--neo-blue);
+  --primary-hover: var(--neo-blue-2);
+  --primary-soft:  rgba(59,130,246,.14);
+  --success:       var(--neo-green);
+  --success-soft:  rgba(34,197,94,.15);
+  --warn:          var(--neo-amber);
+  --warn-soft:     rgba(245,158,11,.15);
+  --danger:        var(--neo-red);
+  --danger-soft:   rgba(239,68,68,.15);
+  --amber:         var(--neo-amber);
+  --green:         var(--neo-green);
+  --red:           var(--neo-red);
+  --shadow:        var(--neo-shadow-1);
+  --shadow-lg:     var(--neo-shadow-2);
+  --radius:        var(--neo-r);
+  --radius-sm:     var(--neo-r-sm);
+}
+
+/* ------------------------------------------------------------
+   3. TEMA CLARO — variante "vidrio luminoso" del mismo lenguaje
+   ------------------------------------------------------------ */
+[data-theme="light"] {
+  --neo-hi:            rgba(255,255,255,.85);
+  --neo-panel:         linear-gradient(180deg, rgba(255,255,255,.94), rgba(244,248,255,.92));
+  --neo-panel-flat:    rgba(255,255,255,.88);
+  --neo-panel-soft:    rgba(241,246,255,.85);
+  --neo-stroke:        rgba(15,23,42,.10);
+  --neo-stroke-strong: rgba(15,23,42,.20);
+  --neo-txt:           #0F172A;
+  --neo-txt-muted:     #5B6B87;
+  --neo-shadow-1:      0 8px 22px rgba(15,23,42,.10);
+  --neo-shadow-2:      0 18px 44px rgba(15,23,42,.16);
+
+  --bg:            #EEF3FB;
+  --surface:       #FFFFFF;
+  --surface-2:     rgba(241,246,255,.9);
+  --bg-alt:        rgba(238,243,251,.9);
+  --border:        rgba(15,23,42,.10);
+  --text:          var(--neo-txt);
+  --text-muted:    var(--neo-txt-muted);
+  --primary:       var(--neo-blue-2);
+  --primary-hover: var(--neo-blue-3);
+  --primary-soft:  rgba(37,99,235,.12);
+  --success:       var(--neo-green-2);
+  --success-soft:  rgba(22,163,74,.12);
+  --warn:          #B45309;
+  --warn-soft:     rgba(245,158,11,.14);
+  --danger:        #DC2626;
+  --danger-soft:   rgba(220,38,38,.12);
+}
+
+/* ============================================================
+   4. LIENZO / FONDO
+   ============================================================ */
+html, body { font-family: var(--neo-font); }
+
+[data-theme="dark"] html,
+[data-theme="dark"] body {
+  background:
+    radial-gradient(1100px 620px at 8% -12%,  rgba(59,130,246,.22), transparent 62%),
+    radial-gradient(900px 520px at 104% -6%,  rgba(139,92,246,.18), transparent 58%),
+    radial-gradient(760px 520px at 50% 118%,  rgba(34,211,238,.10), transparent 62%),
+    linear-gradient(180deg, #0B1020 0%, #070B16 100%);
+  background-attachment: fixed;
+  background-color: var(--neo-ink-1);
+}
+
+[data-theme="light"] html,
+[data-theme="light"] body {
+  background:
+    radial-gradient(1000px 580px at 6% -14%, rgba(59,130,246,.20), transparent 60%),
+    radial-gradient(860px 500px at 104% -8%, rgba(139,92,246,.14), transparent 58%),
+    linear-gradient(180deg, #F5F8FF 0%, #E9EFF9 100%);
+  background-attachment: fixed;
+  background-color: var(--bg);
+}
+
+body { color: var(--neo-txt); letter-spacing: .1px; }
+
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: var(--neo-stroke-strong); border-radius: 999px; border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+/* ============================================================
+   5. CABECERA
+   ============================================================ */
+.app-header {
+  background: linear-gradient(180deg, rgba(18,27,46,.92), rgba(11,16,32,.86));
+  border-bottom: 1px solid var(--neo-stroke);
+  backdrop-filter: var(--neo-blur);
+  -webkit-backdrop-filter: var(--neo-blur);
+  box-shadow: 0 8px 26px rgba(2,6,23,.45);
+}
+[data-theme="light"] .app-header {
+  background: linear-gradient(180deg, rgba(255,255,255,.94), rgba(246,249,255,.88));
+  box-shadow: 0 8px 22px rgba(15,23,42,.10);
+}
+
+.app-header .logo {
+  font-weight: 800; font-size: 16px; letter-spacing: -.2px;
+  color: var(--neo-txt);
+  text-shadow: 0 0 26px rgba(59,130,246,.45);
+}
+[data-theme="light"] .app-header .logo { text-shadow: none; }
+.app-header .logo .dot {
+  background: var(--neo-green);
+  box-shadow: 0 0 0 4px rgba(34,197,94,.16), 0 0 14px rgba(34,197,94,.75);
+}
+.app-header .logo .sub { color: var(--neo-txt-muted); font-size: 11px; letter-spacing: .4px; }
+
+.app-header .ver {
+  background: var(--neo-panel-soft);
+  border: 1px solid var(--neo-stroke);
+  color: var(--neo-txt-muted);
+  border-radius: var(--neo-r-pill);
+  backdrop-filter: blur(8px);
+  font-variant-numeric: tabular-nums;
+}
+.app-header .ver:hover {
+  color: #fff; border-color: rgba(59,130,246,.55);
+  background: rgba(59,130,246,.16);
+  box-shadow: 0 0 18px rgba(59,130,246,.35);
+}
+.app-header .clock { color: var(--neo-txt-muted); font-variant-numeric: tabular-nums; }
+
+.icon-btn {
+  background: var(--neo-panel-soft);
+  border: 1px solid var(--neo-stroke);
+  color: var(--neo-txt);
+  border-radius: 12px;
+  backdrop-filter: blur(8px);
+  transition: transform .15s var(--neo-ease), background .15s, border-color .15s, box-shadow .15s;
+}
+.icon-btn:hover {
+  background: rgba(59,130,246,.16); border-color: rgba(59,130,246,.5);
+  box-shadow: 0 0 18px rgba(59,130,246,.30); color: #fff;
+}
+[data-theme="light"] .icon-btn:hover { color: var(--neo-blue-2); }
+.icon-btn:active { transform: scale(.92); }
+
+/* ============================================================
+   6. NAVEGACIÓN — pestañas y pastillas
+   ============================================================ */
+.tabs {
+  background: linear-gradient(180deg, rgba(13,20,37,.92), rgba(9,14,26,.88));
+  border-bottom: 1px solid var(--neo-stroke);
+  backdrop-filter: var(--neo-blur);
+  -webkit-backdrop-filter: var(--neo-blur);
+}
+[data-theme="light"] .tabs { background: rgba(255,255,255,.9); }
+
+.tab-group .tab {
+  color: var(--neo-txt-muted); font-weight: 700; font-size: 13px;
+  border-bottom: 3px solid transparent; letter-spacing: .2px;
+}
+.tab-group .tab:hover { color: var(--neo-txt); }
+.tab-group.active .tab {
+  color: var(--neo-txt);
+  border-bottom-color: var(--neo-blue);
+  text-shadow: 0 0 18px rgba(59,130,246,.65);
+}
+[data-theme="light"] .tab-group.active .tab { text-shadow: none; color: var(--neo-blue-2); }
+.tab-group .tab:active { background: rgba(59,130,246,.10); }
+
+.subtabs {
+  background: rgba(11,17,32,.94);
+  border-bottom: 1px solid var(--neo-stroke);
+  backdrop-filter: var(--neo-blur);
+  -webkit-backdrop-filter: var(--neo-blur);
+  box-shadow: 0 14px 34px rgba(2,6,23,.55);
+  gap: 4px; padding: 6px 8px;
+}
+[data-theme="light"] .subtabs { background: rgba(252,253,255,.96); box-shadow: 0 14px 30px rgba(15,23,42,.12); }
+
+.subtab {
+  border: 1px solid transparent;
+  border-radius: var(--neo-r-pill);
+  color: var(--neo-txt-muted); font-weight: 600; font-size: 13px;
+  padding: 7px 15px;
+  transition: color .16s, background .16s, border-color .16s, box-shadow .16s;
+}
+.subtab:hover { color: var(--neo-txt); background: rgba(148,163,184,.10); }
+.subtab.active {
+  color: #fff;
+  background: rgba(59,130,246,.14);
+  border-color: rgba(59,130,246,.65);
+  box-shadow: 0 0 0 1px rgba(59,130,246,.20), 0 0 22px rgba(59,130,246,.35), inset 0 1px 0 rgba(255,255,255,.08);
+}
+[data-theme="light"] .subtab.active { color: var(--neo-blue-3); background: rgba(37,99,235,.10); }
+
+/* ============================================================
+   7. TIPOGRAFÍA DE VISTA
+   ============================================================ */
+.view-header h2 {
+  font-size: 20px; font-weight: 800; letter-spacing: -.3px; color: var(--neo-txt);
+}
+.view-header { margin-bottom: 16px; }
+.mes-badge { color: var(--neo-txt-muted); font-weight: 600; }
+
+.kpi-group-title {
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.1px;
+  color: var(--neo-txt-muted); border-bottom: 1px solid var(--neo-stroke);
+  padding-bottom: 6px; margin: 4px 0 10px;
+}
+.kpi-group-title::before {
+  content: ''; display: inline-block; width: 3px; height: 11px; border-radius: 2px;
+  background: linear-gradient(180deg, var(--neo-blue), var(--neo-violet));
+  margin-right: 8px; vertical-align: -1px;
+}
+
+/* ============================================================
+   8. TARJETAS DE VIDRIO
+   ============================================================ */
+.card {
+  background: var(--neo-panel);
+  border: 1px solid var(--neo-stroke);
+  border-radius: var(--neo-r);
+  box-shadow: var(--neo-shadow-1), inset 0 1px 0 var(--neo-hi);
+  backdrop-filter: var(--neo-blur);
+  -webkit-backdrop-filter: var(--neo-blur);
+  position: relative;
+  overflow: hidden;
+}
+.card::after {
+  content: ''; position: absolute; inset: 0 0 auto 0; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,.16), transparent);
+  pointer-events: none;
+}
+.card h3 {
+  font-size: 11.5px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.1px;
+  color: var(--neo-txt-muted); margin-bottom: 12px;
+}
+
+/* ============================================================
+   9. KPI — fila (insignia + etiqueta) · valor a todo el ancho · sparkline
+   ------------------------------------------------------------
+   Estructura real del DOM (generada por render.js + sparkline.js):
+     <div class="kpi CLASE"> [insignia] [etiqueta] [anillo?] [valor] [svg]
+   Con flex-wrap la insignia y la etiqueta comparten el primer renglón y
+   el valor ocupa el ancho completo debajo: así los importes largos
+   ("99,400.00 CUP") nunca parten en dos líneas.
+   ============================================================ */
+.kpi-grid { gap: 12px; }
+
+.kpi {
+  display: flex; flex-wrap: wrap; align-items: center;
+  column-gap: 10px;
+  background: var(--neo-panel);
+  border: 1px solid var(--neo-stroke);
+  border-radius: var(--neo-r);
+  box-shadow: var(--neo-shadow-1), inset 0 1px 0 var(--neo-hi);
+  backdrop-filter: var(--neo-blur);
+  -webkit-backdrop-filter: var(--neo-blur);
+  padding: 13px 14px 6px;
+  position: relative; overflow: hidden;
+  transition: transform .18s var(--neo-ease), box-shadow .18s, border-color .18s;
+}
+.kpi::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(120% 90% at 100% 0%, rgba(59,130,246,.10), transparent 60%);
+  pointer-events: none;
+}
+.kpi > * { position: relative; }
+
+.kpi .label {
+  flex: 1 1 auto; min-width: 0;
+  font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: .9px;
+  color: var(--neo-txt-muted); line-height: 1.25;
+  /* Sólo se parte entre palabras: nunca "RECUPERACI / ON" */
+  overflow-wrap: break-word; hyphens: none;
+}
+.kpi .value {
+  flex: 1 1 100%;
+  font-size: clamp(16px, 2.2vw + 10px, 26px); font-weight: 800;
+  letter-spacing: -.8px; margin-top: 8px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.16;
+}
+.kpi .sub { flex: 1 1 100%; color: var(--neo-txt-muted); font-size: 11px; }
+
+/* Insignia de icono: fluye en el primer renglón, a la izquierda */
+.kpi .kpi-badge {
+  flex: 0 0 auto;
+  width: 40px; height: 40px; border-radius: 12px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 18px; line-height: 1;
+  background: rgba(59,130,246,.14);
+  border: 1px solid rgba(59,130,246,.35);
+  box-shadow: inset 0 0 20px rgba(59,130,246,.28), 0 6px 16px rgba(2,6,23,.35);
+}
+
+/* Sparkline al pie de la tarjeta */
+.kpi .spark { flex: 1 1 100%; display: block; width: 100%; height: 32px; margin-top: 10px; overflow: visible; }
+.spark-line {
+  fill: none; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 100; stroke-dashoffset: 100;
+  animation: spark-draw 1.15s cubic-bezier(.32,.72,0,1) forwards;
+}
+.spark-area { stroke: none; opacity: .55; }
+@keyframes spark-draw { to { stroke-dashoffset: 0; } }
+
+/* Anillo de porcentaje: arriba a la derecha; la etiqueta reserva su hueco */
+.kpi-ring-wrap {
+  position: absolute; right: 12px; top: 12px;
+  width: 46px; height: 46px; display: grid; place-items: center;
+}
+.kpi-ring-wrap svg { width: 46px; height: 46px; transform: rotate(-90deg); }
+.kpi-ring-wrap .ring-bg { fill: none; stroke: var(--neo-stroke-strong); stroke-width: 3.4; }
+.kpi-ring-wrap .ring-fg {
+  fill: none; stroke: var(--neo-blue); stroke-width: 3.4; stroke-linecap: round;
+  filter: drop-shadow(0 0 6px rgba(59,130,246,.75));
+}
+.kpi-ring-wrap .ring-txt {
+  position: absolute; font-size: 12px; font-weight: 800; color: var(--neo-txt);
+  font-variant-numeric: tabular-nums;
+}
+.kpi.kpi-con-anillo { padding-right: 58px; }
+.kpi.kpi-con-anillo .label { padding-right: 0; }
+
+/* Colores semánticos del valor */
+[data-theme="dark"] .kpi.blue  .value { color: var(--neo-blue);  text-shadow: 0 0 24px rgba(59,130,246,.45); }
+[data-theme="dark"] .kpi.green .value,
+[data-theme="dark"] .kpi.ok    .value { color: var(--neo-green); text-shadow: 0 0 24px rgba(34,197,94,.45); }
+[data-theme="dark"] .kpi.amber .value { color: var(--neo-amber); text-shadow: 0 0 24px rgba(245,158,11,.45); }
+[data-theme="dark"] .kpi.red   .value { color: var(--neo-red);   text-shadow: 0 0 24px rgba(239,68,68,.45); }
+[data-theme="light"] .kpi.blue .value  { color: var(--neo-blue-2); }
+[data-theme="light"] .kpi.green .value,
+[data-theme="light"] .kpi.ok .value    { color: var(--neo-green-2); }
+[data-theme="light"] .kpi.amber .value { color: #B45309; }
+[data-theme="light"] .kpi.red .value   { color: #DC2626; }
+
+/* Colores semánticos de la insignia */
+.kpi.green .kpi-badge, .kpi.ok .kpi-badge {
+  background: rgba(34,197,94,.14); border-color: rgba(34,197,94,.38);
+  box-shadow: inset 0 0 20px rgba(34,197,94,.28), 0 6px 16px rgba(2,6,23,.35);
+}
+.kpi.amber .kpi-badge {
+  background: rgba(245,158,11,.14); border-color: rgba(245,158,11,.38);
+  box-shadow: inset 0 0 20px rgba(245,158,11,.28), 0 6px 16px rgba(2,6,23,.35);
+}
+.kpi.red .kpi-badge, .kpi.due .kpi-badge, .kpi.danger .kpi-badge {
+  background: rgba(239,68,68,.14); border-color: rgba(239,68,68,.38);
+  box-shadow: inset 0 0 20px rgba(239,68,68,.28), 0 6px 16px rgba(2,6,23,.35);
+}
+.kpi.blue .kpi-badge { background: rgba(59,130,246,.14); border-color: rgba(59,130,246,.35); }
+
+.kpi .sub .usd-badge, .kpi .sub .delta {
+  background: var(--neo-panel-soft); border: 1px solid var(--neo-stroke);
+  color: var(--neo-txt-muted); border-radius: var(--neo-r-pill); font-weight: 700;
+}
+.kpi .sub .delta.up   { background: rgba(34,197,94,.16); color: var(--neo-green); border-color: transparent; }
+.kpi .sub .delta.down { background: rgba(239,68,68,.16); color: var(--neo-red);   border-color: transparent; }
+
+.kpi.kpi-click:hover {
+  transform: translateY(-3px);
+  border-color: rgba(59,130,246,.55);
+  box-shadow: 0 16px 38px rgba(2,6,23,.55), 0 0 26px rgba(59,130,246,.28), inset 0 1px 0 var(--neo-hi);
+}
+.kpi.kpi-click:focus-visible {
+  border-color: var(--neo-blue);
+  box-shadow: 0 0 0 2px rgba(59,130,246,.45);
+}
+
+/* ============================================================
+   10. BOTONES
+   ============================================================ */
+.btn {
+  background: var(--neo-panel-soft);
+  border: 1px solid var(--neo-stroke);
+  color: var(--neo-txt);
+  border-radius: var(--neo-r-sm);
+  font-weight: 700; letter-spacing: .1px;
+  backdrop-filter: blur(8px);
+  transition: transform .14s var(--neo-ease), background .15s, border-color .15s, box-shadow .15s;
+}
+.btn:hover {
+  background: rgba(59,130,246,.14);
+  border-color: rgba(59,130,246,.5);
+  box-shadow: 0 0 20px rgba(59,130,246,.25);
+}
+[data-theme="light"] .btn:hover { color: var(--neo-blue-2); }
+
+.btn.primary {
+  background: linear-gradient(180deg, var(--neo-blue), var(--neo-blue-2));
+  border-color: rgba(59,130,246,.7);
+  color: #fff;
+  box-shadow: 0 8px 22px rgba(37,99,235,.45), inset 0 1px 0 rgba(255,255,255,.22);
+}
+.btn.primary:hover {
+  background: linear-gradient(180deg, #4C8DFF, var(--neo-blue-2));
+  box-shadow: 0 12px 30px rgba(37,99,235,.55), inset 0 1px 0 rgba(255,255,255,.25);
+}
+.btn.success { background: linear-gradient(180deg, var(--neo-green), var(--neo-green-2)); border-color: rgba(34,197,94,.65); color: #fff; box-shadow: 0 8px 22px rgba(22,163,74,.40); }
+.btn.danger  { background: linear-gradient(180deg, #F87171, #DC2626); border-color: rgba(239,68,68,.65); color: #fff; box-shadow: 0 8px 22px rgba(220,38,38,.38); }
+.btn.ghost   { background: transparent; border-color: var(--neo-stroke); color: var(--neo-txt-muted); }
+.btn.ghost:hover { color: var(--neo-txt); }
+
+/* ============================================================
+   11. FORMULARIOS
+   ============================================================ */
+label { color: var(--neo-txt-muted); font-weight: 700; font-size: 12px; letter-spacing: .2px; }
+
+input, select, textarea {
+  background: var(--neo-panel-flat);
+  border: 1px solid var(--neo-stroke);
+  color: var(--neo-txt);
+  border-radius: var(--neo-r-sm);
+  backdrop-filter: blur(8px);
+  transition: border-color .15s, box-shadow .15s, background .15s;
+}
+input::placeholder, textarea::placeholder { color: var(--neo-txt-muted); opacity: .8; }
+input:focus, select:focus, textarea:focus {
+  border-color: rgba(59,130,246,.75);
+  box-shadow: 0 0 0 3px rgba(59,130,246,.20), 0 0 22px rgba(59,130,246,.22);
+  outline: none;
+}
+select {
+  /* Las cuatro propiedades juntas: si el atajo "background" las reinicia,
+     la flecha se dibuja en mosaico sobre todo el control. */
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2393A2BE' d='M6 8L1 3h10z'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 12px center;
+  background-size: 12px 12px;
+  padding-right: 34px;
+}
+select option { background: #141F38; color: #EAF0FF; }
+[data-theme="light"] select option { background: #fff; color: #0F172A; }
+
+/* ============================================================
+   12. TABLAS Y LISTAS
+   ============================================================ */
+th {
+  color: var(--neo-txt-muted); font-weight: 800; letter-spacing: .8px;
+  background: var(--neo-panel-flat); backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--neo-stroke);
+}
+td { border-bottom: 1px solid var(--neo-stroke); }
+tr:hover td { background: rgba(59,130,246,.07); }
+
+/* ============================================================
+   13. BADGES / PASTILLAS DE ESTADO
+   ============================================================ */
+.badge {
+  border-radius: var(--neo-r-pill); font-weight: 700; letter-spacing: .2px;
+  border: 1px solid transparent;
+}
+.badge.ok   { background: rgba(34,197,94,.16);  color: var(--neo-green);  border-color: rgba(34,197,94,.35); }
+.badge.warn { background: rgba(245,158,11,.16); color: var(--neo-amber);  border-color: rgba(245,158,11,.35); }
+.badge.due  { background: rgba(239,68,68,.16);  color: var(--neo-red);    border-color: rgba(239,68,68,.35); }
+.badge.paid { background: rgba(59,130,246,.16); color: var(--neo-blue);   border-color: rgba(59,130,246,.35); }
+.badge.muted{ background: rgba(148,163,184,.14); color: var(--neo-txt-muted); border-color: var(--neo-stroke); }
+.badge.parcial { background: rgba(245,158,11,.16); color: var(--neo-amber); border-color: rgba(245,158,11,.35); }
+.badge.por-iniciar { background: rgba(148,163,184,.14); color: var(--neo-txt-muted); border-color: var(--neo-stroke); }
+[data-theme="light"] .badge.ok { color: var(--neo-green-2); }
+[data-theme="light"] .badge.warn, [data-theme="light"] .badge.parcial { color: #B45309; }
+[data-theme="light"] .badge.due { color: #DC2626; }
+[data-theme="light"] .badge.paid { color: var(--neo-blue-2); }
+
+.pill { background: rgba(59,130,246,.14); color: var(--neo-blue); border: 1px solid rgba(59,130,246,.3); }
+[data-theme="light"] .pill { color: var(--neo-blue-2); }
+
+/* ============================================================
+   14. CINTILLAS COLAPSABLES (accordion)
+   ============================================================ */
+.acc-card {
+  background: var(--neo-panel);
+  border: 1px solid var(--neo-stroke);
+  border-radius: 14px;
+  box-shadow: 0 8px 22px rgba(2,6,23,.35), inset 0 1px 0 var(--neo-hi);
+  backdrop-filter: var(--neo-blur);
+  -webkit-backdrop-filter: var(--neo-blur);
+  transition: border-color .18s, box-shadow .18s, transform .18s var(--neo-ease);
+}
+[data-theme="light"] .acc-card { box-shadow: var(--neo-shadow-1), inset 0 1px 0 var(--neo-hi); }
+.acc-card:hover { transform: translateY(-1px); border-color: var(--neo-stroke-strong); }
+.acc-card.open {
+  border-color: rgba(59,130,246,.6);
+  box-shadow: 0 18px 44px rgba(2,6,23,.55), 0 0 26px rgba(59,130,246,.22), inset 0 1px 0 var(--neo-hi);
+}
+.acc-card[data-estado="due"]      { border-left: 3px solid var(--neo-red); }
+.acc-card[data-estado="warn"]     { border-left: 3px solid var(--neo-amber); }
+.acc-card[data-estado="paid"]     { border-left: 3px solid var(--neo-green); }
+.acc-card[data-estado="parcial"]  { border-left: 3px solid var(--neo-amber); }
+.acc-card[data-estado="inactivo"],
+.acc-card[data-estado="por-iniciar"] { border-left: 3px solid var(--neo-stroke-strong); }
+
+.acc-summary:active { background: rgba(59,130,246,.08); }
+.acc-summary-name { font-weight: 800; letter-spacing: -.1px; }
+.acc-summary-sub  { color: var(--neo-txt-muted); }
+.acc-summary-sub .acc-ip {
+  background: var(--neo-panel-soft); border: 1px solid var(--neo-stroke);
+  color: var(--neo-txt-muted); font-family: var(--neo-mono);
+}
+.acc-summary-total .amt { font-variant-numeric: tabular-nums; font-weight: 800; }
+.acc-summary-total .amt.paid { color: var(--neo-green); text-shadow: 0 0 18px rgba(34,197,94,.35); }
+.acc-summary-total .lbl { color: var(--neo-txt-muted); }
+.acc-dot { box-shadow: 0 0 0 3px rgba(148,163,184,.10), 0 0 12px currentColor; }
+.acc-row .acc-label { color: var(--neo-txt-muted); font-weight: 800; letter-spacing: .7px; }
+.acc-row { border-bottom: 1px solid var(--neo-stroke); }
+.acc-chevron { color: var(--neo-txt-muted); }
+
+.cintilla-mes {
+  background: var(--neo-panel-soft);
+  border: 1px solid var(--neo-stroke);
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+}
+.cintilla-mes-head { background: var(--neo-panel-flat); border-left: 3px solid var(--neo-blue); }
+.cintilla-mes-nombre { font-weight: 800; color: var(--neo-txt); }
+.cintilla-mes-sub { color: var(--neo-txt-muted); }
+.cintilla-mes.cintilla-mes-open { border-color: rgba(59,130,246,.55); box-shadow: 0 0 24px rgba(59,130,246,.20); }
+
+.acc-empty, .empty { color: var(--neo-txt-muted); }
+
+/* ============================================================
+   15. MODALES (hoja inferior / diálogo de vidrio)
+   ============================================================ */
+.modal-overlay.open { background: rgba(3,7,18,.68); backdrop-filter: blur(4px); }
+.modal {
+  background: linear-gradient(180deg, rgba(27,38,62,.96), rgba(15,23,40,.98));
+  border: 1px solid var(--neo-stroke);
+  box-shadow: 0 30px 80px rgba(2,6,23,.75), inset 0 1px 0 var(--neo-hi);
+  backdrop-filter: var(--neo-blur);
+  -webkit-backdrop-filter: var(--neo-blur);
+  color: var(--neo-txt);
+}
+[data-theme="light"] .modal {
+  background: linear-gradient(180deg, #FFFFFF, #F7FAFF);
+  box-shadow: 0 30px 70px rgba(15,23,42,.28);
+}
+.modal-header { border-bottom: 1px solid var(--neo-stroke); }
+.modal-header::before { background: var(--neo-stroke-strong); }
+.modal-header h3 { font-weight: 800; letter-spacing: -.2px; }
+.modal-header .close { color: var(--neo-txt-muted); border-radius: 10px; }
+.modal-header .close:hover { color: var(--neo-txt); background: rgba(148,163,184,.12); }
+.modal-footer { border-top: 1px solid var(--neo-stroke); background: transparent; }
+
+/* ============================================================
+   16. TOASTS
+   ============================================================ */
+.toast {
+  background: linear-gradient(180deg, rgba(27,38,62,.97), rgba(15,23,40,.98));
+  border: 1px solid var(--neo-stroke);
+  color: var(--neo-txt);
+  border-radius: 14px;
+  box-shadow: 0 20px 48px rgba(2,6,23,.65);
+  backdrop-filter: var(--neo-blur);
+}
+[data-theme="light"] .toast { background: #fff; color: var(--neo-txt); box-shadow: 0 18px 44px rgba(15,23,42,.18); }
+.toast.success { border-left: 4px solid var(--neo-green); }
+.toast.error   { border-left: 4px solid var(--neo-red); }
+.toast.warn    { border-left: 4px solid var(--neo-amber); }
+.toast.info    { border-left: 4px solid var(--neo-blue); }
+
+/* ============================================================
+   17. CALENDARIO
+   ============================================================ */
+.cal-head { color: var(--neo-txt-muted); font-weight: 800; letter-spacing: .6px; }
+.cal-day {
+  background: var(--neo-panel-flat);
+  border: 1px solid var(--neo-stroke);
+  border-radius: 10px;
+  color: var(--neo-txt);
+  backdrop-filter: blur(6px);
+}
+.cal-day .num { font-weight: 800; font-variant-numeric: tabular-nums; }
+.cal-day.today {
+  border: 2px solid var(--neo-blue);
+  box-shadow: 0 0 20px rgba(59,130,246,.45), inset 0 0 20px rgba(59,130,246,.12);
+}
+.cal-day.corte { background: rgba(59,130,246,.12); border-color: rgba(59,130,246,.55); border-style: dashed; }
+.cal-day.corte .num { color: var(--neo-blue); }
+.cal-corte-tag {
+  background: rgba(59,130,246,.16); color: var(--neo-blue);
+  border: 1px solid rgba(59,130,246,.45); border-radius: var(--neo-r-pill);
+}
+[data-theme="light"] .cal-corte-tag { color: var(--neo-blue-2); }
+.cal-count { color: var(--neo-txt-muted); }
+.cal-day.clickable:hover { box-shadow: 0 12px 26px rgba(2,6,23,.5), 0 0 18px rgba(59,130,246,.22); border-color: rgba(59,130,246,.5); }
+.cal-legend-item { color: var(--neo-txt-muted); }
+
+/* ============================================================
+   18. FLOTANTES (FAB) Y AVISOS
+   ============================================================ */
+.fab, .fab-tasa {
+  background: linear-gradient(180deg, var(--neo-blue), var(--neo-blue-2));
+  box-shadow: 0 14px 34px rgba(37,99,235,.55), inset 0 1px 0 rgba(255,255,255,.25);
+}
+.fab-tasa.fab-tasa-aviso   { background: linear-gradient(180deg, #FBBF24, var(--neo-amber)); box-shadow: 0 14px 34px rgba(245,158,11,.5); }
+.fab-tasa.fab-tasa-urgente { background: linear-gradient(180deg, #F87171, #DC2626); }
+
+/* ============================================================
+   19. BARRAS DE PROGRESO / RECUPERACIÓN
+   ============================================================ */
+.recup-bar, .prov-cap-bar {
+  background: rgba(148,163,184,.14);
+  border: 1px solid var(--neo-stroke);
+  border-radius: var(--neo-r-pill);
+  overflow: hidden;
+}
+.recup-fill, .prov-cap-fill {
+  border-radius: var(--neo-r-pill);
+  box-shadow: 0 0 18px rgba(59,130,246,.45);
+}
+.recup-fill.recup-green { background: linear-gradient(90deg, var(--neo-green-2), #4ADE80); }
+.recup-fill.recup-amber { background: linear-gradient(90deg, #D97706, #FBBF24); }
+.recup-fill.recup-red   { background: linear-gradient(90deg, #DC2626, #F87171); }
+.bar-green { background: linear-gradient(90deg, var(--neo-green-2), #4ADE80); }
+.bar-amber { background: linear-gradient(90deg, #D97706, #FBBF24); }
+.bar-red   { background: linear-gradient(90deg, #DC2626, #F87171); }
+.recup-pct strong { color: var(--neo-blue); text-shadow: 0 0 22px rgba(59,130,246,.45); }
+.recup-dato .muted { color: var(--neo-txt-muted); font-weight: 700; }
+
+/* ============================================================
+   20. WIDGETS DEL PANEL
+   ============================================================ */
+.atencion-item, .corte-row {
+  background: var(--neo-panel-soft);
+  border: 1px solid var(--neo-stroke);
+  border-radius: 14px;
+  backdrop-filter: blur(8px);
+}
+.corte-row.vigente { border-color: rgba(59,130,246,.55); background: rgba(59,130,246,.12); }
+.corte-estado { border-radius: var(--neo-r-pill); border: 1px solid var(--neo-stroke); font-weight: 800; }
+.corte-estado.vigente { background: linear-gradient(180deg, var(--neo-blue), var(--neo-blue-2)); border-color: transparent; box-shadow: 0 6px 18px rgba(37,99,235,.45); }
+.corte-estado.proximo { color: var(--neo-amber); border-color: rgba(245,158,11,.5); }
+.atencion-item.red   { border-left: 4px solid var(--neo-red); }
+.atencion-item.amber { border-left: 4px solid var(--neo-amber); }
+.atencion-item.blue  { border-left: 4px solid var(--neo-blue); }
+.atencion-ok { background: rgba(34,197,94,.14); color: var(--neo-green); border-radius: 14px; border: 1px solid rgba(34,197,94,.3); }
+
+.tend-bar.ing { background: linear-gradient(180deg, #4ADE80, var(--neo-green-2)); box-shadow: 0 0 16px rgba(34,197,94,.35); }
+.tend-bar.gas { background: linear-gradient(180deg, #F87171, #DC2626); box-shadow: 0 0 16px rgba(239,68,68,.35); }
+.tend-key .dot.ing { background: var(--neo-green); }
+.tend-key .dot.gas { background: var(--neo-red); }
+.tend-legend { color: var(--neo-txt-muted); }
+.caja-linea { border-bottom: 1px dashed var(--neo-stroke); }
+.caja-linea.total { border-top: 2px solid var(--neo-stroke-strong); }
+
+.prov-cap-aviso { background: var(--neo-panel-soft); border: 1px solid var(--neo-stroke); border-radius: 14px; }
+
+/* ============================================================
+   21. PANTALLA DE PIN
+   ============================================================ */
+#pin-lock {
+  background:
+    radial-gradient(900px 520px at 50% -10%, rgba(59,130,246,.25), transparent 60%),
+    linear-gradient(180deg, #0B1020, #070B16);
+  color: var(--neo-txt);
+}
+#pin-lock .lock-icon { filter: drop-shadow(0 0 24px rgba(59,130,246,.6)); }
+#pin-lock input {
+  font-family: var(--neo-mono); letter-spacing: 10px;
+  border-color: rgba(59,130,246,.4);
+}
+
+/* ============================================================
+   22. RECIBO (se mantiene claro para imprimir)
+   ============================================================ */
+.recibo { background: #fff !important; color: #111 !important; border-radius: 12px; }
+.recibo * { color: #111; }
+
+/* ============================================================
+   23. AJUSTES FINOS RESPONSIVE
+   ============================================================ */
+@media (max-width: 600px) {
+  .kpi { padding: 11px 12px 5px; }
+  .kpi .value { font-size: clamp(15px, 5.4vw, 21px); letter-spacing: -.5px; margin-top: 6px; }
+  .kpi .kpi-badge { width: 34px; height: 34px; font-size: 15px; border-radius: 10px; }
+  .kpi .spark { height: 25px; margin-top: 7px; }
+  .kpi-ring-wrap { width: 38px; height: 38px; right: 10px; top: 10px; }
+  .kpi-ring-wrap svg { width: 38px; height: 38px; }
+  .kpi-ring-wrap .ring-txt { font-size: 10.5px; }
+  .kpi.kpi-con-anillo { padding-right: 50px; }
+  .view-header h2 { font-size: 18px; }
+  .card { border-radius: 14px; }
+}
+@media (max-width: 380px) {
+  .kpi .value { font-size: 22px; }
+}
+
+/* Accesibilidad: respeta "reducir movimiento" */
+@media (prefers-reduced-motion: reduce) {
+  .spark-line { animation: none; stroke-dashoffset: 0; }
+  .kpi, .acc-card, .btn, .icon-btn { transition: none; }
+}
+
+/* v5.41.1 — Contenedor de KPIs agrupados (Inversiones / Deudas personales).
+   Antes era un .kpi-grid que contenía otros .kpi-grid + títulos, y el título
+   quedaba como una celda más de la cuadrícula (columnas aplastadas en móvil).
+   Ahora es un bloque normal: título arriba y su cuadrícula 2×N debajo. */
+.kpi-stack { display: block; margin-bottom: 14px; }
+.kpi-stack > .kpi-group-title { display: block; width: 100%; margin: 4px 0 10px; }
+.kpi-stack > .kpi-group-title:not(:first-child) { margin-top: 18px; }
+.kpi-stack > .kpi-grid { margin-bottom: 0; }

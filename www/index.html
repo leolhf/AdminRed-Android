@@ -1,15 +1,17 @@
 <!DOCTYPE html>
-<html lang="es" data-theme="light">
+<html lang="es" data-theme="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, viewport-fit=cover">
-  <meta name="theme-color" content="#2563eb">
+  <meta name="theme-color" content="#0B1020">
   <meta name="description" content="AdminRed (RedNet) — Administración de negocio de reventa de internet.">
   <link rel="manifest" href="manifest.json">
   <link rel="icon" type="image/png" href="icons/icon-192.png">
   <link rel="apple-touch-icon" href="icons/icon-192.png">
   <title>AdminRed (RedNet)</title>
   <link rel="stylesheet" href="styles.css">
+  <!-- Capa visual "Neo Glass" (sólo apariencia; se carga después de styles.css) -->
+  <link rel="stylesheet" href="css/theme-neo.css">
 </head>
 <body>
 
@@ -174,7 +176,7 @@
       </div>
 
       <!-- KPIs combinados: inversión + deudas -->
-      <div class="kpi-grid" id="kpi-inversion"></div>
+      <div class="kpi-stack" id="kpi-inversion"></div>
 
       <!-- Barra de recuperación global de la inversión -->
       <div class="card mt-16" id="card-recuperacion-inv" style="display:none">
@@ -323,6 +325,7 @@
         <div class="flex wrap" style="gap:10px">
           <button class="btn primary" id="drive-btn-conectar" onclick="RN.drive.conectar()">☁️ Activar copia en Drive</button>
           <button class="btn danger" id="drive-btn-desconectar" style="display:none" onclick="RN.drive.desconectar()">🔓 Desconectar en este equipo</button>
+          <button class="btn" onclick="RN.drive.configurar()">🔑 Configurar URL y token</button>
           <button class="btn" onclick="RN.drive.sincronizarAhora()">⬆️ Sincronizar ahora</button>
           <button class="btn" onclick="RN.drive.compararAhora()">🔍 Comparar con la nube</button>
         </div>
@@ -471,6 +474,7 @@
   <script src="js/ui/render.js"></script>
   <script src="js/ui/inline-edit.js"></script>
   <script src="js/ui/ui-components.js"></script>
+  <script src="js/ui/sparkline.js"></script>
   <script src="js/ui/tasa-aviso.js"></script>
 
   <!-- 4. CLIENTES -->

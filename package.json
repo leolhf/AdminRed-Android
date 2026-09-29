@@ -1,6 +1,6 @@
 {
   "name": "adminred",
-  "version": "5.40.1",
+  "version": "5.41.1",
   "description": "AdminRed (RedNet) — Administración de negocio de reventa de servicio de internet. App nativa Android (Capacitor) y de escritorio (Electron).",
   "main": "main.js",
   "scripts": {
@@ -67,7 +67,11 @@
       "oneClick": false,
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
-      "createStartMenuShortcut": true
+      "createStartMenuShortcut": true,
+      "artifactName": "AdminRed_Setup_${version}.${ext}"
+    },
+    "portable": {
+      "artifactName": "AdminRed_Portable_${version}.${ext}"
     }
   }
 }

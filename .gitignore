@@ -43,3 +43,6 @@ Thumbs.db
 .idea/
 *.iml
 .vscode/
+
+# Salida de electron-builder (.exe; los publica GitHub Actions)
+dist-electron/
