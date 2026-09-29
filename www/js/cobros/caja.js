@@ -427,7 +427,7 @@ RN.caja.extraer = function (monedaInicial) {
         <div class="label">Fondo de caja total</div>
         <div class="value">${fondoFormateado}</div>
         <div class="sub">${puedeRetirar ? 'Puedes retirar hasta ' + RN.calc.formatCUP(b.retirable) + ' (bolsillo libre)' : 'No hay bolsillo libre disponible'}</div>
-        <div class="sub" style="font-size:11px;margin-top:4px;color:#666">
+        <div class="sub" style="font-size:11px;margin-top:4px;color:var(--text-muted)">
           Saldo inicial: ${RN.calc.formatCUP(RN.state.config.fondoInicial || 0)} ·
           Ingresos: ${RN.calc.formatCUP(RN.calc.ingresosTotales())} ·
           Depósitos: ${RN.calc.formatCUP(RN.calc.totalDepositos())} ·

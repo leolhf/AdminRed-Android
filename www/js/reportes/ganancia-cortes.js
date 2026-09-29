@@ -394,7 +394,7 @@ RN.gananciaCortes.abrirProyectada = function () {
         'Por eso el primer corte puede cubrir todo el paquete y los siguientes son ganancia directa.' +
       '</p>' +
       (sinCosto
-        ? '<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);font-size:12px;color:#e6a700">' +
+        ? '<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);font-size:12px;color:var(--warn)">' +
             '⚠️ No hay precio de proveedor por mega configurado: el costo del paquete se asume 0 y la ganancia está <strong>inflada</strong>. Configúralo en 📡 Gestionar servicio.' +
           '</div>'
         : '') +
@@ -570,7 +570,7 @@ RN.gananciaCortes.abrirReal = function () {
         'Por eso el primer corte puede cubrir todo el paquete y los siguientes son ganancia directa.' +
       '</p>' +
       (sinCosto
-        ? '<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);font-size:12px;color:#e6a700">' +
+        ? '<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);font-size:12px;color:var(--warn)">' +
             '⚠️ No hay precio de proveedor por mega configurado: el costo del paquete se asume 0 y la ganancia está <strong>inflada</strong>. Configúralo en 📡 Gestionar servicio.' +
           '</div>'
         : '') +

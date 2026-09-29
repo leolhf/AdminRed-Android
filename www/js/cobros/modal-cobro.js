@@ -150,7 +150,7 @@ RN.modalCobro.abrir = function (clienteId) {
             <span id="cobro-desglose-estado"><strong>—</strong></span>
           </div>
           <!-- Aviso de fondo insuficiente para vuelto -->
-          <div id="cobro-aviso-fondo" style="display:none;margin-top:8px;padding:8px 10px;background:#fff3cd;border-radius:6px;font-size:12px;color:#856404">
+          <div id="cobro-aviso-fondo" style="display:none;margin-top:8px;padding:8px 10px;background:var(--warn-soft);border-radius:6px;font-size:12px;color:var(--warn)">
             ⚠ El fondo de caja no tiene suficiente efectivo para el vuelto. Fondo actual: ${RN.calc.formatCUP(fondo)}
           </div>
         </div>
