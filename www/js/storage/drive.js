@@ -12,9 +12,10 @@
  * ============================================================
  * CONFIGURACIÓN
  * ============================================================
- * La URL y el TOKEN del Web App se leen de 'js/storage/drive-config.js'
- * (excluido de git; ver drive-config.example.js). En CI se regenera desde
- * los Secrets DRIVE_APPS_URL/DRIVE_APPS_TOKEN.
+ * La URL y el TOKEN del Web App se introducen en la propia app (Ajustes →
+ * ☁️ Copia en Google Drive → 🔑 Configurar) y se guardan solo en el
+ * dispositivo (localStorage). NO van dentro de la APK/.exe, que son públicos.
+ * 'js/storage/drive-config.js' queda como respaldo opcional para desarrollo.
  * ============================================================
  *
  * Complementa al almacenamiento local: cada cambio de datos se sube (con
@@ -45,14 +46,21 @@
 RN.drive = RN.drive || {};
 
 // ---------------------------------------------------------------
-// CONFIGURACIÓN — se lee de 'js/storage/drive-config.js', un archivo
-// EXCLUIDO de git (.gitignore) que contiene window.RN_DRIVE_CONFIG =
-// { url, token }. Así el token no queda en el historial del repositorio.
-// Plantilla: drive-config.example.js. En CI, el workflow lo regenera desde
-// los Secrets DRIVE_APPS_URL/DRIVE_APPS_TOKEN.
+// CONFIGURACIÓN — la URL/token se guardan en localStorage del dispositivo
+// (los introduce el usuario). Respaldo opcional para desarrollo: un archivo
+// 'js/storage/drive-config.js' (en .gitignore) con window.RN_DRIVE_CONFIG.
 // ---------------------------------------------------------------
-RN.drive.APPS_SCRIPT_URL = (window.RN_DRIVE_CONFIG && window.RN_DRIVE_CONFIG.url) || 'PEGA_AQUI_URL';
-RN.drive.APPS_SCRIPT_TOKEN = (window.RN_DRIVE_CONFIG && window.RN_DRIVE_CONFIG.token) || 'PEGA_AQUI_TOKEN';
+RN.drive.KEY_URL = 'rn_drive_url';     // URL del Web App, guardada SOLO en este dispositivo
+RN.drive.KEY_TOKEN = 'rn_drive_token'; // token, guardado SOLO en este dispositivo
+
+RN.drive._leerCred = function (key, campoCfg) {
+  var v = '';
+  try { v = (localStorage.getItem(key) || '').trim(); } catch (e) {}
+  if (v) return v;
+  return (window.RN_DRIVE_CONFIG && window.RN_DRIVE_CONFIG[campoCfg]) || ('PEGA_AQUI_' + campoCfg.toUpperCase());
+};
+Object.defineProperty(RN.drive, 'APPS_SCRIPT_URL', { configurable: true, get: function () { return RN.drive._leerCred(RN.drive.KEY_URL, 'url'); } });
+Object.defineProperty(RN.drive, 'APPS_SCRIPT_TOKEN', { configurable: true, get: function () { return RN.drive._leerCred(RN.drive.KEY_TOKEN, 'token'); } });
 
 RN.drive.KEY_ACTIVO = 'rn_drive_activo'; // '1' si la sincronización está activada
 RN.drive.KEY_ULT_SINCRO = 'rn_drive_ultima_sincro'; // fechaISO que hay en la nube
@@ -67,7 +75,7 @@ RN.drive._conflictoAbierto = false; // evita subir por encima de un conflicto si
 
 /** ¿Sincronización activada en este equipo? */
 RN.drive.cuenta = function () {
-  try { return localStorage.getItem(RN.drive.KEY_ACTIVO) === '1' ? 'hfleo975@gmail.com (Apps Script)' : null; }
+  try { return localStorage.getItem(RN.drive.KEY_ACTIVO) === '1' ? 'Google Drive (Apps Script)' : null; }
   catch (e) { return null; }
 };
 
@@ -109,27 +117,138 @@ RN.drive._desempaquetar = function (contenido) {
 // Transporte: llamadas al Web App de Apps Script
 // ---------------------------------------------------------------
 
+RN.drive.TIMEOUT_MS = 30000; // sin esto, una conexión colgada dejaba la subida esperando para siempre
+
+/**
+ * fetch + lectura + JSON con timeout y errores comprensibles.
+ * Antes: si el Web App devolvía una página HTML (acceso "Solo yo", URL /dev,
+ * despliegue borrado) el usuario veía "Unexpected token '<'..." sin pista.
+ */
+RN.drive._fetchJson = async function (url, opts) {
+  var ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+  var timer = ctl ? setTimeout(function () { ctl.abort(); }, RN.drive.TIMEOUT_MS) : null;
+  var resp, texto;
+  try {
+    resp = await fetch(url, Object.assign({}, opts, ctl ? { signal: ctl.signal } : {}));
+    texto = await resp.text();
+  } catch (e) {
+    if (e && e.name === 'AbortError') throw new Error('Google Drive no respondió a tiempo (30 s). Revisa la conexión.');
+    throw new Error('No se pudo conectar con Google Drive. Revisa la conexión y la URL del Web App.');
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+  var data;
+  try { data = JSON.parse(texto); }
+  catch (e) {
+    if (/^\s*</.test(texto)) {
+      throw new Error('El Web App devolvió una página web en vez de datos. Revisa que esté implementado con acceso «Cualquier persona» y que la URL termine en /exec.');
+    }
+    throw new Error('Respuesta inválida del Web App (HTTP ' + resp.status + ').');
+  }
+  if (data && data.error) throw new Error(data.error);
+  if (!resp.ok) throw new Error('El Web App respondió con error HTTP ' + resp.status + '.');
+  return data;
+};
+
 /** Sube el respaldo. Lanza excepción con el mensaje de error si falla. */
-RN.drive._apiSubir = async function (json) {
+RN.drive._apiSubir = function (json) {
   // Content-Type text/plain a propósito: evita el preflight CORS (OPTIONS)
   // que Apps Script no maneja bien con application/json desde WebView/fetch.
-  var resp = await fetch(RN.drive.APPS_SCRIPT_URL, {
+  return RN.drive._fetchJson(RN.drive.APPS_SCRIPT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
     body: JSON.stringify({ token: RN.drive.APPS_SCRIPT_TOKEN, accion: 'subir', json: json })
-  });
-  var data = await resp.json();
-  if (data.error) throw new Error(data.error);
-  return data; // { ok: true, fechaRemota }
+  }); // { ok: true, fechaRemota }
 };
 
 /** Lee el respaldo remoto. Lanza excepción con el mensaje de error si falla. */
-RN.drive._apiLeer = async function () {
+RN.drive._apiLeer = function () {
   var url = RN.drive.APPS_SCRIPT_URL + '?token=' + encodeURIComponent(RN.drive.APPS_SCRIPT_TOKEN) + '&accion=leer';
-  var resp = await fetch(url, { method: 'GET' });
-  var data = await resp.json();
-  if (data.error) throw new Error(data.error);
-  return data; // { json, fechaRemota } o { json: null }
+  return RN.drive._fetchJson(url, { method: 'GET' }); // { json, fechaRemota } o { json: null }
+};
+
+/**
+ * Valida la URL del Web App. Devuelve un mensaje de error o null si es válida.
+ * Errores típicos: pegar la URL de prueba (/dev, exige iniciar sesión en Google)
+ * o una URL con ?query, que rompe el "?token=" que se añade al leer.
+ */
+RN.drive._validarUrl = function (url) {
+  var u;
+  try { u = new URL(url); } catch (e) { return 'La URL no es válida.'; }
+  if (u.protocol !== 'https:' || u.hostname !== 'script.google.com') return 'La URL debe empezar por https://script.google.com/';
+  if (/\/dev\/?$/.test(u.pathname)) return 'Esa es la URL de prueba (/dev). Usa la de la implementación, que termina en /exec.';
+  if (!/\/exec\/?$/.test(u.pathname)) return 'La URL debe terminar en /exec (Implementar → Nueva implementación → Aplicación web).';
+  return null;
+};
+
+
+// ---------------------------------------------------------------
+// Configuración de credenciales (URL + token) desde la app
+// ---------------------------------------------------------------
+
+/** Diálogo para introducir/cambiar/borrar la URL y el token del Apps Script. */
+RN.drive.configurar = function () {
+  var esc = RN.render.esc;
+  var tieneGuardado = false;
+  try { tieneGuardado = !!(localStorage.getItem(RN.drive.KEY_URL) || localStorage.getItem(RN.drive.KEY_TOKEN)); } catch (e) {}
+  var urlAct = RN.drive._configurado() ? RN.drive.APPS_SCRIPT_URL : '';
+  var html =
+    '<div class="modal-header"><h3>🔑 Credenciales de Google Drive</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>' +
+    '<div class="modal-body">' +
+      '<label>URL del Web App (termina en /exec)</label>' +
+      '<input id="drive-cfg-url" type="url" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="https://script.google.com/macros/s/.../exec" value="' + esc(urlAct) + '">' +
+      '<label class="mt-16">Token</label>' +
+      '<input id="drive-cfg-token" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="' + (RN.drive._configurado() ? '•••••••• (déjalo vacío para conservar el actual)' : 'Pega aquí tu token') + '">' +
+      '<p class="muted mt-16" style="font-size:12px">Se guardan únicamente en este dispositivo. No forman parte de la app instalada ni de ningún archivo compartido.</p>' +
+    '</div>' +
+    '<div class="modal-footer" style="flex-wrap:wrap">' +
+      '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>' +
+      (tieneGuardado ? '<button class="btn danger" onclick="RN.drive._borrarCredenciales()">Borrar</button>' : '') +
+      '<button class="btn primary" onclick="RN.drive._guardarCredenciales()">Guardar</button>' +
+    '</div>';
+  RN.uiComponents.modal(html);
+};
+
+RN.drive._guardarCredenciales = function () {
+  var url = (document.getElementById('drive-cfg-url').value || '').trim();
+  var token = (document.getElementById('drive-cfg-token').value || '').trim();
+  var errUrl = RN.drive._validarUrl(url);
+  if (errUrl) {
+    RN.notifyUI.toast(errUrl, 'error', 7000);
+    return;
+  }
+  try { var uu = new URL(url); url = uu.origin + uu.pathname; } catch (e) {} // quita ?query y #hash
+  if (!token && !RN.drive._configurado()) {
+    RN.notifyUI.toast('Falta el token', 'error');
+    return;
+  }
+  try {
+    localStorage.setItem(RN.drive.KEY_URL, url);
+    if (token) localStorage.setItem(RN.drive.KEY_TOKEN, token);
+  } catch (e) {
+    RN.notifyUI.toast('No se pudieron guardar las credenciales', 'error');
+    return;
+  }
+  RN.uiComponents.cerrarModal();
+  RN.drive._ultimoError = null;
+  RN.notifyUI.toast('Credenciales guardadas en este dispositivo', 'success');
+  RN.drive._refrescarUI();
+  // Con credenciales nuevas se vuelve a comprobar contra Drive: antes, si la
+  // sincronización ya estaba activa, no se probaba nada y un token erróneo
+  // solo se descubría en la siguiente subida.
+  if (!RN.drive.cuenta()) RN.drive.conectar();
+  else RN.drive.compararAlArrancar(true);
+};
+
+RN.drive._borrarCredenciales = function () {
+  try {
+    localStorage.removeItem(RN.drive.KEY_URL);
+    localStorage.removeItem(RN.drive.KEY_TOKEN);
+    localStorage.removeItem(RN.drive.KEY_ACTIVO);
+  } catch (e) {}
+  RN.uiComponents.cerrarModal();
+  RN.notifyUI.toast('Credenciales borradas de este dispositivo', 'success');
+  RN.drive._refrescarUI();
 };
 
 // ---------------------------------------------------------------
@@ -139,13 +258,16 @@ RN.drive._apiLeer = async function () {
 /** Activa la sincronización y hace la 1.ª subida/comparación. */
 RN.drive.conectar = async function () {
   if (!RN.drive._configurado()) {
-    RN.notifyUI.toast('Falta configurar APPS_SCRIPT_URL / APPS_SCRIPT_TOKEN en drive.js', 'error', 9000);
+    RN.drive.configurar();
     return;
   }
   try { localStorage.setItem(RN.drive.KEY_ACTIVO, '1'); } catch (e) {}
-  RN.notifyUI.toast('Copia en Google Drive activada', 'success');
+  RN.drive._ultimoError = null;
   RN.drive._refrescarUI();
-  await RN.drive.compararAlArrancar();
+  // Se avisa de "activada" solo si Drive respondió; si falla, compararAlArrancar
+  // muestra el motivo real (token incorrecto, URL, sin red...).
+  var ok = await RN.drive.compararAlArrancar(true);
+  if (ok) RN.notifyUI.toast('Copia en Google Drive activada', 'success');
 };
 
 /** Desactiva la sincronización en este equipo (la copia en Drive no se borra). */
@@ -208,16 +330,14 @@ RN.drive.subirAutomatica = async function (silencioso) {
 RN.drive.sincronizarAhora = function () {
   if (!RN.drive.cuenta()) { RN.drive.conectar(); return; }
   RN.notifyUI.toast('Subiendo copia a Drive…', 'info');
-  return RN.drive.subirAutomatica(false).then(function (ok) {
-    if (ok) RN.notifyUI.toast('☁️ Copia de seguridad al día', 'success');
-  });
+  return RN.drive.subirAutomatica(false); // ya avisa del resultado (éxito o error)
 };
 
 /** Botón "Comparar con la nube ahora" de Ajustes (fuerza el chequeo de conflictos). */
 RN.drive.compararAhora = function () {
   if (!RN.drive.cuenta()) { RN.drive.conectar(); return; }
   RN.notifyUI.toast('Comparando con Google Drive…', 'info');
-  return RN.drive.compararAlArrancar();
+  return RN.drive.compararAlArrancar(true);
 };
 
 // ---------------------------------------------------------------
@@ -553,54 +673,72 @@ RN.drive._fusionar = async function () {
   RN.uiComponents.cerrarModal();
 
   RN.notifyUI.toast('🔀 Fusionando y guardando en Drive…', 'info');
-  await RN.drive.subirAutomatica(true);
-  RN.notifyUI.toast('✅ Datos fusionados correctamente', 'success');
-  setTimeout(function () { location.reload(); }, 800);
+  var subido = await RN.drive.subirAutomatica(true);
+  if (subido) RN.notifyUI.toast('✅ Datos fusionados correctamente', 'success');
+  else RN.notifyUI.toast('⚠️ Datos fusionados en este equipo, pero no se pudieron subir a Drive (quedan pendientes)', 'warn', 7000);
+  setTimeout(function () { location.reload(); }, subido ? 800 : 2500);
 };
 
-/** Compara local vs nube al abrir la app (o al pedirlo manualmente). */
-RN.drive.compararAlArrancar = async function () {
+/**
+ * Compara local vs nube al abrir la app (o al pedirlo manualmente).
+ * manual=true: los errores se muestran al usuario (en el arranque son silenciosos).
+ * Devuelve true si se pudo hablar con Drive, false si falló.
+ */
+RN.drive.compararAlArrancar = async function (manual) {
   var local = RN.drive._leerLocal();
-  if (!local.cuenta || !RN.drive._configurado()) return;
-  if (!RN.drive.hayRed()) { RN.drive._pendiente = true; return; }
-
-  var remoto;
+  if (!local.cuenta || !RN.drive._configurado()) return false;
+  if (!RN.drive.hayRed()) {
+    RN.drive._pendiente = true;
+    if (manual) RN.notifyUI.toast('Sin conexión a internet', 'warn');
+    return false;
+  }
+  if (RN.drive._comparando) return true; // evita abrir dos comparaciones/modales a la vez
+  RN.drive._comparando = true;
   try {
-    remoto = await RN.drive._apiLeer();
-  } catch (e) {
-    console.warn('[drive] comparación falló (seguimos en local):', e);
-    RN.drive._ultimoError = String((e && e.message) || e);
-    RN.drive._refrescarUI();
-    return; // sin red/token: la app trabaja en local, sin molestar
+    var remoto;
+    try {
+      remoto = await RN.drive._apiLeer();
+    } catch (e) {
+      console.warn('[drive] comparación falló (seguimos en local):', e);
+      RN.drive._ultimoError = String((e && e.message) || e);
+      RN.drive._refrescarUI();
+      if (manual) RN.notifyUI.toast('No se pudo comparar con Drive: ' + RN.drive._ultimoError, 'error', 7000);
+      return false; // sin red/token: la app trabaja en local, sin molestar
+    }
+    RN.drive._ultimoError = null;
+
+    // Aún no hay copia en la nube: subir la local silenciosamente.
+    if (!remoto || remoto.json === null || remoto.json === undefined) {
+      var ok = await RN.drive.subirAutomatica(true);
+      if (ok) RN.notifyUI.toast('☁️ Primera copia subida a Google Drive', 'success');
+      else if (manual) RN.notifyUI.toast('No se pudo subir la primera copia: ' + (RN.drive._ultimoError || 'error desconocido'), 'error', 7000);
+      return ok;
+    }
+
+    var paquete;
+    try { paquete = RN.drive._desempaquetar(remoto.json); }
+    catch (e) { RN.notifyUI.toast('Copia en Drive ilegible: ' + e.message, 'error'); return false; }
+
+    var datosLocales = JSON.parse(RN.storageLocal.serializar());
+    var diff = RN.drive._diff(datosLocales, paquete.data);
+
+    if (!diff.hasDiff) {
+      RN.notifyUI.toast('☁️ Copia de Google Drive al día (' + RN.drive._fechaCorta(paquete.fechaISO) + ')', 'info');
+      RN.drive._refrescarUI();
+      return true;
+    }
+
+    // Hay diferencias: guardar el estado para el modal y mostrar comparación.
+    RN.drive._datosLocalesActuales = datosLocales;
+    RN.drive._datosRemotosPendientes = paquete;
+    RN.drive._ultimoDiff = diff;
+    RN.drive._ultimaFechaLocal = local.ultCambio;
+    RN.drive._ultimaFechaNube = paquete.fechaISO;
+    RN.drive._mostrarConflicto(diff, local.ultCambio, paquete.fechaISO);
+    return true;
+  } finally {
+    RN.drive._comparando = false;
   }
-
-  // Aún no hay copia en la nube: subir la local silenciosamente.
-  if (!remoto || remoto.json === null || remoto.json === undefined) {
-    await RN.drive.subirAutomatica(true);
-    RN.notifyUI.toast('☁️ Primera copia subida a Google Drive', 'success');
-    return;
-  }
-
-  var paquete;
-  try { paquete = RN.drive._desempaquetar(remoto.json); }
-  catch (e) { RN.notifyUI.toast('Copia en Drive ilegible: ' + e.message, 'error'); return; }
-
-  var datosLocales = JSON.parse(RN.storageLocal.serializar());
-  var diff = RN.drive._diff(datosLocales, paquete.data);
-
-  if (!diff.hasDiff) {
-    RN.notifyUI.toast('☁️ Copia de Google Drive al día (' + RN.drive._fechaCorta(paquete.fechaISO) + ')', 'info');
-    RN.drive._refrescarUI();
-    return;
-  }
-
-  // Hay diferencias: guardar el estado para el modal y mostrar comparación.
-  RN.drive._datosLocalesActuales = datosLocales;
-  RN.drive._datosRemotosPendientes = paquete;
-  RN.drive._ultimoDiff = diff;
-  RN.drive._ultimaFechaLocal = local.ultCambio;
-  RN.drive._ultimaFechaNube = paquete.fechaISO;
-  RN.drive._mostrarConflicto(diff, local.ultCambio, paquete.fechaISO);
 };
 
 /** Aplica un objeto de datos (ya desempaquetado) al estado y persiste. */
@@ -641,10 +779,10 @@ RN.drive._fechaCorta = function (iso) {
 /** Texto de estado para la tarjeta de Ajustes. */
 RN.drive.estado = function () {
   var c = RN.drive.cuenta();
-  if (!RN.drive._configurado()) return 'Falta configurar APPS_SCRIPT_URL / APPS_SCRIPT_TOKEN en drive.js.';
+  if (!RN.drive._configurado()) return 'Sin configurar: pulsa "🔑 Configurar URL y token" e introduce los datos de tu Web App de Apps Script.';
   if (!c) return 'Copia en Drive desactivada — la copia solo se guarda en este teléfono.';
   var ult = localStorage.getItem(RN.drive.KEY_ULT_SINCRO);
-  var txt = 'Cuenta: ' + c + ' · Última copia: ' + (ult ? RN.drive._fechaCorta(ult) : 'pendiente');
+  var txt = 'Activa (' + c + ') · Última copia: ' + (ult ? RN.drive._fechaCorta(ult) : 'pendiente');
   if (RN.drive._conflictoAbierto) txt += ' · ⚠️ hay diferencias sin resolver con Drive';
   if (RN.drive._pendiente) txt += ' · ⏳ copia pendiente de subir';
   if (RN.drive._ultimoError) txt += ' · ⚠️ ' + RN.drive._ultimoError;
