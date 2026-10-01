@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.46.0 — Submenú plegable con cierre automático
+
+- Al tocar **🏠 Operación**, **💰 Finanzas** o **📊 Análisis** se despliega el menú de ese grupo (con animación suave) y se pliega solo tras **3 segundos sin actividad**. Cuenta como actividad tocar o arrastrar en la barra, desplazar el submenú o usar el teclado; elegir una sección navega y reinicia los 3 s.
+- Tocar el grupo ya abierto lo pliega; tocar fuera de la barra o pulsar Esc lo pliega de inmediato. Cambiar de grupo navega a su primera vista y abre su menú. Navegar desde otros puntos de la app (notificaciones, botones) no despliega el menú; el indicador "Estás en:" sigue mostrando dónde estás.
+- Los grupos muestran un ▾ que gira al abrirse y son accesibles (`role="button"`, `aria-expanded`, Enter/Espacio).
+- `tools/sync-version.py` ahora también sincroniza y verifica `package-lock.json` (quedaba atrasado en 5.41.5).
+- Prueba nueva `tools/test-tabs-menu.js` (jsdom, 30 comprobaciones con reloj falso; `npm run test:ui`) integrada en el workflow de CI.
+
 ## v5.45.0 — Lote 4: arquitectura y documentación
 
 - **`render.js` dividido** (1.256 → 261 líneas): las vistas pasan a `js/ui/views/` (`dashboard`, `clientes`, `cobros`, `realizados`, `finanzas`, `reportes`). Es un movimiento puro: el código no cambió (verificado comparando las 30 funciones de `RN.render` antes y después) y siguen colgando de `RN.render.*`. Registradas en `index.html` y en la precaché de `sw.js`.
