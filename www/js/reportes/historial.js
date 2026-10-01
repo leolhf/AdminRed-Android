@@ -44,14 +44,14 @@ RN.historial.filtrar = function (filtro) {
 // v5.13.9 (CODE-3): exportCSV mejorado — respeta filtro, mas columnas, nombre real.
 RN.historial.exportCSV = function (filtro) {
   var lista = filtro ? RN.historial.filtrar(filtro) : RN.state.history;
-  var rows = [['fecha', 'cliente', 'tipo', 'mes', 'concepto', 'monto', 'montoEquipo', 'mora', 'total', 'tipoPago', 'falta', 'excedente', 'moneda', 'usd', 'cup', 'reciboNum']];
+  var rows = [['fecha', 'cliente', 'tipo', 'mes', 'concepto', 'monto', 'montoEquipo', 'mora', 'moraCobrada', 'total', 'tipoPago', 'falta', 'excedente', 'moneda', 'usd', 'cup', 'reciboNum']];
   lista.forEach(function (h) {
     var c = RN.calc.clientePorId(h.clienteId);
     rows.push([
       (h.fecha || '').slice(0, 10),
       c ? c.nombre : (h.ventaInventario ? 'Venta inventario' : ''),
       h.tipo, h.mes || '', h.concepto || '',
-      h.monto || 0, h.montoEquipo || 0, h.montoMora || 0,
+      h.monto || 0, h.montoEquipo || 0, h.montoMora || 0, h.montoMoraCobrada || 0,
       RN.calc.totalCobro(h), h.tipoPago || '', h.falta || 0, h.excedente || 0,
       h.moneda || 'CUP', h.montoPagadoUSD || 0, h.montoPagadoCUP || 0,
       h.reciboNum || ''

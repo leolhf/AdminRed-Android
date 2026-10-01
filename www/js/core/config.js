@@ -81,6 +81,9 @@ RN.config.guardar = function () {
   const graciaDias = graciaEl ? Math.max(0, parseInt(graciaEl.value, 10) || 5) : 5;
   const mencion = document.getElementById('cfg-mencion-desc').value === 'true';
   const auto = document.getElementById('cfg-tasa-auto').value === 'true';
+  // v5.43.0: interruptor de clientes inactivos con deuda
+  const inactDeudaEl = document.getElementById('cfg-inactivos-deuda');
+  RN.state.config.incluirInactivosConDeuda = inactDeudaEl ? inactDeudaEl.value === 'true' : !!RN.state.config.incluirInactivosConDeuda;
   const fondo = parseFloat(document.getElementById('cfg-fondo-caja').value) || 0;
   RN.state.config.tasaUsd = tasa;
   // v5.12.7: Registrar la fecha de actualización de la tasa (aviso de vencimiento 24h/72h)
@@ -128,6 +131,7 @@ RN.config.rellenarForm = function () {
   // v5.13.5 (ISSUE #3): Días de gracia (mora) configurable
   t('cfg-gracia-dias', c.graciaDias === undefined || c.graciaDias === null ? 5 : c.graciaDias);
   t('cfg-mencion-desc', String(c.mencionarDescuentoRecurrente));
+  t('cfg-inactivos-deuda', String(!!c.incluirInactivosConDeuda));
   t('cfg-tasa-auto', String(c.tasaAuto));
   t('cfg-fondo-caja', c.fondoInicial || 0);
   // v5.11.3: % de ganancia personal (no recupera inversión)

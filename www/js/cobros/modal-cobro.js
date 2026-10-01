@@ -35,13 +35,18 @@ RN.modalCobro._totalAPagar = function () {
   if (!c) return 0;
   var mes = RN.calc.mesActualStr();
   var neto = RN.calc.getPrecioNeto(c, mes);
-  var mora = RN.calc.getMora(c);
+  // v5.42.0: mora calculada mes a mes
+  var moraTotal = RN.calc.detalleMora(c).total;
   var inpEq = document.getElementById('cobro-monto-equipo');
   var eq = inpEq ? (parseFloat(inpEq.value) || 0) : 0;
-  return +(neto * (mora + 1) + eq).toFixed(2);
+  return +(neto + moraTotal + eq).toFixed(2);
 };
 
-/** Abre el modal de cobro para un cliente (desde cualquier vista). */
+/**
+ * Abre el modal de cobro para un cliente (desde cualquier vista).
+ * @param {string} clienteId id del cliente (RN.state.clients[].id)
+ * @returns {void}
+ */
 RN.modalCobro.abrir = function (clienteId) {
   const c = RN.state.clients.find(x => x.id === clienteId);
   if (!c) { RN.notifyUI.toast('Cliente no encontrado', 'error'); return; }
@@ -69,7 +74,7 @@ RN.modalCobro.abrir = function (clienteId) {
 
   // v5.13.8 (BUG-1): totalAPagar ahora incluye mora
   const moraVal = RN.calc.getMora(c);
-  const totalAPagar = +(RN.calc.getPrecioNeto(c, mes) * (moraVal + 1) + cuotaEq).toFixed(2);
+  const totalAPagar = +(resumen.neto + resumen.moraMonto + cuotaEq).toFixed(2);
 
   const html = `
     <div class="modal-header"><h3>Cobro — ${RN.render.esc(c.nombre)}</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>
@@ -77,11 +82,19 @@ RN.modalCobro.abrir = function (clienteId) {
       <div class="card" style="margin:0 0 16px;padding:12px">
         <div class="flex" style="justify-content:space-between"><span class="muted">Plan / Precio base</span><strong>${RN.render.nombrePlan(c)} · ${RN.calc.formatCUP(base)}</strong></div>
         <div class="flex" style="justify-content:space-between"><span class="muted">Descuento recurrente</span><span>− ${RN.calc.formatCUP(rec)}</span></div>
+        ${(() => {
+          // v5.43.0: indicador de bonificación permanente aplicada este mes
+          const perm = RN.state.descuentos.filter(d => d.clienteId === clienteId && d.estado !== 'anulado' &&
+            RN.descuentos.vigenciaDe(d) === 'permanente' && RN.descuentos.vigenteEnMes(d, mes));
+          const tot = perm.reduce((s, d) => s + (RN.calc.valorDescuento(d, clienteId, mes) || 0), 0);
+          return perm.length ? `<div class="flex" style="justify-content:space-between"><span class="badge ok">♾️ Bonificación permanente aplicada</span><span>− ${RN.calc.formatCUP(tot)}</span></div>` : '';
+        })()}
         <div class="flex" style="justify-content:space-between"><span class="muted">Descuentos puntuales</span><span id="cobro-desc-punt">− ${RN.calc.formatCUP(RN.calc.getDescuentosPuntualesMes(clienteId, mes))}</span></div>
         <div class="divider"></div>
         <div class="flex" style="justify-content:space-between"><strong>Neto servicio (este mes)</strong><strong id="cobro-neto" style="font-size:18px">${RN.calc.formatCUP(RN.calc.getPrecioNeto(c, mes))}</strong></div>
-        ${resumen.mora > 0 ? `<div class="flex" style="justify-content:space-between"><span class="muted">Mora (${resumen.mora} mes${resumen.mora !== 1 ? 'es' : ''} de atraso)</span><span class="badge due" id="cobro-mora-display">+ ${RN.calc.formatCUP(resumen.neto * resumen.mora)}</span></div>` : ''}
-        ${resumen.mora > 0 ? `<div class="flex" style="justify-content:space-between"><strong>Deuda total (servicio + mora)</strong><strong id="cobro-deuda-total" style="font-size:18px;color:var(--danger)">${RN.calc.formatCUP(resumen.neto * (resumen.mora + 1))}</strong></div>` : ''}
+        ${resumen.mora > 0 ? `<div class="flex" style="justify-content:space-between"><span class="muted">Mora (${resumen.mora} mes${resumen.mora !== 1 ? 'es' : ''} de atraso)</span><span class="badge due" id="cobro-mora-display">+ ${RN.calc.formatCUP(resumen.moraMonto)}</span></div>` : ''}
+        ${resumen.mora > 0 ? `<details class="cobro-mora-detalle" style="margin:4px 0 8px"><summary class="muted" style="font-size:12px;cursor:pointer">Ver detalle mes a mes</summary>${resumen.detalleMora.map(x => `<div class="flex" style="justify-content:space-between;font-size:12px;padding:2px 0"><span class="muted">${RN.calc.mesTexto(x.mes)}</span><span>${RN.calc.formatCUP(x.neto)}</span></div>`).join('')}</details>` : ''}
+        ${resumen.mora > 0 ? `<div class="flex" style="justify-content:space-between"><strong>Deuda total (servicio + mora)</strong><strong id="cobro-deuda-total" style="font-size:18px;color:var(--danger)">${RN.calc.formatCUP(resumen.neto + resumen.moraMonto)}</strong></div>` : ''}
       </div>
 
       ${deudaEq > 0 ? `<div class="card" style="margin:0 0 16px;padding:12px">
@@ -150,7 +163,7 @@ RN.modalCobro.abrir = function (clienteId) {
             <span id="cobro-desglose-estado"><strong>—</strong></span>
           </div>
           <!-- Aviso de fondo insuficiente para vuelto -->
-          <div id="cobro-aviso-fondo" style="display:none;margin-top:8px;padding:8px 10px;background:#fff3cd;border-radius:6px;font-size:12px;color:#856404">
+          <div id="cobro-aviso-fondo" style="display:none;margin-top:8px;padding:8px 10px;background:var(--warn-soft);border-radius:6px;font-size:12px;color:var(--warn)">
             ⚠ El fondo de caja no tiene suficiente efectivo para el vuelto. Fondo actual: ${RN.calc.formatCUP(fondo)}
           </div>
         </div>
@@ -449,8 +462,8 @@ RN.modalCobro.recalcular = function () {
   const mora = r.mora;
   const inpEq = document.getElementById('cobro-monto-equipo');
   const eq = inpEq ? (parseFloat(inpEq.value) || 0) : 0;
-  // Total con mora: neto * (mora + 1) + eq
-  const totalConMora = +(neto * (mora + 1) + eq).toFixed(2);
+  // v5.42.0: total con mora calculada mes a mes: neto + mora + eq
+  const totalConMora = +(neto + r.moraMonto + eq).toFixed(2);
   const elNeto = document.getElementById('cobro-neto');
   const elDesc = document.getElementById('cobro-desc-punt');
   const elTot = document.getElementById('cobro-total');
@@ -460,8 +473,8 @@ RN.modalCobro.recalcular = function () {
   var elDeudaTotal = document.getElementById('cobro-deuda-total');
   if (elNeto) elNeto.textContent = RN.calc.formatCUP(neto);
   if (elDesc) elDesc.textContent = '\u2212 ' + RN.calc.formatCUP(RN.calc.getDescuentosPuntualesMes(c.id, mes));
-  if (elMora && mora > 0) elMora.textContent = '+ ' + RN.calc.formatCUP(neto * mora);
-  if (elDeudaTotal && mora > 0) elDeudaTotal.textContent = RN.calc.formatCUP(neto * (mora + 1));
+  if (elMora && mora > 0) elMora.textContent = '+ ' + RN.calc.formatCUP(r.moraMonto);
+  if (elDeudaTotal && mora > 0) elDeudaTotal.textContent = RN.calc.formatCUP(neto + r.moraMonto);
   if (elAPagar) elAPagar.textContent = RN.calc.formatCUP(totalConMora);
   if (elTot) elTot.textContent = RN.calc.formatCUP(totalConMora);
 
@@ -545,7 +558,9 @@ RN.modalCobro.confirmar = function () {
 
   // v5.13.8 (BUG-1/LOG-1): Total a pagar incluye mora (meses de atraso)
   var mora = RN.calc.getMora(c);
-  var aPagar = +(neto * (mora + 1) + montoEq).toFixed(2);
+  // v5.42.0: mora calculada mes a mes
+  var detMora = RN.calc.detalleMora(c);
+  var aPagar = +(neto + detMora.total + montoEq).toFixed(2);
 
   // Total pagado en CUP = (USD convertido) + CUP directo
   var cupDesdeUSD = RN.moneda.aCUP(usd);
@@ -593,6 +608,10 @@ RN.modalCobro.confirmar = function () {
   // Ahora: h.monto SIEMPRE es solo servicio, h.montoEquipo SIEMPRE es solo equipo pagado.
   var montoServicioRegistrado = neto;
   var montoEquipoPagado = montoEq;
+  // v5.43.0: la mora de meses anteriores cobrada también es ingreso (y entra a la
+  // caja). Pago completo/excedente: toda la mora. Pago parcial: orden servicio →
+  // mora → equipo (ver abajo).
+  var moraCobrada = detMora.total;
   if (tipoPago === 'parcial') {
     // v5.13.5 (ISSUE #6/#7): Respetar el montoEquipo ingresado por el usuario
     // cuando lo especificó explícitamente. Antes el código siempre recalculaba
@@ -602,13 +621,19 @@ RN.modalCobro.confirmar = function () {
     if (montoEq > 0) {
       // El usuario especificó cuánto va al equipo — respetarlo
       montoEquipoPagado = Math.min(montoEq, pagadoCUP);
-      montoServicioRegistrado = Math.max(0, pagadoCUP - montoEquipoPagado);
+      var restoSinEq = Math.max(0, pagadoCUP - montoEquipoPagado);
+      montoServicioRegistrado = Math.min(restoSinEq, neto);
+      moraCobrada = Math.min(Math.max(0, restoSinEq - montoServicioRegistrado), detMora.total);
     } else {
-      // Sin especificación: aplicar al servicio primero, remanente al equipo
+      // Sin especificación: servicio primero, luego mora, remanente al equipo
       montoServicioRegistrado = Math.min(pagadoCUP, neto);
-      montoEquipoPagado = Math.max(0, pagadoCUP - neto);
+      moraCobrada = Math.min(Math.max(0, pagadoCUP - montoServicioRegistrado), detMora.total);
+      montoEquipoPagado = Math.max(0, pagadoCUP - montoServicioRegistrado - moraCobrada);
     }
   }
+  moraCobrada = +moraCobrada.toFixed(2);
+  // v5.43.0: el fondo después del cobro incluye lo realmente ingresado (servicio + mora + equipo)
+  fondoDespues = +(fondoAntes + montoServicioRegistrado + moraCobrada + montoEquipoPagado).toFixed(2);
 
   // v5.13.8 (BUG-4): Pre-computar descuentos a aplicar una sola vez
   // (antes se filtraba dos veces: al construir h y al marcar como aplicado)
@@ -640,7 +665,9 @@ RN.modalCobro.confirmar = function () {
     montoPagadoCUPDesdeUSD: cupDesdeUSD,
     totalPagadoCUP: pagadoCUP,
     totalPagadoUSD: pagadoUSD,
-    totalCUP: montoServicioRegistrado + montoEquipoPagado,
+    // v5.43.0: mora de meses anteriores efectivamente cobrada (ingreso real + caja)
+    montoMoraCobrada: moraCobrada,
+    totalCUP: +(montoServicioRegistrado + moraCobrada + montoEquipoPagado).toFixed(2),
     totalAPagar: aPagar,
     tasaUsd: tasa,
     // ====== Campos de tipo de pago ======
@@ -651,9 +678,13 @@ RN.modalCobro.confirmar = function () {
     fondoDespues: fondoDespues,
     // v5.13.8 (BUG-1): guardar mora para el recibo
     mora: mora,
-    montoMora: +(neto * mora).toFixed(2)
+    montoMora: detMora.total,
+    // v5.42.0: neto congelado al cobrar (no cambia si luego se edita plan/descuento)
+    precioNetoAplicado: neto,
+    detalleMora: detMora.meses
   };
   RN.state.history.push(h);
+  RN.calc.invalidarIndicePagos(); // v5.43.1
 
   // v5.13.8 (BUG-4): Usar el array pre-computado en lugar de re-filtrar
   // v5.14.4 — MULTI-MES (el cambio más delicado del feature):
@@ -664,7 +695,7 @@ RN.modalCobro.confirmar = function () {
   // N-meses → al cobrarse el último mes del rango; permanente → nunca (queda
   // activa/pendiente hasta que el administrador la anule).
   descuentosAplicar.forEach(d => {
-    RN.descuentos.aplicarEnMes(d, mes, h.id, RN.calc.valorDescuento(d, c.id));
+    RN.descuentos.aplicarEnMes(d, mes, h.id, RN.calc.valorDescuento(d, c.id, mes));
   });
 
   // v5.13.1: Bug #3 — descuenta equipo SIEMPRE que se haya pagado parte del equipo.

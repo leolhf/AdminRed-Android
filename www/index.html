@@ -74,6 +74,8 @@
       </div>
     </div>
   </nav>
+  <!-- v5.44.0: indicador de ubicación "Operación → Cobros" -->
+  <div class="breadcrumb no-print" id="breadcrumb" aria-live="polite"></div>
 
   <main>
     <!-- DASHBOARD -->
@@ -82,10 +84,17 @@
         <button class="btn primary" onclick="RN.modalCobro.abrirDesdeCobros()">+ Registrar cobro</button>
       </div>
       <div class="kpi-grid" id="kpi-dashboard"></div>
+      <!-- v5.44.0: Caja en tiempo real (saldos físicos CUP/USD + accesos rápidos) -->
+      <div class="card mt-16" id="card-caja-real">
+        <div id="panel-caja-real"></div>
+      </div>
       <!-- v5.16.0: Bloque "Requiere tu atención" (alertas accionables) -->
       <div class="card mt-16" id="card-atencion">
         <h3>⚠️ Requiere tu atención</h3>
         <div id="panel-atencion"></div>
+        <!-- v5.44.0: chips de filtro + clientes priorizados -->
+        <div class="chips mt-16" id="atencion-chips" role="group" aria-label="Filtrar clientes que requieren atención"></div>
+        <div id="panel-atencion-clientes"></div>
       </div>
       <div class="card mt-16">
         <h3>Resumen rápido</h3>
@@ -132,7 +141,7 @@
         <button class="btn primary" onclick="RN.modalCliente.abrir()">+ Nuevo cliente</button>
       </div>
       <div class="toolbar">
-        <input class="search" type="search" id="search-clientes" placeholder="Buscar por nombre, dirección, teléfono...">
+        <input class="search" type="search" id="search-clientes" placeholder="Nombre, teléfono, plan o deuda>500..." inputmode="search" title="Puedes combinar: ana plan10 deuda>500">
         <select id="filter-estado"><option value="">Todos los estados</option><option value="ok">Al día</option><option value="warn">Por vencer</option><option value="due">Atrasado</option><option value="paid">Pagado</option><option value="parcial">Pago parcial</option><option value="por-iniciar">Por iniciar</option><option value="inactivo">Inactivo</option></select>
       </div>
       <div class="accordion-list" id="lista-clientes"></div>
@@ -144,7 +153,7 @@
         <button class="btn danger" onclick="RN.monthReset.confirmar()">🔄 Cerrar mes</button>
       </div>
       <div class="toolbar">
-        <input class="search" type="search" id="search-cobros" placeholder="Buscar cliente...">
+        <input class="search" type="search" id="search-cobros" placeholder="Cliente, teléfono, plan o deuda>500..." inputmode="search">
       </div>
       <div class="accordion-list" id="lista-cobros"></div>
     </section>
@@ -345,6 +354,8 @@
         <div class="form-row cols-2">
           <div><label>Mencionar descuento recurrente en recibo</label>
             <select id="cfg-mencion-desc"><option value="true">Sí</option><option value="false">No</option></select></div>
+          <div><label>Incluir inactivos con deuda en Cobranza y Morosos</label>
+            <select id="cfg-inactivos-deuda"><option value="false">No</option><option value="true">Sí</option></select></div>
           <div><label>Tasa automática (consulta mdiv.pro)</label>
             <select id="cfg-tasa-auto"><option value="false">Manual</option><option value="true">Automática</option></select></div>
         </div>
@@ -472,6 +483,12 @@
   <script src="js/ui/reloj.js"></script>
   <script src="js/ui/tabs.js"></script>
   <script src="js/ui/render.js"></script>
+  <script src="js/ui/views/dashboard.js"></script>
+  <script src="js/ui/views/clientes.js"></script>
+  <script src="js/ui/views/cobros.js"></script>
+  <script src="js/ui/views/realizados.js"></script>
+  <script src="js/ui/views/finanzas.js"></script>
+  <script src="js/ui/views/reportes.js"></script>
   <script src="js/ui/inline-edit.js"></script>
   <script src="js/ui/ui-components.js"></script>
   <script src="js/ui/sparkline.js"></script>

@@ -333,14 +333,14 @@ RN.update._banner = function (info) {
       el = document.createElement('div');
       el.id = 'update-banner';
       el.style.cssText = 'position:sticky;top:0;z-index:9999;margin:0 0 8px;padding:10px 12px;' +
-        'display:flex;align-items:center;gap:10px;background:#2563eb;color:#fff;font-size:13px;' +
+        'display:flex;align-items:center;gap:10px;background:var(--primary);color:#fff;font-size:13px;' +
         'border-radius:0 0 10px 10px;box-shadow:0 2px 8px rgba(0,0,0,.25)';
       var host = document.querySelector('header.app-header');
       if (host && host.parentNode) host.parentNode.insertBefore(el, host.nextSibling);
       else document.body.insertBefore(el, document.body.firstChild);
     }
     el.innerHTML = '<span style="flex:1">⬆️ Nueva versión <strong>v' + RN.update._limpiar(info.version) + '</strong> disponible</span>' +
-      '<button id="update-banner-go" class="btn sm" style="background:#fff;color:#2563eb;border:0;padding:6px 10px;border-radius:8px;font-weight:600">Descargar</button>' +
+      '<button id="update-banner-go" class="btn sm" style="background:#fff;color:var(--primary);border:0;padding:6px 10px;border-radius:8px;font-weight:600">Descargar</button>' +
       '<button id="update-banner-x" style="background:transparent;border:0;color:#fff;font-size:18px;line-height:1;cursor:pointer">×</button>';
     var go = document.getElementById('update-banner-go');
     if (go) go.onclick = function () { RN.update.abrirDescarga(info); };
@@ -522,14 +522,14 @@ RN.update._pintarEstado = function () {
     if (e.ultimaVersion) {
       var cmp = RN.update._comparar(e.ultimaVersion, e.instalada);
       var etiqueta = cmp > 0
-        ? '<span style="color:#d97706;font-weight:600">hay una nueva: v' + e.ultimaVersion + '</span>'
+        ? '<span style="color:var(--warn);font-weight:600">hay una nueva: v' + e.ultimaVersion + '</span>'
         : 'estás al día (última publicada: v' + e.ultimaVersion + ')';
       var fuenteTxt = e.fuente ? ' <span class="muted">— vía ' + String(e.fuente).replace(/</g, '&lt;') + '</span>' : '';
       lineas.push(etiqueta + fuenteTxt + '.');
     }
     if (e.ultimaOk) lineas.push('Última comprobación correcta: ' + new Date(e.ultimaOk).toLocaleString() + '.');
     else if (e.ultimoIntento) lineas.push('Todavía no se ha podido comprobar correctamente.');
-    if (e.error) lineas.push('<span style="color:#dc2626">Último error: ' + String(e.error).replace(/</g, '&lt;') + ' — próximo intento ' + RN.update._textoEspera(e.esperaMs) + '.</span>');
+    if (e.error) lineas.push('<span style="color:var(--danger)">Último error: ' + String(e.error).replace(/</g, '&lt;') + ' — próximo intento ' + RN.update._textoEspera(e.esperaMs) + '.</span>');
     else if (e.esperaMs) lineas.push('<span class="muted">Próxima comprobación automática ' + RN.update._textoEspera(e.esperaMs) + '.</span>');
     el.innerHTML = lineas.join('<br>');
   } catch (err) { /* nunca romper la UI por el estado */ }
@@ -575,7 +575,7 @@ RN.update.diagnostico = async function () {
         Último intento: ${e.ultimoIntento ? new Date(e.ultimoIntento).toLocaleString() : '—'}<br>
         Fallos consecutivos: ${e.fallos}<br>
         Próxima comprobación automática: ${RN.update._textoEspera(e.esperaMs)}<br>
-        ${e.error ? '<span style="color:#dc2626">Último error: ' + String(e.error).replace(/</g, '&lt;') + '</span>' : ''}
+        ${e.error ? '<span style="color:var(--danger)">Último error: ' + String(e.error).replace(/</g, '&lt;') + '</span>' : ''}
       </div>
     </div>
     <div class="modal-footer">
@@ -589,7 +589,7 @@ RN.update.diagnostico = async function () {
   var cont = document.getElementById('upd-diag-filas');
   if (!cont) return;
   cont.innerHTML = d.filas.map(function (f) {
-    var color = f.ok ? '#16a34a' : '#dc2626';
+    var color = f.ok ? 'var(--success)' : 'var(--danger)';
     var icono = f.ok ? '✓' : '✗';
     return '<div style="margin-bottom:10px;padding:8px;border:1px solid rgba(127,127,127,.3);border-radius:8px">' +
       '<div style="font-weight:600;font-size:13px">' + icono + ' ' + f.fuente + '</div>' +

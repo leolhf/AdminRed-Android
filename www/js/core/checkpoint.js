@@ -50,7 +50,7 @@ RN.checkpoint.restaurar = function (idx) {
   if (!snap) return false;
   const data = JSON.parse(snap);
   RN.state.clients = data.clients || [];
-  RN.state.history = data.history || [];
+  RN.state.history = data.history || []; if (RN.calc && RN.calc.invalidarIndicePagos) RN.calc.invalidarIndicePagos();
   RN.state.gastos = data.gastos || [];
   RN.state.depositos = data.depositos || [];
   RN.state.retiros = data.retiros || [];

@@ -49,6 +49,14 @@ RN.tabs.ir = function (view) {
     v.classList.toggle('active', v.id === 'view-' + view);
   });
 
+  // v5.44.0: breadcrumb "Grupo → Vista"
+  var bc = document.getElementById('breadcrumb');
+  if (bc) {
+    var gNom = { operacion: 'Operación', finanzas: 'Finanzas', analisis: 'Análisis' }[grupo] || '';
+    var sel = document.querySelector('.subtab[data-view="' + view + '"]');
+    bc.textContent = 'Estás en: ' + gNom + ' \u2192 ' + (sel ? sel.textContent : view);
+  }
+
   // Render específico de la vista
   RN.render.vista(view);
 

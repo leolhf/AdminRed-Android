@@ -22,6 +22,7 @@ RN.monthReset.confirmar = function () {
   }
 
   const snapshot = RN.calc.generarSnapshot(mes);
+  const rc = snapshot.resumenCierre || {};
   // v5.14.4: solo se anulan los PURAMENTE puntuales de este mes (helper
   // esPuntualDeMes). Las bonificaciones permanentes / de N>1 meses / unPago
   // continúan vigentes en meses siguientes y NO se anulan al cierre.
@@ -50,7 +51,7 @@ RN.monthReset.confirmar = function () {
 
   RN.uiComponents.confirm(
     'Cerrar mes — ' + RN.calc.mesTexto(mes),
-    `Se generará un snapshot con:\n• Ingresos: ${RN.calc.formatCUP(snapshot.ingresos)}\n• Gastos: ${RN.calc.formatCUP(snapshot.gastos)}\n• Utilidad: ${RN.calc.formatCUP(snapshot.utilidad)}\n• Cobranza: ${snapshot.clientesPagaron}/${snapshot.clientesTotal}\n\nSe anularán ${sinAplicar} descuento(s) puntual(es) de este mes no aplicado(s). Las bonificaciones permanentes o de varios meses NO se anulan.\n\nNota: El mes operativo seguirá siendo ${RN.calc.mesTexto(mes)} (el mes real del sistema). El mes cambiará automáticamente cuando avance el calendario.${advertencias}`,
+    `Se generará un snapshot con:\n• Ingresos: ${RN.calc.formatCUP(snapshot.ingresos)}\n• Gastos: ${RN.calc.formatCUP(snapshot.gastos)}\n• Utilidad: ${RN.calc.formatCUP(snapshot.utilidad)}\n• Cobranza: ${snapshot.clientesPagaron}/${snapshot.clientesTotal}\n• En mora: ${rc.clientesEnMora || 0} cliente(s) · ${RN.calc.formatCUP(rc.moraGenerada || 0)} (cobrado este mes: ${RN.calc.formatCUP(rc.moraCobrada || 0)})\n• Caja al cierre: ${RN.calc.formatCUP(rc.saldoCajaCUP || 0)} + $${(rc.saldoCajaUSD || 0).toFixed(2)} USD\n\nSe anularán ${sinAplicar} descuento(s) puntual(es) de este mes no aplicado(s). Las bonificaciones permanentes o de varios meses NO se anulan.\n\nNota: El mes operativo seguirá siendo ${RN.calc.mesTexto(mes)} (el mes real del sistema). El mes cambiará automáticamente cuando avance el calendario.${advertencias}`,
     () => {
       // 1. Snapshot
       RN.state.snapshots.push(snapshot);

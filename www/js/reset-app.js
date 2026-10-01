@@ -13,7 +13,7 @@ RN.resetApp.confirmar = function () {
     'Se borrarán TODOS los clientes, cobros, gastos, inventario e inversiones. Esta acción no se puede deshacer.\n\nLa configuración (tasa USD, proveedor, fondo de caja) se mantendrá.',
     () => {
       RN.state.clients = [];
-      RN.state.history = [];
+      RN.state.history = []; if (RN.calc && RN.calc.invalidarIndicePagos) RN.calc.invalidarIndicePagos();
       RN.state.gastos = [];
       RN.state.depositos = [];
       RN.state.retiros = [];

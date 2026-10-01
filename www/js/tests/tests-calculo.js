@@ -79,6 +79,13 @@ RN.tests.ejecutar = function () {
     RN.tests._testRevertirPorCobroLiberaMes();   // v5.14.4
     RN.tests._testAnularAplicadaRevieveTodos();  // v5.14.4
     RN.tests._testLegadoEsquema7();              // v5.14.4
+    RN.tests._testMoraMesAMes();                 // v5.42.0
+    RN.tests._testNetoCongelado();               // v5.42.0
+    RN.tests._testMoraComoIngreso();             // v5.43.0
+    RN.tests._testInactivosConDeuda();           // v5.43.0
+    RN.tests._testLote1Caja();                   // v5.43.0
+    RN.tests._testIndicePagos();                 // v5.43.1
+    RN.tests._testBusquedaYAtencion();           // v5.44.0
   } finally {
     // Restaurar siempre
     RN.state = stateReal;
@@ -773,3 +780,225 @@ RN.tests._testLegadoEsquema7 = function () {
   RN.tests._assertEq(RN.descuentos.vigenciaDe(RN.state.descuentos[1]), 'unPago', 'v5.14.4 legacy: soloPago se interpreta como unPago');
 };
 
+
+
+/* ============================================================
+ * v5.42.0 — Mora calculada mes a mes y neto congelado al cobrar.
+ * ============================================================ */
+RN.tests._testMoraMesAMes = function () {
+  RN.calc.mesActualStr = function () { return '2025-09'; };
+  RN.state = RN.tests._mockState({
+    clients: [{ id: 'c1', nombre: 'Ana', precio: 500, planId: null, activo: true, diaPago: 5, mesInicio: '2025-01', descuentoRecurrente: 0, deudaEquipo: 0 }],
+    history: [{ id: 'h1', clienteId: 'c1', tipo: 'servicio', mes: '2025-06', monto: 500 }],
+    // Bonificación de 100 SOLO en agosto (mes en mora)
+    descuentos: [{ id: 'd1', clienteId: 'c1', tipo: 'bonificacion', modo: 'fijo', valor: 100, estado: 'pendiente', mes: '2025-08', vigencia: 'meses', desde: '2025-08', durMeses: 1, aplicaciones: [] }]
+  });
+  var c = RN.state.clients[0];
+  RN.tests._assertEq(JSON.stringify(RN.calc.mesesEnMora(c)), JSON.stringify(['2025-07', '2025-08']), 'v5.42.0: mesesEnMora pagó hasta jun, actual sep -> jul, ago');
+  var det = RN.calc.detalleMora(c);
+  RN.tests._assertEq(det.total, 900, 'v5.42.0: mora mes a mes = jul(500) + ago(400) = 900 (antes 1000)');
+  RN.tests._assertEq(det.meses[1].neto, 400, 'v5.42.0: detalle de agosto refleja la bonificación');
+  RN.tests._assertEq(RN.calc.deudaTotalCliente(c), 1400, 'v5.42.0: deudaTotal = mes actual(500) + mora(900) = 1400');
+  RN.tests._assertEq(RN.calc.resumenCliente(c).moraMonto, 900, 'v5.42.0: resumenCliente.moraMonto = 900');
+  // Nunca pagó, mesInicio jul -> debe jul + ago
+  RN.state.history = [];
+  c.mesInicio = '2025-07';
+  RN.tests._assertEq(RN.calc.detalleMora(c).total, 900, 'v5.42.0: nunca pagó, inicio jul -> mora 900');
+  // Al día -> sin mora
+  RN.state.history = [{ id: 'h2', clienteId: 'c1', tipo: 'servicio', mes: '2025-09', monto: 500 }];
+  RN.tests._assertEq(RN.calc.detalleMora(c).total, 0, 'v5.42.0: al día -> mora 0');
+};
+
+RN.tests._testNetoCongelado = function () {
+  RN.calc.mesActualStr = function () { return '2025-09'; };
+  RN.state = RN.tests._mockState({
+    clients: [{ id: 'c1', nombre: 'Ana', precio: 500, planId: null, activo: true, diaPago: 5, mesInicio: '2025-01', descuentoRecurrente: 0, deudaEquipo: 0 }],
+    history: [{ id: 'h1', clienteId: 'c1', tipo: 'servicio', mes: '2025-09', monto: 500, tipoPago: 'completo', precioNetoAplicado: 500 }]
+  });
+  var c = RN.state.clients[0];
+  RN.tests._assertEq(RN.calc.getStatus(c, '2025-09'), 'paid', 'v5.42.0: cobro completo -> paid');
+  // El precio del plan sube DESPUÉS de cobrar: el mes cobrado no debe pasar a 'parcial'
+  c.precio = 700;
+  RN.tests._assertEq(RN.calc.getStatus(c, '2025-09'), 'paid', 'v5.42.0: subir el precio no altera un mes ya cobrado (neto congelado)');
+  RN.tests._assertEq(RN.calc.netoEsperadoMes(c, '2025-09'), 500, 'v5.42.0: netoEsperadoMes usa el valor congelado');
+  RN.tests._assertEq(RN.calc.netoEsperadoMes(c, '2025-10'), 700, 'v5.42.0: mes sin cobro usa neto vivo');
+  // Cobro parcial NO congela: sigue evaluándose contra el neto vivo
+  RN.state.history = [{ id: 'h3', clienteId: 'c1', tipo: 'servicio', mes: '2025-09', monto: 300, tipoPago: 'parcial', precioNetoAplicado: 500 }];
+  RN.tests._assertEq(RN.calc.getStatus(c, '2025-09'), 'parcial', 'v5.42.0: cobro parcial -> parcial');
+  RN.tests._assertEq(RN.calc.netoEsperadoMes(c, '2025-09'), 700, 'v5.42.0: parcial no congela el neto');
+  // Cobros antiguos sin el campo: comportamiento previo
+  RN.state.history = [{ id: 'h4', clienteId: 'c1', tipo: 'servicio', mes: '2025-09', monto: 500 }];
+  RN.tests._assertEq(RN.calc.getStatus(c, '2025-09'), 'parcial', 'v5.42.0: cobro legado sin precioNetoAplicado usa neto vivo');
+};
+
+
+/* ============================================================
+ * v5.43.0 — Mora cobrada = ingreso real (y entra a la caja); interruptor de inactivos.
+ * ============================================================ */
+RN.tests._testMoraComoIngreso = function () {
+  RN.calc.mesActualStr = function () { return '2025-09'; };
+  RN.state = RN.tests._mockState({
+    clients: [{ id: 'c1', nombre: 'Ana', precio: 500, planId: null, activo: true, diaPago: 5, mesInicio: '2025-01', descuentoRecurrente: 0, deudaEquipo: 0 }],
+    history: [
+      // cobro nuevo: servicio 500 + mora cobrada 1000
+      { id: 'h1', clienteId: 'c1', tipo: 'servicio', mes: '2025-09', monto: 500, montoEquipo: 0, montoMora: 1000, montoMoraCobrada: 1000, tipoPago: 'completo', precioNetoAplicado: 500 },
+      // cobro legado con mora informativa y sin montoMoraCobrada: NO suma
+      { id: 'h2', clienteId: 'c2', tipo: 'servicio', mes: '2025-09', monto: 300, montoEquipo: 0, montoMora: 600 }
+    ]
+  });
+  RN.state.config.fondoInicial = 0;
+  RN.tests._assertEq(RN.calc.ingresoCobro(RN.state.history[0]), 1500, 'v5.43.0: ingresoCobro = servicio + mora cobrada');
+  RN.tests._assertEq(RN.calc.ingresoCobro(RN.state.history[1]), 300, 'v5.43.0: cobro legado (sin montoMoraCobrada) no cambia');
+  RN.tests._assertEq(RN.calc.ingresosMes('2025-09'), 1800, 'v5.43.0: ingresosMes incluye la mora cobrada');
+  RN.tests._assertEq(RN.calc.ingresosTotales(), 1800, 'v5.43.0: ingresosTotales incluye la mora cobrada');
+  RN.tests._assertEq(RN.calc.ingresosServicioMes('2025-09'), 800, 'v5.43.0: ingresosServicioMes NO incluye mora (estado del mes)');
+  RN.tests._assertEq(RN.calc.fondoCaja(), 1800, 'v5.43.0: la mora cobrada entra a la caja');
+  RN.tests._assertEq(RN.calc.getStatus(RN.state.clients[0], '2025-09'), 'paid', 'v5.43.0: la mora cobrada no altera el estado del mes');
+  RN.tests._assertEq(RN.calc.totalCobro(RN.state.history[0]), 1500, 'v5.43.0: totalCobro suma la mora cobrada');
+};
+
+RN.tests._testInactivosConDeuda = function () {
+  RN.calc.mesActualStr = function () { return '2025-09'; };
+  RN.state = RN.tests._mockState({
+    clients: [
+      { id: 'a', nombre: 'Activo', precio: 500, planId: null, activo: true, diaPago: 5, mesInicio: '2025-07', descuentoRecurrente: 0, deudaEquipo: 0 },
+      { id: 'i', nombre: 'Inactivo deudor', precio: 500, planId: null, activo: false, diaPago: 5, mesInicio: '2025-07', descuentoRecurrente: 0, deudaEquipo: 0 }
+    ],
+    history: []
+  });
+  RN.state.config.incluirInactivosConDeuda = false;
+  RN.tests._assertEq(RN.calc.clientesCobrables().length, 1, 'v5.43.0: interruptor apagado -> solo activos');
+  RN.tests._assertEq(RN.calc.getStatus(RN.state.clients[1], '2025-09'), 'inactivo', 'v5.43.0: apagado -> inactivo');
+  RN.state.config.incluirInactivosConDeuda = true;
+  RN.tests._assertEq(RN.calc.clientesCobrables().length, 2, 'v5.43.0: encendido -> incluye inactivo con mora');
+  RN.tests._assertEq(RN.calc.getStatus(RN.state.clients[1], '2025-09'), 'due', 'v5.43.0: encendido -> inactivo con mora es moroso');
+  RN.tests._assertEq(RN.calc.deudaTotalCliente(RN.state.clients[1]), 1000, 'v5.43.0: inactivo debe solo la mora (jul+ago), no el mes en curso');
+  // Inactivo sin mora (mesInicio = mes actual) no entra
+  RN.state.clients[1].mesInicio = '2025-09';
+  RN.tests._assertEq(RN.calc.clientesCobrables().length, 1, 'v5.43.0: inactivo sin mora no se incluye aunque el interruptor esté encendido');
+};
+
+
+/* v5.43.0 — Días reales del mes, tasa histórica, conversión al retirar y resumen de cierre. */
+RN.tests._testLote1Caja = function () {
+  RN.tests._assertEq(RN.calc.diasDelMes('2025-02'), 28, 'v5.43.0: febrero 2025 = 28 días');
+  RN.tests._assertEq(RN.calc.diasDelMes('2024-02'), 29, 'v5.43.0: febrero 2024 (bisiesto) = 29 días');
+  RN.tests._assertEq(RN.calc.diasDelMes('2025-07'), 31, 'v5.43.0: julio = 31 días');
+  RN.tests._assertEq(RN.calc.diasDelMes('xx'), 0, 'v5.43.0: mes inválido = 0');
+
+  RN.calc.mesActualStr = function () { return '2025-02'; };
+  RN.state = RN.tests._mockState({
+    clients: [{ id: 'c1', nombre: 'Ana', precio: 560, planId: null, activo: true, diaPago: 5, mesInicio: '2025-01', descuentoRecurrente: 0, deudaEquipo: 0 }],
+    history: [],
+    descuentos: [{ id: 'd1', clienteId: 'c1', tipo: 'descuento', modo: 'dias', valor: 7, estado: 'pendiente', mes: '2025-02', vigencia: 'meses', desde: '2025-02', durMeses: 1, aplicaciones: [] }]
+  });
+  // 7 días sobre 28 (feb) = 560/28*7 = 140 (antes con base 30 habría sido 130.67)
+  RN.tests._assertEq(RN.calc.valorDescuento(RN.state.descuentos[0], 'c1', '2025-02'), 140, 'v5.43.0: descuento por días usa los días reales de febrero');
+  RN.tests._assertEq(RN.calc.getPrecioNeto(RN.state.clients[0], '2025-02'), 420, 'v5.43.0: neto con descuento por días en febrero');
+
+  // Tasa histórica por movimiento
+  RN.state.config.tasaUsd = 500;
+  RN.tests._assertEq(RN.calc.tasaMovimiento({ tasaAlMomento: 300, tasaUsada: 250 }), 300, 'v5.43.0: tasaAlMomento manda');
+  RN.tests._assertEq(RN.calc.tasaMovimiento({ tasaUsada: 250 }), 250, 'v5.43.0: movimientos viejos usan tasaUsada');
+  RN.tests._assertEq(RN.calc.tasaMovimiento({}), 500, 'v5.43.0: sin tasa guardada usa la actual');
+  var d = RN.calc.desgloseMovimiento({ moneda: 'MIXTO', monto: 6000, montoOriginal: 10, montoCUPDirecto: 3000, tasaAlMomento: 300 });
+  RN.tests._assertEq(d.cupDesdeUSD, 3000, 'v5.43.0: desglose usa la tasa del momento (10 USD x 300)');
+
+  // Conversión ofrecida al retirar sin dólares físicos
+  RN.state = RN.tests._mockState({ clients: [], history: [] });
+  RN.state.config.tasaUsd = 300; RN.state.config.fondoInicial = 0;
+  RN.state.depositos = [{ id: 'dp1', concepto: 'x', monto: 20000, moneda: 'CUP', montoOriginal: 0, montoCUPDirecto: 20000, fecha: '2025-02-01T00:00:00', mes: '2025-02' }];
+  var chk = RN.calc.validarMovimientoCaja({ montoUSD: 10, montoCUP: 0 }, 'retiro');
+  RN.tests._assertEq(chk.ok, false, 'v5.43.0: retiro en USD sin dólares físicos sigue bloqueado');
+  RN.tests._assertEq(chk.conversion && chk.conversion.usd, 10, 'v5.43.0: se ofrece convertir 10 USD');
+  RN.tests._assertEq(chk.conversion && chk.conversion.cup, 3000, 'v5.43.0: costo de la conversión = 3000 CUP');
+  var chk2 = RN.calc.validarMovimientoCaja({ montoUSD: 100, montoCUP: 0 }, 'retiro');
+  RN.tests._assertEq(!!chk2.conversion, false, 'v5.43.0: sin pesos suficientes no se ofrece conversión');
+
+  // Resumen de cierre
+  RN.calc.mesActualStr = function () { return '2025-09'; };
+  RN.state = RN.tests._mockState({
+    clients: [{ id: 'c1', nombre: 'Ana', precio: 500, planId: null, activo: true, diaPago: 5, mesInicio: '2025-07', descuentoRecurrente: 0, deudaEquipo: 0 }],
+    history: []
+  });
+  var rc = RN.calc.resumenCierre('2025-09');
+  RN.tests._assertEq(rc.clientesEnMora, 1, 'v5.43.0: cierre cuenta clientes en mora');
+  RN.tests._assertEq(rc.moraGenerada, 1000, 'v5.43.0: cierre suma la mora generada (jul+ago)');
+  RN.tests._assertEq(RN.calc.generarSnapshot('2025-09').resumenCierre.clientesEnMora, 1, 'v5.43.0: el snapshot guarda el resumenCierre');
+};
+
+
+/* v5.43.1 — Índice de pagos: equivale al recorrido completo y se invalida al cambiar el historial. */
+RN.tests._testIndicePagos = function () {
+  RN.calc.mesActualStr = function () { return '2025-09'; };
+  RN.state = RN.tests._mockState({
+    clients: [
+      { id: 'c1', nombre: 'Ana', precio: 500, planId: null, activo: true, diaPago: 5, mesInicio: '2025-01', descuentoRecurrente: 0, deudaEquipo: 0 },
+      { id: 'c2', nombre: 'Beto', precio: 400, planId: null, activo: true, diaPago: 5, mesInicio: '2025-07', descuentoRecurrente: 0, deudaEquipo: 0 }
+    ],
+    history: [
+      { id: 'h1', clienteId: 'c1', tipo: 'servicio', mes: '2025-05', monto: 500 },
+      { id: 'h2', clienteId: 'c1', tipo: 'servicio', mes: '2025-06', monto: 500 },
+      { id: 'hv', clienteId: 'c1', tipo: 'venta-inventario', mes: '2025-08', monto: 100 }
+    ]
+  });
+  RN.calc.invalidarIndicePagos();
+  var c1 = RN.state.clients[0], c2 = RN.state.clients[1];
+  RN.tests._assertEq(RN.calc.ultimoMesPagado('c1'), '2025-06', 'v5.43.1: último mes pagado de c1 = jun');
+  RN.tests._assertEq(RN.calc.ultimoMesPagado('c2'), null, 'v5.43.1: c2 nunca pagó -> null');
+  RN.tests._assertEq(RN.calc.cobrosServicio('c1', '2025-06').length, 1, 'v5.43.1: cobros de servicio de c1 en junio = 1');
+  RN.tests._assertEq(RN.calc.cobrosServicio('c1', '2025-08').length, 0, 'v5.43.1: una venta de inventario no cuenta como pago de servicio');
+  RN.tests._assertEq(RN.calc.getMora(c1), 2, 'v5.43.1: mora c1 (jul+ago) = 2');
+  RN.tests._assertEq(RN.calc.getMora(c2), 2, 'v5.43.1: mora c2 nunca pagó desde jul = 2');
+  // Agregar un cobro (push): el índice se actualiza solo (firma) y también con invalidación explícita
+  RN.state.history.push({ id: 'h3', clienteId: 'c1', tipo: 'servicio', mes: '2025-09', monto: 500 });
+  RN.tests._assertEq(RN.calc.getMora(c1), 0, 'v5.43.1: tras pagar sep la mora de c1 = 0 (índice refrescado)');
+  RN.tests._assertEq(RN.calc.getStatus(c1, '2025-09'), 'paid', 'v5.43.1: c1 al día tras el push');
+  RN.tests._assertEq(RN.calc.cobranzaMes('2025-09').pagaron, 1, 'v5.43.1: cobranzaMes usa el índice (1 pagó)');
+  // Reemplazar el historial completo (carga/restauración)
+  RN.state.history = [];
+  RN.tests._assertEq(RN.calc.getMora(c1), 8, 'v5.43.1: historial reemplazado -> c1 sin pagos desde ene (mora 8: ene..ago)');
+  // Edición en sitio del mes de un cobro: requiere invalidación explícita
+  RN.state.history = [{ id: 'h9', clienteId: 'c1', tipo: 'servicio', mes: '2025-06', monto: 500 }];
+  RN.tests._assertEq(RN.calc.ultimoMesPagado('c1'), '2025-06', 'v5.43.1: índice antes de editar');
+  RN.state.history[0].mes = '2025-08';
+  RN.calc.invalidarIndicePagos();
+  RN.tests._assertEq(RN.calc.ultimoMesPagado('c1'), '2025-08', 'v5.43.1: tras invalidar, el índice refleja la edición');
+};
+
+
+/* v5.44.0 — Búsqueda de clientes (teléfono, plan, deuda>X) y lista de atención priorizada. */
+RN.tests._testBusquedaYAtencion = function () {
+  RN.calc.mesActualStr = function () { return '2025-09'; };
+  RN.calc.hoy = function () { return new Date(2025, 8, 10); }; // 10-sep-2025
+  RN.state = RN.tests._mockState({
+    planes: [{ id: 'p1', nombre: 'Hogar', megas: 10 }],
+    clients: [
+      { id: 'a', nombre: 'Ana Pérez', telefono: '+53 5555-1234', precio: 500, planId: 'p1', activo: true, diaPago: 10, mesInicio: '2025-09', descuentoRecurrente: 0, deudaEquipo: 0 },
+      { id: 'b', nombre: 'Beto', telefono: '5399-8888', precio: 300, planId: null, activo: true, diaPago: 5, mesInicio: '2025-07', descuentoRecurrente: 0, deudaEquipo: 0 },
+      { id: 'c', nombre: 'Carla', precio: 400, planId: null, activo: true, diaPago: 11, mesInicio: '2025-09', descuentoRecurrente: 0, deudaEquipo: 0 },
+      { id: 'd', nombre: 'Dani', precio: 200, planId: null, activo: false, diaPago: 5, mesInicio: '2025-07', descuentoRecurrente: 0, deudaEquipo: 0 }
+    ],
+    history: []
+  });
+  var L = RN.state.clients;
+  var ids = function (r) { return r.map(function (c) { return c.id; }).join(','); };
+  RN.tests._assertEq(ids(RN.calc.filtrarClientes(L, 'ana')), 'a', 'v5.44.0: búsqueda por nombre');
+  RN.tests._assertEq(ids(RN.calc.filtrarClientes(L, '5555')), 'a', 'v5.44.0: búsqueda por teléfono (solo dígitos)');
+  RN.tests._assertEq(ids(RN.calc.filtrarClientes(L, 'hogar')), 'a', 'v5.44.0: búsqueda por nombre del plan');
+  RN.tests._assertEq(ids(RN.calc.filtrarClientes(L, 'deuda>500')), 'b', 'v5.44.0: deuda>500 (b debe 900; d 400)');
+  RN.tests._assertEq(ids(RN.calc.filtrarClientes(L, 'deuda>=400')), 'b,c,d', 'v5.44.0: deuda>=400 (b 900, c 400, d 400)');
+  RN.tests._assertEq(ids(RN.calc.filtrarClientes(L, 'beto deuda>500')), 'b', 'v5.44.0: términos combinados (AND)');
+  RN.tests._assertEq(RN.calc.filtrarClientes(L, '').length, 4, 'v5.44.0: búsqueda vacía devuelve todo');
+
+  // Atención: b y (con interruptor) d en mora; a vence hoy (10); c vence mañana (11)
+  RN.state.config.incluirInactivosConDeuda = false;
+  var at = RN.calc.clientesAtencion('');
+  RN.tests._assertEq(at.map(function (x) { return x.cliente.id + ':' + x.motivo; }).join(','), 'b:mora,a:vence hoy,c:vence mañana', 'v5.44.0: orden mora → hoy → mañana');
+  RN.tests._assertEq(RN.calc.clientesAtencion('morosos').length, 1, 'v5.44.0: chip Morosos');
+  RN.tests._assertEq(ids(RN.calc.clientesAtencion('hoy').map(function (x) { return x.cliente; })), 'a', 'v5.44.0: chip Por cobrar hoy');
+  RN.tests._assertEq(RN.calc.clientesAtencion('inactivos').length, 1, 'v5.44.0: chip Inactivos con deuda lista a d');
+  // Parcial
+  RN.state.history = [{ id: 'h', clienteId: 'c', tipo: 'servicio', mes: '2025-09', monto: 100, tipoPago: 'parcial' }];
+  RN.tests._assertEq(ids(RN.calc.clientesAtencion('parciales').map(function (x) { return x.cliente; })), 'c', 'v5.44.0: chip Parciales');
+};

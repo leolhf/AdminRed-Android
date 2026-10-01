@@ -132,7 +132,7 @@ RN.ciclos.clientesCobranzaPendientes = function () {
   var mes = RN.calc.mesActualStr();
   var cv = RN.ciclos.corteVigente();
   var cvDia = cv ? cv.diaPago : null;
-  var activos = RN.calc.clientesActivos().filter(function (c) {
+  var activos = RN.calc.clientesCobrables().filter(function (c) {
     return RN.calc.getStatus(c) !== 'paid' && RN.calc.mesInicioCliente(c) <= mes;
   });
   // agrupar por diaPago
@@ -162,7 +162,7 @@ RN.ciclos.clientesCobranzaPendientes = function () {
  * Devuelve array de { diaPago, clientes: [...] }.
  */
 RN.ciclos.clientesMorososPorCorte = function () {
-  var morosos = RN.calc.clientesActivos().filter(function (c) {
+  var morosos = RN.calc.clientesCobrables().filter(function (c) {
     return RN.calc.getMora(c) > 0;
   });
   var gruposMap = {};

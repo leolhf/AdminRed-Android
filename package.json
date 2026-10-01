@@ -1,6 +1,6 @@
 {
   "name": "adminred",
-  "version": "5.41.3",
+  "version": "5.45.0",
   "description": "AdminRed (RedNet) — Administración de negocio de reventa de servicio de internet. App nativa Android (Capacitor) y de escritorio (Electron).",
   "main": "main.js",
   "scripts": {
@@ -11,7 +11,8 @@
     "build:release": "cd android && ./gradlew assembleRelease",
     "electron:start": "electron .",
     "dist:win": "electron-builder --win",
-    "dist:win:portable": "electron-builder --win portable"
+    "dist:win:portable": "electron-builder --win portable",
+    "test": "node tools/run-tests.js"
   },
   "keywords": [
     "adminred",

@@ -6,6 +6,42 @@
 
 RN.calc = RN.calc || {};
 
+/**
+ * Tipos compartidos (JSDoc). Detalle de cada campo en MODELO.md → "Esquema de datos".
+ *
+ * @typedef {Object} Cliente
+ * @property {string} id
+ * @property {string} nombre
+ * @property {string|null} planId       null = plan personalizado
+ * @property {number} precio            precio mensual base (CUP)
+ * @property {number} diaPago           día de corte (1-31)
+ * @property {string} [mesInicio]       primer mes facturable, 'YYYY-MM'
+ * @property {number} descuentoRecurrente
+ * @property {number} deudaEquipo
+ * @property {number} cuotaEquipo
+ * @property {boolean} activo
+ *
+ * @typedef {Object} Cobro              entrada de RN.state.history (tipo 'servicio')
+ * @property {string} id
+ * @property {string} clienteId
+ * @property {string} mes               'YYYY-MM'
+ * @property {number} monto             SOLO servicio del mes
+ * @property {number} [montoEquipo]     SOLO equipo pagado
+ * @property {number} [montoMoraCobrada] mora de meses anteriores cobrada (ingreso real)
+ * @property {number} [precioNetoAplicado] neto congelado al cobrar
+ * @property {'completo'|'parcial'|'excedente'} tipoPago
+ *
+ * @typedef {Object} ResumenCliente
+ * @property {string} estado            'paid'|'parcial'|'ok'|'warn'|'due'|'por-iniciar'|'inactivo'
+ * @property {number} neto              precio neto del mes
+ * @property {number} cuotaEq           cuota de equipo
+ * @property {number} mora              meses de mora
+ * @property {number} moraMonto         deuda de mora mes a mes (CUP)
+ * @property {Array<{mes:string, neto:number}>} detalleMora
+ * @property {number} totalMes          neto + cuota de equipo
+ * @property {number} totalDeuda        deuda total del cliente
+ */
+
 /** Devuelve el día de hoy (1-31). */
 RN.calc.hoy = function () { return new Date(); };
 
@@ -88,13 +124,21 @@ RN.calc.mesInicioCliente = function (cliente) {
  *  - ok: al día (aún no llegó su día de pago este mes)
  *  - warn: pasó el día de pago pero dentro de gracia (≤ config.graciaDias, default 5)
  *  - due: atrasado / mora real (getMora > 0) o se pasó del día de pago + gracia este mes
+ *
+ * @param {Cliente} cliente
+ * @param {string} [mes] 'YYYY-MM' (por defecto, el mes actual)
+ * @returns {string} 'paid'|'parcial'|'ok'|'warn'|'due'|'por-iniciar'|'inactivo'
  */
 RN.calc.getStatus = function (cliente, mes) {
   // v5.13.6 (BUG-6): clientes inactivos (activo === false) devuelven 'inactivo'
   // en vez de 'ok'. Antes devolvia 'ok' (al d\u00eda) para clientes dados de baja,
   // lo que mostraba badge verde en clientes inactivos.
   if (!cliente) return 'ok';
-  if (cliente.activo === false) return 'inactivo';
+  // v5.43.0: interruptor "incluir inactivos con deuda" — un inactivo con mora
+  // sigue debiendo: se muestra como 'due' (moroso) en vez de 'inactivo'.
+  if (cliente.activo === false) {
+    return (RN.state.config.incluirInactivosConDeuda && RN.calc.getMora(cliente) > 0) ? 'due' : 'inactivo';
+  }
   // v5.14.2 (Auditoría Reportes — BUG-2): 'mes' es opcional y por defecto usa
   // el mes operativo actual (100% compatible con las llamadas existentes).
   // Antes esta función SIEMPRE usaba mesActualStr() internamente, por lo que
@@ -108,13 +152,11 @@ RN.calc.getStatus = function (cliente, mes) {
   var mesInicio = RN.calc.mesInicioCliente(cliente);
   if (RN.calc.mesesEntre(mesInicio, mes) < 0) return 'por-iniciar';
 
-  const cobrosMes = RN.state.history.filter(h =>
-    h.clienteId === cliente.id && h.tipo === 'servicio' && h.mes === mes
-  );
+  const cobrosMes = RN.calc.cobrosServicio(cliente.id, mes);
   if (cobrosMes.length > 0) {
     // v5.13.1: Bug #15 — coherencia confirmada con Bug #2.
     // h.monto es SIEMPRE solo servicio, netoEsperado también es solo servicio.
-    const netoEsperado = RN.calc.getPrecioNeto(cliente, mes);
+    const netoEsperado = RN.calc.netoEsperadoMes(cliente, mes);
     const totalServicio = cobrosMes.reduce((s, h) => s + (h.monto || 0), 0);
     if (totalServicio >= netoEsperado - 0.01) return 'paid';
     return 'parcial';
@@ -156,13 +198,80 @@ RN.calc.getStatus = function (cliente, mes) {
  *     Mínimo 0. Así un cliente dado de alta este mes o con mesInicio futuro
  *     no aparece como moroso.
  */
+/* ============================================================
+ * v5.43.1 — Índice de pagos por cliente (rendimiento).
+ *
+ * getStatus/getMora/cobranzaMes recorrían RN.state.history completo por cada
+ * cliente (O(clientes × historial)). El índice agrupa UNA vez los cobros de
+ * servicio por cliente y mes:
+ *   { porCliente: { [clienteId]: { meses: { 'YYYY-MM': [h, ...] }, ultimo: 'YYYY-MM'|null } } }
+ * Se reconstruye solo cuando cambia el historial. Detección automática por firma
+ * (referencia del array + longitud + primer/último cobro), más invalidación
+ * explícita (RN.calc.invalidarIndicePagos) en los puntos donde se agrega un cobro
+ * o se cargan datos. Si se EDITA en sitio el mes/cliente de un cobro ya existente,
+ * hay que llamar a invalidarIndicePagos().
+ * ============================================================ */
+RN.calc._idxPagos = null;
+RN.calc._idxPagosFirma = null;
+
+RN.calc._firmaHistorial = function () {
+  var h = RN.state.history || [];
+  return { ref: h, n: h.length, primero: h[0], ultimo: h[h.length - 1] };
+};
+
+/** Fuerza la reconstrucción del índice en la próxima consulta. */
+RN.calc.invalidarIndicePagos = function () {
+  RN.calc._idxPagos = null;
+  RN.calc._idxPagosFirma = null;
+};
+
+/** Reconstruye el índice de pagos por cliente a partir de RN.state.history. */
+RN.calc.rebuildIndexPagos = function () {
+  var porCliente = {};
+  (RN.state.history || []).forEach(function (h) {
+    if (!h || h.tipo !== 'servicio' || !h.clienteId || !h.mes) return;
+    var e = porCliente[h.clienteId] || (porCliente[h.clienteId] = { meses: {}, ultimo: null });
+    (e.meses[h.mes] || (e.meses[h.mes] = [])).push(h);
+    if (e.ultimo === null || h.mes > e.ultimo) e.ultimo = h.mes;
+  });
+  RN.calc._idxPagos = { porCliente: porCliente };
+  RN.calc._idxPagosFirma = RN.calc._firmaHistorial();
+  return RN.calc._idxPagos;
+};
+
+/** Devuelve el índice vigente (lo reconstruye si el historial cambió). */
+RN.calc.indexPagos = function () {
+  var f = RN.calc._idxPagosFirma;
+  var a = RN.calc._firmaHistorial();
+  if (!RN.calc._idxPagos || !f || f.ref !== a.ref || f.n !== a.n || f.primero !== a.primero || f.ultimo !== a.ultimo) {
+    return RN.calc.rebuildIndexPagos();
+  }
+  return RN.calc._idxPagos;
+};
+
+var _SIN_COBROS = [];
+/** Cobros de servicio de un cliente en un mes (array, vacío si no hay). */
+RN.calc.cobrosServicio = function (clienteId, mes) {
+  var e = RN.calc.indexPagos().porCliente[clienteId];
+  return (e && e.meses[mes]) || _SIN_COBROS;
+};
+
+/** Último mes (YYYY-MM) con un cobro de servicio del cliente, o null si nunca pagó. */
+RN.calc.ultimoMesPagado = function (clienteId) {
+  var e = RN.calc.indexPagos().porCliente[clienteId];
+  return e ? e.ultimo : null;
+};
+
+/**
+ * Meses completos de atraso del cliente (sin contar el mes en curso).
+ * @param {Cliente} cliente
+ * @returns {number} 0 si está al día
+ */
 RN.calc.getMora = function (cliente) {
   const mes = RN.calc.mesActualStr();
-  const pagados = RN.state.history
-    .filter(h => h.clienteId === cliente.id && h.tipo === 'servicio')
-    .map(h => h.mes);
-  if (pagados.length > 0) {
-    const ultimoPagado = pagados.sort().pop();
+  // v5.43.1: último mes pagado desde el índice (antes: filter+map+sort del historial).
+  const ultimoPagado = RN.calc.ultimoMesPagado(cliente.id);
+  if (ultimoPagado !== null) {
     if (ultimoPagado >= mes) return 0;
     // Meses debidos = meses posteriores al último pagado, excluyendo el mes
     // actual (en curso). Ej: pagó hasta junio, en septiembre debe jul+ago = 2.
@@ -175,6 +284,49 @@ RN.calc.getMora = function (cliente) {
   var mesInicio = RN.calc.mesInicioCliente(cliente);
   var diff = RN.calc.mesesEntre(mesInicio, mes);
   return diff > 0 ? diff : 0;
+};
+
+/**
+ * v5.42.0: lista (YYYY-MM, orden cronológico) de los meses que componen la
+ * mora. Son los `getMora()` meses inmediatamente anteriores al mes actual
+ * (en ambos casos del modelo —pagó alguna vez / nunca pagó— la mora es un
+ * bloque contiguo que termina en el mes previo al actual).
+ */
+RN.calc.mesesEnMora = function (cliente) {
+  var n = RN.calc.getMora(cliente);
+  var lista = [];
+  var m = RN.calc.mesActualStr();
+  for (var i = 0; i < n; i++) { m = RN.calc.mesAnterior(m); lista.push(m); }
+  return lista.reverse();
+};
+
+/**
+ * v5.42.0: deuda de mora calculada MES A MES. Suma getPrecioNeto(cliente, mes)
+ * de cada mes en atraso, en lugar de multiplicar el neto del mes actual por
+ * la cantidad de meses (que distorsiona si hubo descuentos puntuales o
+ * bonificaciones distintas en meses anteriores).
+ * @returns {{meses: Array<{mes:string, neto:number}>, total:number}}
+ */
+RN.calc.detalleMora = function (cliente) {
+  var meses = RN.calc.mesesEnMora(cliente).map(function (m) {
+    return { mes: m, neto: RN.calc.getPrecioNeto(cliente, m) };
+  });
+  var total = meses.reduce(function (s, x) { return s + x.neto; }, 0);
+  return { meses: meses, total: +total.toFixed(2) };
+};
+
+/**
+ * v5.42.0: neto de servicio esperado para un mes. Si el mes ya se cerró con un
+ * cobro completo (no parcial) que guardó `precioNetoAplicado`, se usa ese valor
+ * congelado: editar luego el plan o el descuento recurrente no cambia lo ya
+ * cobrado. Sin cobro cerrado (o cobros antiguos sin el campo) → neto vivo.
+ */
+RN.calc.netoEsperadoMes = function (cliente, mes) {
+  mes = mes || RN.calc.mesActualStr();
+  var cerrado = RN.calc.cobrosServicio(cliente.id, mes).find(function (h) {
+    return h.tipoPago !== 'parcial' && typeof h.precioNetoAplicado === 'number';
+  });
+  return cerrado ? cerrado.precioNetoAplicado : RN.calc.getPrecioNeto(cliente, mes);
 };
 
 /**
@@ -206,12 +358,17 @@ RN.calc.mesesEntre = function (a, b) {
  * + deuda de equipo. v5.13.1: Bug #4 — nueva función centralizada para que
  * todas las vistas (mora, cobranza, render, calendario) usen el mismo cálculo
  * en lugar de getPrecioNeto(c) sin mes + getCuotaEquipo dispersos.
+ * @param {Cliente} cliente
+ * @param {string} [mes] 'YYYY-MM'
+ * @returns {number} CUP (un cliente inactivo solo debe su mora)
  */
 RN.calc.deudaTotalCliente = function (cliente, mes) {
   mes = mes || RN.calc.mesActualStr();
   var mora = RN.calc.getMora(cliente);
   var netoMes = RN.calc.getPrecioNeto(cliente, mes);
-  var servicioPendiente = netoMes * (mora + 1);
+  // v5.42.0: mora mes a mes (antes: netoMes * (mora + 1)).
+  // v5.43.0: un cliente inactivo no debe el mes en curso, solo su mora.
+  var servicioPendiente = (cliente.activo === false ? 0 : netoMes) + RN.calc.detalleMora(cliente).total;
   var deudaEquipo = RN.investment.getDeudaEquipoCliente(cliente);
   return +(servicioPendiente + deudaEquipo).toFixed(2);
 };
@@ -220,6 +377,9 @@ RN.calc.deudaTotalCliente = function (cliente, mes) {
  * v5.13.7 (DUP-2): Resumen consolidado de un cliente para todas las vistas.
  * Centraliza estado, neto, cuota, deuda, mora y totales en un solo objeto
  * para evitar que cada vista recalcule por separado.
+ * @param {Cliente} cliente
+ * @param {string} [mes] 'YYYY-MM'
+ * @returns {ResumenCliente}
  */
 RN.calc.resumenCliente = function (cliente, mes) {
   mes = mes || RN.calc.mesActualStr();
@@ -232,7 +392,8 @@ RN.calc.resumenCliente = function (cliente, mes) {
   var mora = RN.calc.getMora(cliente);
   var totalMes = neto + cuotaEq;
   var totalDeuda = RN.calc.deudaTotalCliente(cliente, mes);
-  return { estado: estado, neto: neto, cuotaEq: cuotaEq, deuda: deuda, mora: mora, totalMes: totalMes, totalDeuda: totalDeuda, mes: mes };
+  var detMora = RN.calc.detalleMora(cliente);
+  return { estado: estado, neto: neto, cuotaEq: cuotaEq, deuda: deuda, mora: mora, moraMonto: detMora.total, detalleMora: detMora.meses, totalMes: totalMes, totalDeuda: totalDeuda, mes: mes };
 };
 
 /** Mes anterior a un YYYY-MM. */
@@ -422,22 +583,33 @@ RN.calc.getDescuentosPuntualesMes = function (clienteId, mes) {
   let total = 0;
   RN.state.descuentos.forEach(d => {
     if (d.clienteId === clienteId && RN.descuentos.vigenteEnMes(d, mes)) {
-      total += RN.calc.valorDescuento(d, clienteId);
+      total += RN.calc.valorDescuento(d, clienteId, mes);
     }
   });
   return total;
 };
 
 /** Calcula el valor en CUP de un descuento puntual según su modo. */
-RN.calc.valorDescuento = function (d, clienteId) {
+/**
+ * v5.43.0: cantidad de días REALES de un mes 'YYYY-MM' (feb 28/29, abr 30...).
+ * Devuelve 0 si el mes no es válido.
+ */
+RN.calc.diasDelMes = function (ym) {
+  var m = /^(\d{4})-(\d{2})/.exec(ym || '');
+  if (!m) return 0;
+  return new Date(+m[1], +m[2], 0).getDate();
+};
+
+RN.calc.valorDescuento = function (d, clienteId, mes) {
   const cliente = RN.state.clients.find(c => c.id === clienteId);
   const base = cliente ? RN.calc.getPrecioBase(cliente) : 0;
   switch (d.modo) {
     case 'fijo': return d.valor || 0;
     case 'porcentaje': return +(base * (d.valor || 0) / 100).toFixed(2);
     case 'dias': {
-      // proporcional a días sin servicio sobre los días base del mes
-      const dias = RN.state.config.diasBaseMes || 30;
+      // v5.43.0: proporcional a días sin servicio sobre los días REALES del mes
+      // (mes indicado, o el del descuento). Si no hay mes válido: días base (30).
+      const dias = RN.calc.diasDelMes(mes || d.mes || d.desde) || RN.state.config.diasBaseMes || 30;
       return +((base / dias) * (d.valor || 0)).toFixed(2);
     }
     default: return 0;
@@ -447,6 +619,9 @@ RN.calc.valorDescuento = function (d, clienteId) {
 /**
  * Precio neto a cobrar = precioBase - descuentoRecurrente - descuentosPuntuales.
  * Nunca negativo.
+ * @param {Cliente} cliente
+ * @param {string} [mes] 'YYYY-MM' (por defecto, el mes actual)
+ * @returns {number} CUP
  */
 RN.calc.getPrecioNeto = function (cliente, mes) {
   const base = RN.calc.getPrecioBase(cliente);
@@ -489,12 +664,23 @@ RN.calc.formatUSD = function (cup) {
   return '$' + (cup / tasa).toFixed(2) + ' USD';
 };
 
-/** Total ingresos del mes (cobros de servicio + equipo). */
+/**
+ * v5.43.0: ingreso total de un cobro = servicio (h.monto) + equipo
+ * (h.montoEquipo) + mora de meses anteriores efectivamente cobrada
+ * (h.montoMoraCobrada). Antes la mora pagada solo quedaba como dato
+ * informativo (h.montoMora) y no entraba en ingresos ni en la caja.
+ * Los cobros anteriores a v5.43.0 no traen el campo y suman 0 (sin cambios).
+ */
+RN.calc.ingresoCobro = function (h) {
+  return (h.monto || 0) + (h.montoEquipo || 0) + (h.montoMoraCobrada || 0);
+};
+
+/** Total ingresos del mes (servicio + equipo + mora cobrada). */
 RN.calc.ingresosMes = function (mes) {
   mes = mes || RN.calc.mesActualStr();
   return RN.state.history
     .filter(h => h.mes === mes)
-    .reduce((s, h) => s + (h.monto || 0) + (h.montoEquipo || 0), 0);
+    .reduce((s, h) => s + RN.calc.ingresoCobro(h), 0);
 };
 
 /**
@@ -513,7 +699,7 @@ RN.calc.ingresosServicioMes = function (mes) {
 
 /** Total ingresos históricos. */
 RN.calc.ingresosTotales = function () {
-  return RN.state.history.reduce((s, h) => s + (h.monto || 0) + (h.montoEquipo || 0), 0);
+  return RN.state.history.reduce((s, h) => s + RN.calc.ingresoCobro(h), 0);
 };
 
 /** Total gastos históricos. */
@@ -567,7 +753,7 @@ RN.calc.monedaMovimiento = function (m) {
 RN.calc.desgloseMovimiento = function (m) {
   m = m || {};
   var moneda = RN.calc.monedaMovimiento(m);
-  var tasa = (m.tasaUsada || RN.state.config.tasaUsd || 0);
+  var tasa = (m.tasaAlMomento || m.tasaUsada || RN.state.config.tasaUsd || 0);
   if (moneda === 'MIXTO') {
     var usd = +(m.montoOriginal || 0);
     var cup = (m.montoCUPDirecto === undefined || m.montoCUPDirecto === null)
@@ -581,12 +767,22 @@ RN.calc.desgloseMovimiento = function (m) {
   return { moneda: 'CUP', usd: 0, cup: +(m.monto || 0), cupDesdeUSD: 0 };
 };
 
+/**
+ * v5.43.0: tasa USD vigente CUANDO se hizo el movimiento de caja (tasaAlMomento),
+ * para convertir a USD en reportes históricos sin que un cambio posterior de tasa
+ * los distorsione. Movimientos viejos: tasaUsada; sin ninguna: la tasa actual.
+ */
+RN.calc.tasaMovimiento = function (m) {
+  m = m || {};
+  return m.tasaAlMomento || m.tasaUsada || RN.state.config.tasaUsd || 0;
+};
+
 /** v5.20.0 / v5.30.0: Desglose de depósitos por moneda (CUP puro, USD original y su equivalente en CUP). */
 RN.calc.totalDepositosPorMoneda = function () {
   var cup = 0, usdOriginal = 0, usdCUP = 0;
   (RN.state.depositos || []).forEach(function (d) {
     var x = RN.calc.desgloseMovimiento(d);
-    var tasa = d.tasaUsada || RN.state.config.tasaUsd || 0;
+    var tasa = RN.calc.tasaMovimiento(d);
     cup += x.cup;
     usdOriginal += x.usd;
     usdCUP += +(x.usd * tasa).toFixed(2);
@@ -599,7 +795,7 @@ RN.calc.totalRetirosPorMoneda = function () {
   var cup = 0, usdOriginal = 0, usdCUP = 0;
   (RN.state.retiros || []).forEach(function (r) {
     var x = RN.calc.desgloseMovimiento(r);
-    var tasa = r.tasaUsada || RN.state.config.tasaUsd || 0;
+    var tasa = RN.calc.tasaMovimiento(r);
     cup += x.cup;
     usdOriginal += x.usd;
     usdCUP += +(x.usd * tasa).toFixed(2);
@@ -647,7 +843,15 @@ RN.calc.validarMovimientoCaja = function (datos, tipo) {
   if (tipo !== 'retiro') return { ok: true, motivo: '' };
   var s = RN.calc.saldosMoneda();
   if (usd > s.usd + 0.01) {
-    return { ok: false, motivo: 'Solo hay $' + s.usd.toFixed(2) + ' USD físico en caja y quieres retirar $' + usd.toFixed(2) + ' USD' };
+    var res = { ok: false, motivo: 'Solo hay $' + s.usd.toFixed(2) + ' USD físico en caja y quieres retirar $' + usd.toFixed(2) + ' USD' };
+    // v5.43.0: si hay tasa y alcanzan los pesos, se puede OFRECER convertir desde CUP
+    // (el usuario lo confirma). `conversion` = dólares a comprar y su costo en CUP.
+    var faltanUSD = +(usd - s.usd).toFixed(2);
+    var costoCUP = s.tasa ? +(faltanUSD * s.tasa).toFixed(2) : 0;
+    if (s.tasa > 0 && costoCUP + cup <= s.cup + 0.01) {
+      res.conversion = { usd: faltanUSD, cup: costoCUP, tasa: s.tasa };
+    }
+    return res;
   }
   if (cup > s.cup + 0.01) {
     return { ok: false, motivo: 'Solo hay ' + RN.calc.formatCUP(s.cup) + ' CUP físico en caja y quieres retirar ' + RN.calc.formatCUP(cup) };
@@ -911,18 +1115,113 @@ RN.calc.utilidadMes = function (mes) {
   return RN.calc.ingresosMes(mes) - RN.calc.gastosMes(mes);
 };
 
+/**
+ * v5.44.0: búsqueda de clientes (Clientes y Cobros). Función pura.
+ * `q` se separa por espacios; cada término debe cumplirse (AND):
+ *   - texto libre → nombre, dirección, IP, teléfono (solo dígitos) o NOMBRE DEL PLAN
+ *   - `deuda>500` / `deuda>=500` / `deuda<100` (también `>500`) → filtra por
+ *     deudaTotalCliente (mes actual + mora + equipo) en CUP.
+ */
+RN.calc.filtrarClientes = function (lista, q) {
+  var terminos = String(q || '').trim().toLowerCase().split(/\s+/).filter(Boolean);
+  if (!terminos.length) return lista;
+  var mes = RN.calc.mesActualStr();
+  return lista.filter(function (c) {
+    var plan = '';
+    if (c.planId) {
+      var p = (RN.state.planes || []).find(function (pl) { return pl.id === c.planId; });
+      if (p) plan = String(p.nombre || '').toLowerCase();
+    }
+    var tel = String(c.telefono || '').replace(/\D/g, '');
+    var texto = [c.nombre, c.direccion, c.ip, c.telefono].join(' ').toLowerCase();
+    return terminos.every(function (t) {
+      var m = /^(?:deuda)?(>=|<=|>|<)(\d+(?:[.,]\d+)?)$/.exec(t);
+      if (m) {
+        var x = parseFloat(m[2].replace(',', '.'));
+        var d = RN.calc.deudaTotalCliente(c, mes);
+        return m[1] === '>' ? d > x : m[1] === '>=' ? d >= x : m[1] === '<' ? d < x : d <= x;
+      }
+      var digitos = t.replace(/\D/g, '');
+      if (digitos.length >= 3 && digitos === t && tel.indexOf(digitos) !== -1) return true;
+      return texto.indexOf(t) !== -1 || (plan && plan.indexOf(t) !== -1);
+    });
+  });
+};
+
+/**
+ * v5.44.0: clientes que requieren atención, priorizados. Función pura.
+ * Orden: 1) mora (más meses y más deuda primero), 2) vence hoy, 3) vence mañana,
+ * 4) pago parcial. `filtro`: '' (todos) | 'morosos' | 'hoy' | 'parciales' | 'inactivos'.
+ * 'inactivos' devuelve los clientes inactivos con deuda (mora) pendiente.
+ * @returns {Array<{cliente, motivo:string, prioridad:number, mora:number, deuda:number}>}
+ */
+RN.calc.clientesAtencion = function (filtro) {
+  filtro = filtro || '';
+  var mes = RN.calc.mesActualStr();
+  var hoy = RN.calc.hoy();
+  var diaHoy = hoy.getDate();
+  var man = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1);
+  var diaMan = man.getDate();
+  var out = [];
+
+  if (filtro === 'inactivos') {
+    RN.state.clients.forEach(function (c) {
+      if (c.activo !== false) return;
+      var mora = RN.calc.getMora(c);
+      if (mora > 0) out.push({ cliente: c, motivo: 'inactivo con mora', prioridad: 0, mora: mora, deuda: RN.calc.deudaTotalCliente(c, mes) });
+    });
+    return out.sort(function (a, b) { return b.mora - a.mora || b.deuda - a.deuda; });
+  }
+
+  RN.calc.clientesCobrables().forEach(function (c) {
+    if (c.activo === false) return; // los inactivos con deuda solo salen en su chip
+    var mora = RN.calc.getMora(c);
+    var st = RN.calc.getStatus(c, mes);
+    var dia = c.diaPago || 1;
+    var deuda = RN.calc.deudaTotalCliente(c, mes);
+    var pagado = st === 'paid';
+    var motivo = '', prio = 9;
+    if (mora > 0) { motivo = 'mora'; prio = 1; }
+    else if (!pagado && st !== 'por-iniciar' && dia === diaHoy) { motivo = 'vence hoy'; prio = 2; }
+    else if (!pagado && st !== 'por-iniciar' && dia === diaMan) { motivo = 'vence mañana'; prio = 3; }
+    else if (st === 'parcial') { motivo = 'pago parcial'; prio = 4; }
+    if (!motivo) return;
+    if (filtro === 'morosos' && prio !== 1) return;
+    if (filtro === 'hoy' && !(dia === diaHoy && !pagado && st !== 'por-iniciar')) return;
+    if (filtro === 'parciales' && st !== 'parcial') return;
+    out.push({ cliente: c, motivo: motivo, prioridad: prio, mora: mora, deuda: deuda });
+  });
+  return out.sort(function (a, b) {
+    return a.prioridad - b.prioridad || b.mora - a.mora || b.deuda - a.deuda;
+  });
+};
+
 /** Clientes activos. */
 RN.calc.clientesActivos = function () {
   return RN.state.clients.filter(c => c.activo !== false);
+};
+
+/**
+ * v5.43.0: clientes de los que se espera cobrar. Son los activos y, si el
+ * interruptor config.incluirInactivosConDeuda está encendido, también los
+ * inactivos que aún tienen mora pendiente (un inactivo que debe sigue debiendo).
+ * Por defecto (interruptor apagado) equivale a clientesActivos().
+ */
+RN.calc.clientesCobrables = function () {
+  var lista = RN.calc.clientesActivos();
+  if (RN.state.config.incluirInactivosConDeuda) {
+    RN.state.clients.forEach(function (c) {
+      if (c.activo === false && RN.calc.getMora(c) > 0) lista.push(c);
+    });
+  }
+  return lista;
 };
 
 /** Cobranza del mes: cuántos clientes ya pagaron. */
 RN.calc.cobranzaMes = function (mes) {
   mes = mes || RN.calc.mesActualStr();
   const activos = RN.calc.clientesActivos();
-  const pagaron = activos.filter(c =>
-    RN.state.history.some(h => h.clienteId === c.id && h.tipo === 'servicio' && h.mes === mes)
-  );
+  const pagaron = activos.filter(c => RN.calc.cobrosServicio(c.id, mes).length > 0);
   // v5.14.2 (Auditoría Reportes — LOG-1): pasar 'mes' a getStatus. Antes
   // 'parciales' siempre reflejaba el mes operativo actual aunque se pidiera
   // cobranzaMes() de otro mes, dando datos inconsistentes con 'pagaron'
@@ -945,14 +1244,43 @@ RN.calc.generarSnapshot = function (mes) {
     clientesTotal: cob.total,
     clientesPagaron: cob.pagaron,
     clientesFaltan: cob.faltan,
-    tasaCobranza: cob.total ? +(cob.pagaron / cob.total * 100).toFixed(1) : 0
+    tasaCobranza: cob.total ? +(cob.pagaron / cob.total * 100).toFixed(1) : 0,
+    // v5.43.0: resumen de cierre para auditoría
+    resumenCierre: RN.calc.resumenCierre(mes)
+  };
+};
+
+/**
+ * v5.43.0: resumen automático del cierre de mes (se guarda en el snapshot):
+ * clientes en mora y monto de mora generada, mora cobrada en el mes, descuentos
+ * puntuales que se anularán y saldos de caja al cierre.
+ */
+RN.calc.resumenCierre = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  var enMora = RN.calc.clientesCobrables().filter(function (c) { return RN.calc.getMora(c) > 0; });
+  var moraGenerada = enMora.reduce(function (s, c) { return s + RN.calc.detalleMora(c).total; }, 0);
+  var moraCobrada = RN.state.history.filter(function (h) { return h.mes === mes; })
+    .reduce(function (s, h) { return s + (h.montoMoraCobrada || 0); }, 0);
+  var anulados = (RN.descuentos && RN.descuentos.esPuntualDeMes)
+    ? RN.state.descuentos.filter(function (d) { return RN.descuentos.esPuntualDeMes(d, mes); }).length : 0;
+  var sm = RN.calc.saldosMoneda();
+  return {
+    clientesEnMora: enMora.length,
+    clientesEnMoraNombres: enMora.map(function (c) { return c.nombre; }),
+    moraGenerada: +moraGenerada.toFixed(2),
+    moraCobrada: +moraCobrada.toFixed(2),
+    descuentosAnulados: anulados,
+    saldoCajaCUP: sm.cup,
+    saldoCajaUSD: sm.usd,
+    saldoCajaTotal: sm.totalCUP,
+    tasaUsd: sm.tasa
   };
 };
 
 /** Ingreso mensual esperado (suma de precios netos de todos los activos). */
 RN.calc.ingresoEsperadoMes = function (mes) {
   mes = mes || RN.calc.mesActualStr();
-  return RN.calc.clientesActivos().reduce((s, c) => s + RN.calc.getPrecioNeto(c, mes), 0);
+  return RN.calc.clientesActivos().reduce((s, c) => s + RN.calc.netoEsperadoMes(c, mes), 0);
 };
 
 /** Datos para tendencia: ingresos por mes de los últimos N meses. */
@@ -1002,7 +1330,7 @@ RN.calc.prediccionIngresos = function () {
 // v5.13.9 (DUP-1): Helper para obtener el total de un cobro del historial.
 // Centraliza el patron repetido ~8 veces: h.totalCUP || (h.monto + h.montoEquipo)
 RN.calc.totalCobro = function (h) {
-  return h.totalCUP || ((h.monto || 0) + (h.montoEquipo || 0));
+  return h.totalCUP || RN.calc.ingresoCobro(h);
 };
 
 // v5.13.9 (DUP-3): Helper para buscar un cliente por ID.

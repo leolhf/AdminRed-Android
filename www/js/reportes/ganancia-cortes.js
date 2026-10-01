@@ -169,7 +169,7 @@ RN.gananciaCortes._resumenReal = function (mes) {
     var cli = RN.calc.clientePorId(h.clienteId);
     var dp = (cli && cli.diaPago) ? cli.diaPago : 0;
     if (!map[dp]) map[dp] = { cobrado: 0, clientes: {} };
-    map[dp].cobrado += (h.monto || 0) + (h.montoEquipo || 0);
+    map[dp].cobrado += RN.calc.ingresoCobro(h);
     if (cli) map[dp].clientes[cli.id] = true;
   });
   // Megas por corte (de los clientes que pagaron), una sola vez por cliente.
@@ -218,10 +218,11 @@ RN.gananciaCortes._resumenReal = function (mes) {
 
 /**
  * Desglose de los ingresos REALES del mes por concepto y por corte.
- * - servicio: h.monto (solo servicio, incluye mora cobrada)
+ * - servicio: h.monto (solo servicio del mes)
  * - equipo:   h.montoEquipo (pagos de deuda de equipo)
  * - inventario: ventas de inventario (h.tipo === 'venta-inventario')
- * - mora:     subconjunto de servicio (h.montoMora), informativo
+ * - mora:     h.montoMoraCobrada (v5.43.0): mora de meses anteriores cobrada;
+ *             es un concepto APARTE (ya no está dentro de servicio)
  */
 RN.ingresosMes._desglose = function (mes) {
   var servicio = 0, equipo = 0, inventario = 0, mora = 0, total = 0;
@@ -230,17 +231,18 @@ RN.ingresosMes._desglose = function (mes) {
     var monto = h.monto || 0;
     var montoEq = h.montoEquipo || 0;
     var esInv = h.tipo === 'venta-inventario' || h.ventaInventario;
-    var t = monto + montoEq;
+    var montoMora = h.montoMoraCobrada || 0;
+    var t = monto + montoEq + montoMora;
     total += t;
     if (esInv) { inventario += monto; }
-    else { servicio += monto; equipo += montoEq; mora += (h.montoMora || 0); }
+    else { servicio += monto; equipo += montoEq; mora += montoMora; }
 
     var cli = RN.calc.clientePorId(h.clienteId);
     var dp = (cli && cli.diaPago) ? cli.diaPago : 0;
-    if (!porCorte[dp]) porCorte[dp] = { servicio: 0, equipo: 0, inventario: 0, total: 0, clientes: {} };
+    if (!porCorte[dp]) porCorte[dp] = { servicio: 0, equipo: 0, inventario: 0, mora: 0, total: 0, clientes: {} };
     porCorte[dp].total += t;
     if (esInv) { porCorte[dp].inventario += monto; }
-    else { porCorte[dp].servicio += monto; porCorte[dp].equipo += montoEq; }
+    else { porCorte[dp].servicio += monto; porCorte[dp].equipo += montoEq; porCorte[dp].mora += montoMora; }
     if (cli) porCorte[dp].clientes[cli.id] = true;
   });
   return {
@@ -272,6 +274,7 @@ RN.ingresosMes.abrir = function () {
     var detalle = [];
     if (g.servicio > 0) detalle.push('servicio ' + RN.calc.formatCUP(g.servicio));
     if (g.equipo > 0) detalle.push('equipo ' + RN.calc.formatCUP(g.equipo));
+    if (g.mora > 0) detalle.push('mora ' + RN.calc.formatCUP(g.mora));
     if (g.inventario > 0) detalle.push('inventario ' + RN.calc.formatCUP(g.inventario));
     return '<div class="acc-row" style="border-bottom:1px solid var(--border);padding:8px 0">' +
       '<span class="acc-label"><strong>' + titulo + '</strong>' +
@@ -289,15 +292,16 @@ RN.ingresosMes.abrir = function () {
       '<div class="kpi green" style="margin-bottom:12px">' +
         '<div class="label">Ingresos del mes</div>' +
         '<div class="value">' + RN.calc.formatCUP(d.total) + '</div>' +
-        '<div class="sub">' + RN.render.subUSD(d.total, 'Cobros de servicio + equipo + inventario') + '</div>' +
+        '<div class="sub">' + RN.render.subUSD(d.total, 'Servicio + mora + equipo + inventario') + '</div>' +
       '</div>' +
       '<div class="kpi-grid" style="margin-bottom:12px">' +
         '<div class="kpi green"><div class="label">Servicio</div><div class="value" style="font-size:18px">' + RN.calc.formatCUP(d.servicio) + '</div><div class="sub">Cuotas de internet cobradas</div></div>' +
         '<div class="kpi blue"><div class="label">Equipo</div><div class="value" style="font-size:18px">' + RN.calc.formatCUP(d.equipo) + '</div><div class="sub">Pagos de deuda de equipo</div></div>' +
+        (d.mora > 0 ? '<div class="kpi red"><div class="label">Mora</div><div class="value" style="font-size:18px">' + RN.calc.formatCUP(d.mora) + '</div><div class="sub">Meses atrasados cobrados</div></div>' : '') +
         '<div class="kpi amber"><div class="label">Inventario</div><div class="value" style="font-size:18px">' + RN.calc.formatCUP(d.inventario) + '</div><div class="sub">Ventas de inventario</div></div>' +
       '</div>' +
       (d.mora > 0
-        ? '<p class="muted" style="font-size:12px;margin-bottom:12px">El servicio incluye <strong>' + RN.calc.formatCUP(d.mora) + '</strong> de mora de meses anteriores.</p>'
+        ? '<p class="muted" style="font-size:12px;margin-bottom:12px">Incluye <strong>' + RN.calc.formatCUP(d.mora) + '</strong> cobrados de mora de meses anteriores.</p>'
         : '') +
       '<h4 style="margin:4px 0 8px">Desglose por corte</h4>' +
       (secciones || '<div class="acc-empty"><div class="icon">💵</div>Sin ingresos registrados este mes todavía.</div>') +
@@ -394,7 +398,7 @@ RN.gananciaCortes.abrirProyectada = function () {
         'Por eso el primer corte puede cubrir todo el paquete y los siguientes son ganancia directa.' +
       '</p>' +
       (sinCosto
-        ? '<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);font-size:12px;color:#e6a700">' +
+        ? '<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);font-size:12px;color:var(--warn)">' +
             '⚠️ No hay precio de proveedor por mega configurado: el costo del paquete se asume 0 y la ganancia está <strong>inflada</strong>. Configúralo en 📡 Gestionar servicio.' +
           '</div>'
         : '') +
@@ -469,6 +473,7 @@ RN.utilidadMes.abrir = function () {
       '<h4 style="margin:4px 0 8px">Ingresos por concepto</h4>' +
       '<div class="table-wrap" style="margin-bottom:16px"><table><tbody>' +
         '<tr><td>Servicio</td><td style="text-align:right">' + RN.calc.formatCUP(d.servicio) + '</td></tr>' +
+        (d.mora > 0 ? '<tr><td>Mora (meses atrasados)</td><td style="text-align:right">' + RN.calc.formatCUP(d.mora) + '</td></tr>' : '') +
         '<tr><td>Equipo</td><td style="text-align:right">' + RN.calc.formatCUP(d.equipo) + '</td></tr>' +
         '<tr><td>Inventario</td><td style="text-align:right">' + RN.calc.formatCUP(d.inventario) + '</td></tr>' +
         '<tr style="border-top:2px solid var(--border)"><td><strong>Total ingresos</strong></td><td style="text-align:right"><strong>' + RN.calc.formatCUP(ingresos) + '</strong></td></tr>' +
@@ -570,7 +575,7 @@ RN.gananciaCortes.abrirReal = function () {
         'Por eso el primer corte puede cubrir todo el paquete y los siguientes son ganancia directa.' +
       '</p>' +
       (sinCosto
-        ? '<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);font-size:12px;color:#e6a700">' +
+        ? '<div style="margin-top:10px;padding:10px 12px;border-radius:8px;background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.35);font-size:12px;color:var(--warn)">' +
             '⚠️ No hay precio de proveedor por mega configurado: el costo del paquete se asume 0 y la ganancia está <strong>inflada</strong>. Configúralo en 📡 Gestionar servicio.' +
           '</div>'
         : '') +

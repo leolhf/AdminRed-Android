@@ -40,7 +40,7 @@ RN.mora.abrir = function () {
       // v5.13.8 (LOG-3): total incluye mora (deudaTotalCliente)
       var total = r.totalDeuda;
       var tel = c.telefono ? RN.render.esc(c.telefono) : '<span class="muted">—</span>';
-      var moraDeuda = mora > 0 ? neto * mora : 0;
+      var moraDeuda = r.moraMonto;
       var totalTxt = RN.calc.formatCUP(total) + (moraDeuda > 0 ? ' <span class="pill" style="background:var(--danger);color:#fff">+' + mora + ' mes' + (mora !== 1 ? 'es' : '') + ' mora ' + RN.calc.formatCUP(moraDeuda) + '</span>' : '') + (cuotaEq > 0 ? ' <span class="pill">+equipo ' + RN.calc.formatCUP(cuotaEq) + '</span>' : '');
       // v5.13.8 (BUG-6): escAttr en IDs de onclick
       var cid = RN.render.escAttr(c.id);

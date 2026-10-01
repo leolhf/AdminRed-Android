@@ -767,3 +767,71 @@ tr:hover td { background: rgba(59,130,246,.07); }
 .kpi-stack > .kpi-group-title { display: block; width: 100%; margin: 4px 0 10px; }
 .kpi-stack > .kpi-group-title:not(:first-child) { margin-top: 18px; }
 .kpi-stack > .kpi-grid { margin-bottom: 0; }
+
+
+/* ============================================================
+   v5.44.0 — Lote 3: accesibilidad y componentes nuevos de interfaz
+   ============================================================ */
+
+/* Contraste WCAG AA (>= 4.5:1) de los badges en tema claro */
+[data-theme="light"] .badge.ok { color: #166534; }
+[data-theme="light"] .badge.warn,
+[data-theme="light"] .badge.parcial { color: #92400E; }
+[data-theme="light"] .badge.due { color: #B91C1C; }
+[data-theme="light"] .badge.paid { color: #1D4ED8; }
+
+/* Áreas táctiles >= 44px en los botones críticos (Cobrar, Guardar, Cuadrar...) */
+.btn.primary, .btn.danger, .btn.success, .modal-footer .btn,
+.atencion-cli .btn, .caja-real + .muted + .flex .btn, #panel-caja-real .btn {
+  min-height: 44px;
+}
+.icon-btn { min-width: 44px; min-height: 44px; }
+.fab { width: 56px; height: 56px; }
+.input-grande { font-size: 20px; min-height: 48px; font-weight: 700; }
+.chip { min-height: 44px; }
+
+/* Indicador de ubicación */
+.breadcrumb {
+  padding: 4px 14px; font-size: 12px; color: var(--text-muted);
+  border-bottom: 1px solid var(--border);
+}
+
+/* Chips de filtro del panel */
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px;
+  border-radius: 999px; border: 1px solid var(--border); background: var(--surface-2);
+  color: var(--text); font-size: 13px; font-weight: 600; cursor: pointer;
+}
+.chip.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+.chip .chip-n {
+  background: rgba(148,163,184,.25); border-radius: 999px; padding: 0 7px;
+  font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.chip.active .chip-n { background: rgba(255,255,255,.25); }
+
+/* Lista de clientes que requieren atención */
+.atencion-cli {
+  display: flex; align-items: center; gap: 10px; padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+.atencion-cli:last-child { border-bottom: none; }
+.atencion-cli-info { flex: 1; min-width: 0; }
+.atencion-cli-monto { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+/* Tarjeta "Caja ahora" */
+.caja-real { display: flex; gap: 12px; flex-wrap: wrap; }
+.caja-real-saldo {
+  flex: 1; min-width: 130px; display: flex; flex-direction: column; gap: 2px;
+  padding: 10px 12px; border-radius: var(--radius-sm); background: var(--surface-2);
+}
+.caja-real-saldo strong { font-size: 22px; font-variant-numeric: tabular-nums; }
+
+/* Respeta "reducir movimiento": sin animaciones ni transiciones */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important; animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important; scroll-behavior: auto !important;
+  }
+  .fab-tasa-urgente { animation: none; }
+}

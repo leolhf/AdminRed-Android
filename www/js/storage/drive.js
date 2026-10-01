@@ -64,6 +64,7 @@ Object.defineProperty(RN.drive, 'APPS_SCRIPT_TOKEN', { configurable: true, get: 
 
 RN.drive.KEY_ACTIVO = 'rn_drive_activo'; // '1' si la sincronización está activada
 RN.drive.KEY_ULT_SINCRO = 'rn_drive_ultima_sincro'; // fechaISO que hay en la nube
+RN.drive.KEY_CUENTA = 'rn_drive_cuenta'; // correo real dueño del Apps Script (lo informa el script)
 RN.drive.KEY_ULT_CAMBIO = 'rn_ultimo_cambio_local'; // fechaISO del último cambio local
 RN.drive.DEBOUNCE_MS = 15000; // sube como máx. 1 vez cada 15 s tras un cambio
 
@@ -72,11 +73,19 @@ RN.drive._pendiente = false;
 RN.drive._ultimoError = null;
 RN.drive._datosRemotosPendientes = null; // paquete {fechaISO, data} en conflicto, a la espera de resolución
 RN.drive._conflictoAbierto = false; // evita subir por encima de un conflicto sin resolver
+RN.drive._subidaBloqueada = false; // conflicto pospuesto ("Decidir después"): no auto-subir hasta resolverlo
 
 /** ¿Sincronización activada en este equipo? */
 RN.drive.cuenta = function () {
-  try { return localStorage.getItem(RN.drive.KEY_ACTIVO) === '1' ? 'Google Drive (Apps Script)' : null; }
-  catch (e) { return null; }
+  try {
+    if (localStorage.getItem(RN.drive.KEY_ACTIVO) !== '1') return null;
+    return localStorage.getItem(RN.drive.KEY_CUENTA) || 'Google Drive (Apps Script)';
+  } catch (e) { return null; }
+};
+
+/** Guarda el correo que informa el Apps Script (Code.gs v2). Si no lo envía, no cambia nada. */
+RN.drive._guardarCuenta = function (data) {
+  try { if (data && data.cuenta) localStorage.setItem(RN.drive.KEY_CUENTA, String(data.cuenta)); } catch (e) {}
 };
 
 /** ¿Está configurada la URL/token? (evita subir a la URL placeholder por error). */
@@ -150,21 +159,36 @@ RN.drive._fetchJson = async function (url, opts) {
   return data;
 };
 
-/** Sube el respaldo. Lanza excepción con el mensaje de error si falla. */
-RN.drive._apiSubir = function (json) {
+/**
+ * Sube el respaldo. Lanza excepción si falla.
+ * fechaISO = versión nueva; base = versión de la nube que este equipo vio por
+ * última vez; forzar = sobrescribir aunque otro equipo haya cambiado la nube.
+ * Con Code.gs v2, si base no coincide responde { conflicto: true } y NO escribe.
+ */
+RN.drive._apiSubir = async function (json, fechaISO, base, forzar) {
   // Content-Type text/plain a propósito: evita el preflight CORS (OPTIONS)
   // que Apps Script no maneja bien con application/json desde WebView/fetch.
-  return RN.drive._fetchJson(RN.drive.APPS_SCRIPT_URL, {
+  var data = await RN.drive._fetchJson(RN.drive.APPS_SCRIPT_URL, {
     method: 'POST',
     headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-    body: JSON.stringify({ token: RN.drive.APPS_SCRIPT_TOKEN, accion: 'subir', json: json })
-  }); // { ok: true, fechaRemota }
+    body: JSON.stringify({
+      token: RN.drive.APPS_SCRIPT_TOKEN, accion: 'subir', json: json,
+      fechaISO: fechaISO || '', base: base || '', forzar: !!forzar
+    })
+  });
+  RN.drive._guardarCuenta(data);
+  return data; // { ok, version, fechaRemota, cuenta } o { conflicto: true, ... }
 };
 
-/** Lee el respaldo remoto. Lanza excepción con el mensaje de error si falla. */
-RN.drive._apiLeer = function () {
-  var url = RN.drive.APPS_SCRIPT_URL + '?token=' + encodeURIComponent(RN.drive.APPS_SCRIPT_TOKEN) + '&accion=leer';
-  return RN.drive._fetchJson(url, { method: 'GET' }); // { json, fechaRemota } o { json: null }
+/** Lee el respaldo remoto por POST (así el token no viaja en la URL). */
+RN.drive._apiLeer = async function () {
+  var data = await RN.drive._fetchJson(RN.drive.APPS_SCRIPT_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify({ token: RN.drive.APPS_SCRIPT_TOKEN, accion: 'leer' })
+  });
+  RN.drive._guardarCuenta(data);
+  return data; // { json, fechaRemota, cuenta } o { json: null }
 };
 
 /**
@@ -225,6 +249,8 @@ RN.drive._guardarCredenciales = function () {
   try {
     localStorage.setItem(RN.drive.KEY_URL, url);
     if (token) localStorage.setItem(RN.drive.KEY_TOKEN, token);
+    localStorage.removeItem(RN.drive.KEY_CUENTA); // otra URL puede ser otra cuenta: se vuelve a leer
+    localStorage.removeItem(RN.drive.KEY_ULT_SINCRO); // y otra copia en la nube: no arrastrar la versión vista
   } catch (e) {
     RN.notifyUI.toast('No se pudieron guardar las credenciales', 'error');
     return;
@@ -245,6 +271,8 @@ RN.drive._borrarCredenciales = function () {
     localStorage.removeItem(RN.drive.KEY_URL);
     localStorage.removeItem(RN.drive.KEY_TOKEN);
     localStorage.removeItem(RN.drive.KEY_ACTIVO);
+    localStorage.removeItem(RN.drive.KEY_CUENTA);
+    localStorage.removeItem(RN.drive.KEY_ULT_SINCRO);
   } catch (e) {}
   RN.uiComponents.cerrarModal();
   RN.notifyUI.toast('Credenciales borradas de este dispositivo', 'success');
@@ -287,7 +315,7 @@ RN.drive.onChange = function () {
   if (!RN.drive.cuenta()) return;
   // Si hay un conflicto sin resolver en pantalla, no auto-subir por encima:
   // podría pisar la decisión pendiente del usuario.
-  if (RN.drive._conflictoAbierto) return;
+  if (RN.drive._conflictoAbierto || RN.drive._subidaBloqueada) return;
   RN.drive._pendiente = true;
   if (RN.drive._timer) return; // debounce: ya hay una subida programada
   RN.drive._timer = setTimeout(function () {
@@ -297,7 +325,7 @@ RN.drive.onChange = function () {
 };
 
 /** Sube el estado local a la nube. silencioso=true no avisa si no hay cuenta. */
-RN.drive.subirAutomatica = async function (silencioso) {
+RN.drive.subirAutomatica = async function (silencioso, forzar) {
   var activo = RN.drive.cuenta();
   if (!activo || !RN.drive._configurado()) {
     if (!silencioso) RN.notifyUI.toast('Activa primero la copia en Google Drive', 'warn');
@@ -307,7 +335,18 @@ RN.drive.subirAutomatica = async function (silencioso) {
   try {
     var sobre = RN.drive._sobre();
     var fechaISO = (JSON.parse(sobre)).fechaISO;
-    await RN.drive._apiSubir(sobre);
+    var base = localStorage.getItem(RN.drive.KEY_ULT_SINCRO) || '';
+    var res = await RN.drive._apiSubir(sobre, fechaISO, base, forzar);
+    if (res && res.conflicto) {
+      // Otro equipo cambió la copia en Drive desde la última vez que la vimos:
+      // NO se sobrescribe. Se muestra la comparación para que el usuario decida.
+      RN.drive._pendiente = true;
+      RN.drive._ultimoError = null;
+      RN.drive._refrescarUI();
+      if (!silencioso) RN.notifyUI.toast('Otro equipo modificó la copia en Drive. Revisa las diferencias antes de subir.', 'warn', 7000);
+      RN.drive.compararAlArrancar(false).catch(function () {});
+      return false;
+    }
     localStorage.setItem(RN.drive.KEY_ULT_SINCRO, fechaISO);
     RN.drive._pendiente = false;
     RN.drive._ultimoError = null;
@@ -329,6 +368,7 @@ RN.drive.subirAutomatica = async function (silencioso) {
 /** Botón "Sincronizar ahora" de Ajustes. */
 RN.drive.sincronizarAhora = function () {
   if (!RN.drive.cuenta()) { RN.drive.conectar(); return; }
+  RN.drive._subidaBloqueada = false; // acción explícita del usuario
   RN.notifyUI.toast('Subiendo copia a Drive…', 'info');
   return RN.drive.subirAutomatica(false); // ya avisa del resultado (éxito o error)
 };
@@ -347,12 +387,12 @@ RN.drive.compararAhora = function () {
 RN.drive.init = function () {
   // Reintento cuando vuelva la red (subida pendiente por estar offline).
   window.addEventListener('online', function () {
-    if (RN.drive._pendiente && !RN.drive._conflictoAbierto) RN.drive.subirAutomatica(true);
+    if (RN.drive._pendiente && !RN.drive._conflictoAbierto && !RN.drive._subidaBloqueada) RN.drive.subirAutomatica(true);
   });
   // Reintento periódico — si una subida falla (red intermitente, error del
   // script) queda pendiente para siempre si solo dependiéramos de 'online'.
   setInterval(function () {
-    if (RN.drive._pendiente && RN.drive.cuenta() && !RN.drive._conflictoAbierto) {
+    if (RN.drive._pendiente && RN.drive.cuenta() && !RN.drive._conflictoAbierto && !RN.drive._subidaBloqueada) {
       RN.drive.subirAutomatica(true);
     }
   }, 5 * 60 * 1000);
@@ -588,6 +628,8 @@ RN.drive._diffCampos = function (l, d) {
 RN.drive._cerrarConflictoSinResolver = function () {
   RN.uiComponents.cerrarModal();
   RN.drive._conflictoAbierto = false;
+  RN.drive._subidaBloqueada = true; // sin esto, la siguiente subida volvería a abrir el conflicto en cada cambio
+  RN.drive._refrescarUI();
 };
 
 RN.drive._confirmarReemplazarLocal = function () {
@@ -626,6 +668,8 @@ RN.drive._reemplazarLocal = function () {
   localStorage.setItem(RN.drive.KEY_ULT_CAMBIO, fecha);
   RN.drive._datosRemotosPendientes = null;
   RN.drive._conflictoAbierto = false;
+  RN.drive._subidaBloqueada = false;
+  RN.drive._pendiente = false;
   RN.uiComponents.cerrarModal();
   RN.notifyUI.toast('✅ Datos reemplazados con la versión de Google Drive', 'success');
   setTimeout(function () { location.reload(); }, 800);
@@ -635,8 +679,9 @@ RN.drive._reemplazarLocal = function () {
 RN.drive._sobrescribirDrive = async function () {
   RN.drive._datosRemotosPendientes = null;
   RN.drive._conflictoAbierto = false;
+  RN.drive._subidaBloqueada = false;
   RN.uiComponents.cerrarModal();
-  await RN.drive.subirAutomatica(false);
+  await RN.drive.subirAutomatica(false, true); // forzar: el usuario decidió pisar la nube
 };
 
 /** Fusiona Drive + local sección por sección (unión por id; empata gana Drive). */
@@ -667,9 +712,12 @@ RN.drive._fusionar = async function () {
   merged.reciboCounter = Math.max(local.reciboCounter || 0, remoto.reciboCounter || 0);
   merged.mesActual = local.mesActual || remoto.mesActual;
 
+  // Al fusionar ya hemos visto la versión de la nube: la subida posterior parte de ella.
+  if (paquete.fechaISO) { try { localStorage.setItem(RN.drive.KEY_ULT_SINCRO, paquete.fechaISO); } catch (e) {} }
   RN.drive._aplicarDatos(merged);
   RN.drive._datosRemotosPendientes = null;
   RN.drive._conflictoAbierto = false;
+  RN.drive._subidaBloqueada = false;
   RN.uiComponents.cerrarModal();
 
   RN.notifyUI.toast('🔀 Fusionando y guardando en Drive…', 'info');
@@ -723,6 +771,10 @@ RN.drive.compararAlArrancar = async function (manual) {
     var diff = RN.drive._diff(datosLocales, paquete.data);
 
     if (!diff.hasDiff) {
+      // Local y nube coinciden: esta es ahora la versión "vista" (base de las próximas subidas).
+      if (paquete.fechaISO) { try { localStorage.setItem(RN.drive.KEY_ULT_SINCRO, paquete.fechaISO); } catch (e) {} }
+      RN.drive._pendiente = false;
+      RN.drive._subidaBloqueada = false;
       RN.notifyUI.toast('☁️ Copia de Google Drive al día (' + RN.drive._fechaCorta(paquete.fechaISO) + ')', 'info');
       RN.drive._refrescarUI();
       return true;
@@ -745,7 +797,7 @@ RN.drive.compararAlArrancar = async function (manual) {
 RN.drive._aplicarDatos = function (data) {
   var d = RN.migration.migrar(data);
   RN.state.clients = d.clients || [];
-  RN.state.history = d.history || [];
+  RN.state.history = d.history || []; if (RN.calc && RN.calc.invalidarIndicePagos) RN.calc.invalidarIndicePagos();
   RN.state.gastos = d.gastos || [];
   RN.state.depositos = d.depositos || [];
   RN.state.retiros = d.retiros || [];
@@ -782,9 +834,10 @@ RN.drive.estado = function () {
   if (!RN.drive._configurado()) return 'Sin configurar: pulsa "🔑 Configurar URL y token" e introduce los datos de tu Web App de Apps Script.';
   if (!c) return 'Copia en Drive desactivada — la copia solo se guarda en este teléfono.';
   var ult = localStorage.getItem(RN.drive.KEY_ULT_SINCRO);
-  var txt = 'Activa (' + c + ') · Última copia: ' + (ult ? RN.drive._fechaCorta(ult) : 'pendiente');
+  var txt = (c.indexOf('@') !== -1 ? 'Cuenta: ' + c : 'Activa (' + c + ')') + ' · Última copia: ' + (ult ? RN.drive._fechaCorta(ult) : 'pendiente');
   if (RN.drive._conflictoAbierto) txt += ' · ⚠️ hay diferencias sin resolver con Drive';
-  if (RN.drive._pendiente) txt += ' · ⏳ copia pendiente de subir';
+  if (RN.drive._subidaBloqueada) txt += ' · ⏸️ subida en pausa: pulsa "Comparar con la nube"';
+  else if (RN.drive._pendiente) txt += ' · ⏳ copia pendiente de subir';
   if (RN.drive._ultimoError) txt += ' · ⚠️ ' + RN.drive._ultimoError;
   return txt;
 };

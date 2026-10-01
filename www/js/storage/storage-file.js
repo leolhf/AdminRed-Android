@@ -178,7 +178,7 @@ RN.storageFile._mostrarBannerPermiso = function (nombreArchivo) {
   var banner = document.createElement('div');
   banner.id = 'banner-permiso-archivo';
   banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:9999;' +
-    'background:linear-gradient(135deg,#2563eb,#1e40af);color:#fff;' +
+    'background:linear-gradient(135deg,var(--primary),var(--primary-hover));color:#fff;' +
     'padding:12px 16px;display:flex;align-items:center;gap:12px;' +
     'box-shadow:0 2px 8px rgba(0,0,0,0.3);font-size:14px;cursor:pointer;' +
     'animation:slideDown 0.3s ease';

@@ -64,7 +64,7 @@ RN.whatsapp.enviarComprobante = function (cobroId) {
   const c = RN.state.clients.find(x => x.id === h.clienteId);
   if (!c || !c.telefono) { RN.notifyUI.toast('El cliente no tiene teléfono', 'warn'); return; }
   const tpls = RN.waTemplates.cargar();
-  const total = (h.monto || 0) + (h.montoEquipo || 0);
+  const total = RN.calc.ingresoCobro(h);
   const ctx = {
     nombre: c.nombre,
     precioNeto: RN.calc.formatCUP(total),

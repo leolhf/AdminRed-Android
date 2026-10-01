@@ -716,7 +716,7 @@ RN.inversion._htmlDetalleRecuperacion = function (inv, opts) {
     var _recuperadoEfectivo = RN.investment.recuperadoEfectivo(inv);
     var _pctEfectivo = inv.monto ? Math.round(_recuperadoEfectivo / inv.monto * 100) : 0;
     _html += '<div class="acc-row"><span class="acc-label">Ingreso bruto de clientes</span><span class="acc-value">' + RN.calc.formatCUP(_totalAporteBruto) + '</span></div>'
-      + '<div class="acc-row"><span class="acc-label">Margen neto (− costo del mega)</span><span class="acc-value">' + (_totalMargenNeto >= 0 ? '' : '<span style="color:#c62828">') + RN.calc.formatCUP(_totalMargenNeto) + (_totalMargenNeto >= 0 ? '' : '</span>') + '</span></div>'
+      + '<div class="acc-row"><span class="acc-label">Margen neto (− costo del mega)</span><span class="acc-value">' + (_totalMargenNeto >= 0 ? '' : '<span style="color:var(--danger)">') + RN.calc.formatCUP(_totalMargenNeto) + (_totalMargenNeto >= 0 ? '' : '</span>') + '</span></div>'
       + (_acumRetenido && pctPersonal > 0 ? '<div class="acc-row"><span class="acc-label">Ganancia personal retenida acumulada (' + pctPersonal + '%)</span><span class="acc-value">' + RN.calc.formatCUP(_acumRetenido) + '</span></div>' : '')
       + '<div class="acc-row"><span class="acc-label">Margen neto mensual (bruto)</span><span class="acc-value">' + RN.calc.formatCUP(_margenMes) + '</span></div>'
       + (pctPersonal > 0 ? '<div class="acc-row"><span class="acc-label">Disponible para retirar/mes (' + pctPersonal + '% del margen)</span><span class="acc-value"><strong style="color:var(--green)">' + RN.calc.formatCUP(_retiroMes) + '</strong></span></div>' : '')
@@ -738,7 +738,7 @@ RN.inversion._htmlDetalleRecuperacion = function (inv, opts) {
       _aportes.forEach(function (a) {
         var _nom = a.cliente ? RN.render.esc(a.cliente.nombre) : '<span class="muted">— eliminado —</span>';
         var _pctCli = inv.monto ? Math.round(a.recuperacion / inv.monto * 100) : 0;
-        var _signoMargen = a.margenNeto >= 0 ? '' : '<span style="color:#c62828">';
+        var _signoMargen = a.margenNeto >= 0 ? '' : '<span style="color:var(--danger)">';
         var _cierreSigno = a.margenNeto >= 0 ? '' : '</span>';
         _html += '<div class="acc-row"><span class="acc-label">' + _nom + '<br><span class="muted" style="font-size:11px">Bruto: ' + RN.calc.formatCUP(a.aporte) + ' · Margen neto: ' + _signoMargen + RN.calc.formatCUP(a.margenNeto) + _cierreSigno + '</span></span><span class="acc-value"><strong>' + RN.calc.formatCUP(a.recuperacion) + '</strong> <span class="muted" style="font-size:11px">(' + _pctCli + '%)</span></span></div>';
       });

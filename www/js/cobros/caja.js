@@ -175,6 +175,7 @@ RN.caja.guardarDeposito = function () {
     montoOriginal: datos.montoUSD,   // USD físico depositado (0 si no aplica)
     montoCUPDirecto: datos.montoCUP, // CUP directo depositado
     tasaUsada: datos.tasaUsd,
+    tasaAlMomento: datos.tasaUsd,
     fecha: fechaISO,
     mes: mes
   });
@@ -362,8 +363,8 @@ RN.caja._confirmarConversion = function () {
       return;
     }
     var montoCUP = +(monto * tasa).toFixed(2);
-    RN.state.retiros.push({ id: RN.calc.uid('retiro'), concepto: '🔁 Cambio USD→CUP', monto: montoCUP, moneda: 'USD', montoOriginal: monto, montoCUPDirecto: 0, tasaUsada: tasa, fecha: fechaISO, mes: mes });
-    RN.state.depositos.push({ id: RN.calc.uid('deposito'), concepto: '🔁 Cambio USD→CUP', monto: montoCUP, moneda: 'CUP', montoOriginal: 0, montoCUPDirecto: montoCUP, tasaUsada: tasa, fecha: fechaISO, mes: mes });
+    RN.state.retiros.push({ id: RN.calc.uid('retiro'), concepto: '🔁 Cambio USD→CUP', monto: montoCUP, moneda: 'USD', montoOriginal: monto, montoCUPDirecto: 0, tasaUsada: tasa, tasaAlMomento: tasa, fecha: fechaISO, mes: mes });
+    RN.state.depositos.push({ id: RN.calc.uid('deposito'), concepto: '🔁 Cambio USD→CUP', monto: montoCUP, moneda: 'CUP', montoOriginal: 0, montoCUPDirecto: montoCUP, tasaUsada: tasa, tasaAlMomento: tasa, fecha: fechaISO, mes: mes });
     RN.notifyUI.toast('Convertidos $' + monto.toFixed(2) + ' USD a ' + RN.calc.formatCUP(montoCUP), 'success');
   } else {
     if (monto > RN.calc.cupEnCaja() + 0.01) {
@@ -371,14 +372,29 @@ RN.caja._confirmarConversion = function () {
       return;
     }
     var montoUSD = +(monto / tasa).toFixed(2);
-    RN.state.retiros.push({ id: RN.calc.uid('retiro'), concepto: '🔁 Cambio CUP→USD', monto: monto, moneda: 'CUP', montoOriginal: 0, montoCUPDirecto: monto, tasaUsada: tasa, fecha: fechaISO, mes: mes });
-    RN.state.depositos.push({ id: RN.calc.uid('deposito'), concepto: '🔁 Cambio CUP→USD', monto: monto, moneda: 'USD', montoOriginal: montoUSD, montoCUPDirecto: 0, tasaUsada: tasa, fecha: fechaISO, mes: mes });
+    RN.state.retiros.push({ id: RN.calc.uid('retiro'), concepto: '🔁 Cambio CUP→USD', monto: monto, moneda: 'CUP', montoOriginal: 0, montoCUPDirecto: monto, tasaUsada: tasa, tasaAlMomento: tasa, fecha: fechaISO, mes: mes });
+    RN.state.depositos.push({ id: RN.calc.uid('deposito'), concepto: '🔁 Cambio CUP→USD', monto: monto, moneda: 'USD', montoOriginal: montoUSD, montoCUPDirecto: 0, tasaUsada: tasa, tasaAlMomento: tasa, fecha: fechaISO, mes: mes });
     RN.notifyUI.toast('Convertidos ' + RN.calc.formatCUP(monto) + ' a $' + montoUSD.toFixed(2) + ' USD', 'success');
   }
 
   RN.storageLocal.guardar();
   RN.uiComponents.cerrarModal();
   RN.render.todo();
+};
+
+/**
+ * v5.43.0: convierte CUP → USD (retiro CUP + depósito USD por el mismo valor en CUP;
+ * el fondo total no cambia). Usado al ofrecer conversión cuando un retiro en USD
+ * supera los dólares físicos.
+ */
+RN.caja._convertirCUPaUSD = function (usd, tasa) {
+  var montoCUP = +(usd * tasa).toFixed(2);
+  var fechaISO = new Date().toISOString().slice(0, 10) + 'T00:00:00';
+  var mes = fechaISO.slice(0, 7);
+  RN.state.retiros = RN.state.retiros || [];
+  RN.state.depositos = RN.state.depositos || [];
+  RN.state.retiros.push({ id: RN.calc.uid('retiro'), concepto: '🔁 Cambio CUP→USD', monto: montoCUP, moneda: 'CUP', montoOriginal: 0, montoCUPDirecto: montoCUP, tasaUsada: tasa, tasaAlMomento: tasa, fecha: fechaISO, mes: mes });
+  RN.state.depositos.push({ id: RN.calc.uid('deposito'), concepto: '🔁 Cambio CUP→USD', monto: montoCUP, moneda: 'USD', montoOriginal: usd, montoCUPDirecto: 0, tasaUsada: tasa, tasaAlMomento: tasa, fecha: fechaISO, mes: mes });
 };
 
 /** Elimina un depósito del historial. */
@@ -427,7 +443,7 @@ RN.caja.extraer = function (monedaInicial) {
         <div class="label">Fondo de caja total</div>
         <div class="value">${fondoFormateado}</div>
         <div class="sub">${puedeRetirar ? 'Puedes retirar hasta ' + RN.calc.formatCUP(b.retirable) + ' (bolsillo libre)' : 'No hay bolsillo libre disponible'}</div>
-        <div class="sub" style="font-size:11px;margin-top:4px;color:#666">
+        <div class="sub" style="font-size:11px;margin-top:4px;color:var(--text-muted)">
           Saldo inicial: ${RN.calc.formatCUP(RN.state.config.fondoInicial || 0)} ·
           Ingresos: ${RN.calc.formatCUP(RN.calc.ingresosTotales())} ·
           Depósitos: ${RN.calc.formatCUP(RN.calc.totalDepositos())} ·
@@ -497,6 +513,11 @@ RN.caja._validarRetiroDerivado = function (montoCUP, retirable) {
   if (montoCUP <= 0) {
     aviso.innerHTML = '<span class="badge warn">Ingresa un monto válido mayor que 0</span>';
     if (btn) btn.disabled = true;
+  } else if (!chk.ok && chk.conversion) {
+    // v5.43.0: no hay suficientes dólares pero se puede convertir desde CUP (con confirmación)
+    aviso.innerHTML = '<span class="badge warn">💱 ' + chk.motivo + '. Al guardar se te ofrecerá convertir ' +
+      RN.calc.formatCUP(chk.conversion.cup) + ' a $' + chk.conversion.usd.toFixed(2) + ' USD.</span>' + avisoReserva;
+    if (btn) btn.disabled = false;
   } else if (!chk.ok) {
     aviso.innerHTML = '<span class="badge due">🚫 ' + chk.motivo + '</span>' + avisoReserva;
     if (btn) btn.disabled = true; // v5.30.0: bloquea — no hay billetes de esa moneda
@@ -518,8 +539,10 @@ RN.caja._validarRetiroDerivado = function (montoCUP, retirable) {
  * utilidad. Ahora los retiros viven aparte y se restan SOLO del bolsillo libre.
  * v5.20.0: admite CUP, USD o mixto.
  */
-RN.caja.guardar = function () {
-  var datos = RN.moneda.leerBloquePago('retiro', 0);
+RN.caja.guardar = function (pend) {
+  // v5.43.0: `pend` = retiro ya leído del formulario (se usa tras confirmar una conversión,
+  // cuando el modal ya no está en pantalla).
+  var datos = pend ? pend.datos : RN.moneda.leerBloquePago('retiro', 0);
   if (datos.totalRecibidoCUP <= 0) {
     RN.notifyUI.toast('El monto debe ser mayor que 0', 'error');
     return;
@@ -528,12 +551,26 @@ RN.caja.guardar = function () {
   // v5.30.0: bloqueo real por moneda — no se retiran billetes que no existen.
   var chkRet = RN.calc.validarMovimientoCaja(datos, 'retiro');
   if (!chkRet.ok) {
+    // v5.43.0: sin dólares suficientes pero con pesos → ofrecer convertir a la tasa actual
+    if (chkRet.conversion && !pend) {
+      var cv = chkRet.conversion;
+      var cptoP = (document.getElementById('retiro-concepto').value || '').trim() || 'Retiro de caja';
+      var fchP = document.getElementById('retiro-fecha').value || new Date().toISOString().slice(0, 10);
+      RN.uiComponents.confirm('Convertir CUP a USD',
+        chkRet.motivo + '. ¿Convertir ' + RN.calc.formatCUP(cv.cup) + ' a $' + cv.usd.toFixed(2) +
+        ' USD (tasa ' + cv.tasa + ') y registrar el retiro?',
+        function () {
+          RN.caja._convertirCUPaUSD(cv.usd, cv.tasa);
+          RN.caja.guardar({ datos: datos, concepto: cptoP, fecha: fchP });
+        });
+      return;
+    }
     RN.notifyUI.toast(chkRet.motivo, 'error');
     return;
   }
 
-  var concepto = document.getElementById('retiro-concepto').value.trim() || 'Retiro de caja';
-  var fecha = document.getElementById('retiro-fecha').value || new Date().toISOString().slice(0, 10);
+  var concepto = pend ? pend.concepto : (document.getElementById('retiro-concepto').value.trim() || 'Retiro de caja');
+  var fecha = pend ? pend.fecha : (document.getElementById('retiro-fecha').value || new Date().toISOString().slice(0, 10));
   // v5.13.5 (ISSUE #9): Construir fecha ISO sin conversión de timezone.
   // new Date('YYYY-MM-DD').toISOString() interpreta la fecha como medianoche
   // UTC, desplazándola un día atrás para usuarios en UTC-5 (Cuba).
@@ -549,6 +586,7 @@ RN.caja.guardar = function () {
     montoOriginal: datos.montoUSD,   // USD físico retirado
     montoCUPDirecto: datos.montoCUP,
     tasaUsada: datos.tasaUsd,
+    tasaAlMomento: datos.tasaUsd,
     fecha: fechaISO,
     mes: mes
   });

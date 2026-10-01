@@ -163,7 +163,7 @@ RN.validacion._actualizarPunto = function (sucio) {
     punto = document.createElement('span');
     punto.id = 'dirty-dot';
     punto.title = 'Tienes cambios sin guardar';
-    punto.style.cssText = 'display:none;width:10px;height:10px;border-radius:50%;background:#e53935;margin-left:8px;align-self:center;box-shadow:0 0 6px #e53935;animation:rnpulse 1.4s infinite;';
+    punto.style.cssText = 'display:none;width:10px;height:10px;border-radius:50%;background:var(--danger);margin-left:8px;align-self:center;box-shadow:0 0 6px var(--danger);animation:rnpulse 1.4s infinite;';
     header.appendChild(punto);
   }
   punto.style.display = sucio ? 'inline-block' : 'none';

@@ -102,8 +102,17 @@ debió pagar pero no pagó), excluyendo el mes actual (en curso):
 La **deuda total** del cliente combina mora de servicio + deuda de equipo:
 
 ```
-deudaTotal = precioNeto(mes) × (mora + 1) + deudaEquipo
+deudaTotal = precioNeto(mesActual) + Σ precioNeto(mesᵢ) [meses en mora] + deudaEquipo
 ```
+
+Desde v5.42.0 la mora se calcula **mes a mes** (`RN.calc.detalleMora(c)` →
+`{ meses: [{mes, neto}], total }`), no como `neto del mes actual × meses`, para
+que descuentos/bonificaciones de meses anteriores se respeten.
+
+**Neto congelado:** cada cobro guarda `precioNetoAplicado`. Si el mes se cerró
+con un cobro completo/excedente, `RN.calc.netoEsperadoMes(c, mes)` devuelve ese
+valor (editar el plan o el descuento recurrente después no altera lo cobrado);
+los cobros parciales y los antiguos sin el campo usan el neto vivo.
 
 Función centralizada: `RN.calc.deudaTotalCliente(cliente, mes)` (v5.13.1, Bug #4).
 Todas las vistas (mora, cobranza, render, calendario) deben usar esta función
@@ -404,3 +413,86 @@ revertir cambios de configuración que el usuario no intentaba deshacer
   (Bug #17, parte UI), panel de auditoría financiera (Mejora #2), este
   documento (Mejora #7), validación al importar (Mejora #8), tests ampliados
   (Mejora #1).
+
+
+## Mora cobrada como ingreso (v5.43.0)
+
+`h.monto` = servicio del mes; `h.montoEquipo` = equipo; `h.montoMoraCobrada` = mora de
+meses anteriores efectivamente cobrada. Ingreso del cobro = suma de los tres
+(`RN.calc.ingresoCobro`). `h.montoMora` se conserva como dato informativo de la deuda
+de mora al cobrar. `ingresosServicioMes` y `getStatus` NO incluyen la mora cobrada.
+Interruptor `config.incluirInactivosConDeuda` (default `false`): ver `clientesCobrables()`.
+
+
+## Índice de pagos (v5.43.1)
+
+`RN.calc.indexPagos()` → `{ porCliente: { [id]: { meses: { 'YYYY-MM': [cobros] }, ultimo } } }`
+solo con cobros `tipo === 'servicio'`. Helpers: `cobrosServicio(clienteId, mes)` y
+`ultimoMesPagado(clienteId)`. Se reconstruye al cambiar el historial; tras editar en sitio
+el mes/cliente de un cobro, llamar `RN.calc.invalidarIndicePagos()`.
+
+
+## Esquema de datos (v5.45.0)
+
+Referencia de las entidades guardadas en `RN.state` (esquema de migración `RN.migration.VERSION_ESQUEMA` = 10).
+**Oblig.** = siempre presente; **Opc.** = puede faltar (datos antiguos o no aplica).
+Los importes están en CUP salvo que el campo diga USD. Los meses son `YYYY-MM`.
+
+### Cliente (`RN.state.clients[]`)
+
+| Campo | Tipo | | Descripción |
+|---|---|---|---|
+| `id` | string | Oblig. | `uid('cli')` |
+| `nombre` | string | Oblig. | |
+| `telefono`, `direccion`, `ip` | string | Opc. | teléfono normalizado; IP para ordenar |
+| `planId` | string\|null | Oblig. | plan asignado; `null` = personalizado |
+| `precio` | number | Oblig. | precio mensual base (con plan, el del plan) |
+| `megas`, `precioMega` | number | Opc. | solo plan personalizado (con plan quedan en 0) |
+| `diaPago` | number 1-31 | Oblig. | día de corte |
+| `mesInicio` | `YYYY-MM` | Opc. | primer mes facturable (por defecto, mes de alta) |
+| `descuentoRecurrente` | number | Oblig. | descuento fijo mensual |
+| `deudaEquipo`, `deudaEquipoOriginal`, `cuotaEquipo` | number | Oblig. | deuda del equipo y cuota mensual |
+| `activo` | boolean | Oblig. | `false` = inactivo (ver `config.incluirInactivosConDeuda`) |
+| `createdAt` | ISO | Oblig. | |
+
+### Cobro (`RN.state.history[]`, `tipo: 'servicio'`)
+
+| Campo | Descripción |
+|---|---|
+| `id`, `clienteId`, `tipo`, `mes`, `fecha`, `reciboNum`, `notas` | Oblig. Identidad y fecha |
+| `monto` | Oblig. SOLO servicio del mes (nunca incluye equipo ni mora) |
+| `montoEquipo` | Oblig. SOLO equipo realmente pagado |
+| `montoMoraCobrada` | Opc. (v5.43.0) mora de meses anteriores cobrada: es ingreso real y entra a la caja |
+| `montoMora` | Opc. deuda de mora al cobrar (informativo); `mora` = nº de meses; `detalleMora` = `[{mes, neto}]` |
+| `precioNetoAplicado` | Opc. (v5.42.0) neto congelado al cobrar; lo usa `netoEsperadoMes` |
+| `totalCUP` | Oblig. servicio + mora cobrada + equipo (ingreso del cobro) |
+| `totalAPagar` | Oblig. lo que se debía pagar (neto + mora + equipo) |
+| `tipoPago` | Oblig. `completo` \| `parcial` \| `excedente`; `falta` / `excedente` = diferencias |
+| `moneda`, `montoPagadoUSD`, `montoPagadoCUP`, `montoPagadoCUPDesdeUSD`, `totalPagadoCUP`, `totalPagadoUSD`, `tasaUsd` | Oblig. pago en doble moneda y tasa usada |
+| `fondoAntes`, `fondoDespues` | Oblig. fondo de caja antes/después |
+| `descuentoRecurrente`, `descuentosPuntualesIds` | Oblig. descuentos aplicados |
+
+También hay entradas `tipo: 'venta-inventario'` (ventas de lotes; no cuentan como pago de servicio).
+
+### Gasto (`RN.state.gastos[]`)
+
+`id`, `concepto`, `monto` (total CUP), `categoria`, `fecha` (ISO `T00:00:00`), `mes`,
+`moneda` (`CUP`\|`USD`\|`MIXTO`), `montoPagadoUSD`, `montoPagadoCUP`, `tasaUsd`. Todos Oblig.
+Los ajustes de cuadre se guardan como gastos de categoría de cuadre.
+
+### Descuento / bonificación (`RN.state.descuentos[]`)
+
+| Campo | Descripción |
+|---|---|
+| `id`, `clienteId`, `fecha`, `estado` (`pendiente`\|`aplicado`\|`anulado`), `cobroHid` | Oblig. |
+| `tipo` | `descuento` \| `bonificacion` |
+| `modo` | `fijo` \| `porcentaje` \| `dias` (los días se prorratean sobre los días reales del mes) |
+| `valor`, `motivo`, `mes` | Oblig. |
+| `vigencia` | `meses` (con `durMeses`) \| `permanente` \| `unPago` (`soloPago`) |
+| `desde`, `durMeses`, `aplicaciones[]` | Oblig. (modelo de vigencia unificado, v5.14.4) |
+
+### Movimientos de caja (`RN.state.depositos[]`, `RN.state.retiros[]`)
+
+`id`, `concepto`, `monto` (total CUP), `moneda`, `montoOriginal` (USD), `montoCUPDirecto`,
+`tasaUsada`, `tasaAlMomento` (v5.43.0, tasa vigente cuando se hizo el movimiento), `fecha`, `mes`.
+Los cuadres usan además `cuadreMoneda`.

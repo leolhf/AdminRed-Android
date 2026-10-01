@@ -1,5 +1,49 @@
 # Changelog — AdminRed (RedNet)
 
+> Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
+
+## v5.45.0 — Lote 4: arquitectura y documentación
+
+- **`render.js` dividido** (1.256 → 261 líneas): las vistas pasan a `js/ui/views/` (`dashboard`, `clientes`, `cobros`, `realizados`, `finanzas`, `reportes`). Es un movimiento puro: el código no cambió (verificado comparando las 30 funciones de `RN.render` antes y después) y siguen colgando de `RN.render.*`. Registradas en `index.html` y en la precaché de `sw.js`.
+- **JSDoc:** tipos `Cliente`, `Cobro` y `ResumenCliente` y firmas documentadas en las funciones clave de `calculations.js`, `modal-cobro.js` y `cuadre.js`.
+- **MODELO.md:** nueva sección "Esquema de datos" (cliente, cobro, gasto, descuento y movimientos de caja, con campos obligatorios y opcionales).
+- **Changelog unificado:** los 36 `CHANGELOG_v*.md` pasaron a `docs/historial/` (con índice); `DEPENDENCIAS.md` y `README.md` actualizados.
+
+## v5.44.0 — Lote 3: interfaz y accesibilidad
+
+- **Panel:** nueva tarjeta "Caja ahora" (saldos físicos CUP y USD, total equivalente, botones "Cuadrar caja" y "Cobrar ahora"). En "Requiere tu atención": chips de filtro (Morosos, Por cobrar hoy, Parciales, Inactivos con deuda, con contador) y lista de clientes priorizada: mora más alta → vence hoy → vence mañana → parcial, con botón "Cobrar" (`RN.calc.clientesAtencion`).
+- **Búsqueda** en Clientes y Cobros: por nombre, dirección, IP, teléfono (solo dígitos), nombre del plan y `deuda>500` / `deuda>=500` / `deuda<100`; los términos se combinan (`ana hogar deuda>300`). `RN.calc.filtrarClientes`.
+- **Cuadre de caja:** teclado numérico decimal y campos grandes, botón "Usar saldo calculado" por moneda, el sobrante se muestra en azul (exacto verde, faltante rojo).
+- **Navegación:** indicador "Estás en: Operación → Cobros".
+- **Accesibilidad:** contraste WCAG AA en badges del tema claro, áreas táctiles ≥ 44 px en botones críticos, `prefers-reduced-motion` global.
+- 12 tests nuevos (184/184).
+
+## v5.43.1 — Lote 2: índice de pagos y tests en CI
+
+- **Índice de pagos por cliente** (`RN.calc.indexPagos()`): agrupa una sola vez los cobros de servicio por cliente y mes, y se reconstruye solo cuando cambia el historial (firma automática + `RN.calc.invalidarIndicePagos()` en los puntos que agregan cobros o cargan datos). Lo usan `getMora`, `getStatus`, `netoEsperadoMes` y `cobranzaMes`. Medición con 200 clientes y 9.000 cobros (20 pasadas de status+mora+cobranza): ~1.480 ms antes → ~150 ms ahora.
+  - Regla: si se edita EN SITIO el `mes` o el `clienteId` de un cobro existente, llamar a `RN.calc.invalidarIndicePagos()`.
+- **Tests en CI:** `tools/run-tests.js` ejecuta la suite en Node (`npm test`, sale con código 1 si falla) y el workflow `.github/workflows/tests.yml` lo corre en cada push/PR junto con la revisión de sintaxis y `sync-version.py --check`.
+- 11 tests nuevos del índice (172/172).
+
+## v5.43.0 — Lote 1: mora como ingreso, inactivos con deuda, caja y cierre de mes
+
+- **Mora cobrada = ingreso real y entra a la caja:** el cobro guarda `montoMoraCobrada` (completo/excedente: toda la mora; parcial: orden servicio → mora → equipo). `RN.calc.ingresoCobro()` suma servicio + equipo + mora cobrada y lo usan ingresos del mes/totales, fondo de caja, reportes, auditoría, recibo, WhatsApp y CSV (nueva columna `moraCobrada`). El estado del mes (`getStatus`) sigue mirando solo el servicio. Los cobros anteriores no cambian (no traen el campo).
+- **Interruptor "Incluir inactivos con deuda"** (Ajustes, apagado por defecto): los inactivos con mora aparecen en Cobranza y Morosos como morosos; deben solo su mora (no el mes en curso). `RN.calc.clientesCobrables()`.
+- **Retiro en USD sin dólares físicos:** si alcanzan los pesos, se ofrece convertir CUP→USD a la tasa actual (con confirmación) y registrar el retiro.
+- **Cuadre:** aviso "USD no contado" / "CUP no contado" cuando una moneda con saldo se deja vacía.
+- **Tasa histórica:** `tasaAlMomento` en depósitos, retiros, cambios y cuadres; `RN.calc.tasaMovimiento()` la usa al convertir.
+- **Descuentos por días:** usan los días reales del mes (feb 28/29, etc.) en vez de siempre 30.
+- **Modal de cobro:** indicador "Bonificación permanente aplicada: −X".
+- **Cierre de mes:** el snapshot guarda `resumenCierre` (clientes en mora, mora generada y cobrada, descuentos a anular, saldos de caja) y la confirmación lo muestra.
+- 31 tests nuevos en total desde v5.42.0 (160/160).
+
+## v5.42.0 — Mora mes a mes, neto congelado y desglose de mora en el cobro
+
+- **Mora mes a mes:** `RN.calc.detalleMora()` suma el neto real de cada mes en atraso (antes: neto actual × meses). Usado en `deudaTotalCliente`, `resumenCliente` (`moraMonto`, `detalleMora`), Cobranza, Morosos y modal de cobro.
+- **Neto congelado:** el cobro guarda `precioNetoAplicado` (y `detalleMora`); `RN.calc.netoEsperadoMes()` lo usa en `getStatus`, ingreso esperado del mes, panel y auditoría. Cambiar el precio del plan ya no convierte un mes cobrado en "parcial".
+- **Modal de cobro:** la línea de mora muestra el total real y un desplegable "Ver detalle mes a mes".
+- 14 tests nuevos (129/129 pasan; correr `RN.tests.ejecutar()`). Sin cambios de esquema.
+
 ## v5.20.0 — Fix crítico: importar contacto del teléfono dejaba nombre y dirección en blanco
 
 ### Resumen

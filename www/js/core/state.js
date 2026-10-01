@@ -64,6 +64,8 @@ RN.state = {
     // Antes solo existía como fallback implícito en calculations.js/ciclos.js.
     graciaDias: 5,
     mencionarDescuentoRecurrente: true,
+    // v5.43.0: incluir en Cobranza/Morosos a los clientes inactivos que aún deben mora (default: no, como antes)
+    incluirInactivosConDeuda: false,
     tasaAuto: false,
     nombreNegocio: 'AdminRed',
     telefonoNegocio: '',

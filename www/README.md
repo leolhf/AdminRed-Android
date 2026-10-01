@@ -4,7 +4,7 @@ Aplicación web (PWA) para administrar un negocio de reventa de servicio de inte
 
 Es JavaScript vanilla modular: **sin framework, sin bundler, sin build, sin dependencias de npm en el frontend.** Todos los datos viven en el dispositivo del usuario (archivo vinculado o localStorage) — no hay backend ni servidor propio.
 
-**Versión actual:** `5.15.0` (ver `js/version.js`; el detalle de novedades por versión vive en `CHANGELOG.md`).
+**Versión actual:** ver `js/version.js`. El registro de cambios vigente es `CHANGELOG.md`; las notas anteriores por versión están archivadas en `docs/historial/`. El esquema de datos y las reglas de negocio están en `MODELO.md`.
 
 ## Novedades de esta versión (5.10.5)
 

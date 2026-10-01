@@ -31,7 +31,7 @@ RN.cobranza.abrir = function () {
     g.clientes.forEach(function (c) {
       // v5.13.8 (LOG-2/DUP-2): usar resumenCliente que incluye mora
       var r = RN.calc.resumenCliente(c, mes);
-      totalACobrar += r.totalMes + (r.mora > 0 ? r.neto * r.mora : 0);
+      totalACobrar += r.totalMes + r.moraMonto;
     });
   });
 
@@ -46,7 +46,7 @@ RN.cobranza.abrir = function () {
       var neto = r.neto;
       var cuotaEq = r.cuotaEq;
       var mora = r.mora;
-      var total = r.totalMes + (mora > 0 ? neto * mora : 0);
+      var total = r.totalMes + r.moraMonto;
       var tel = c.telefono ? RN.render.esc(c.telefono) : '<span class="muted">\u2014</span>';
       var planTxt = RN.render.esc(RN.render.nombrePlan(c));
       var estadoBadge = RN.render.badgeEstado(estado);

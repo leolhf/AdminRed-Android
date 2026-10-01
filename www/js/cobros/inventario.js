@@ -313,6 +313,7 @@ RN.inventario.guardarAsignacion = function () {
       excedente: 0,
       tasaUsd: pago.tasaUsd
     });
+  RN.calc.invalidarIndicePagos(); // v5.43.1
   }
 
   RN.storageLocal.guardar();

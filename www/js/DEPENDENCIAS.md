@@ -31,7 +31,7 @@ Un módulo que use funciones de otro debe cargarse **después** de él.
 18. `js/ui/notify-ui.js` — toasts
 19. `js/ui/reloj.js` — reloj
 20. `js/ui/tabs.js` — navegación por pestañas
-21. `js/ui/render.js` — render principal (usa calculations.js, investment.js; v5.15: genera onclick a `RN.descuentos.abrirParaCliente` y usa `RN.descuentos.vigenteEnMes` + `RN.calc.valorDescuento` — ver regla de abajo)
+21. `js/ui/render.js` — núcleo del render (helpers + despachador `RN.render.vista`; v5.45.0: las vistas viven en `js/ui/views/` y se cargan justo después: `dashboard`, `clientes`, `cobros`, `realizados`, `finanzas`, `reportes`; todas cuelgan de `RN.render.*`; el orden entre ellas no importa, pero van DESPUÉS de render.js) (usa calculations.js, investment.js; v5.15: genera onclick a `RN.descuentos.abrirParaCliente` y usa `RN.descuentos.vigenteEnMes` + `RN.calc.valorDescuento` — ver regla de abajo)
 22. `js/ui/inline-edit.js` — edición inline
 23. `js/ui/ui-components.js` — modal, confirm, prompt
 

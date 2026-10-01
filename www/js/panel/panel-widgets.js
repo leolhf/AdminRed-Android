@@ -228,7 +228,7 @@ RN.panelWidgets.renderCortes = function () {
     var clientes = RN.ciclos.clientesPorCorte(dp, mes).filter(function (c) {
       return RN.calc.mesInicioCliente(c) <= mes;
     });
-    var esperado = clientes.reduce(function (s, c) { return s + RN.calc.getPrecioNeto(c, mes); }, 0);
+    var esperado = clientes.reduce(function (s, c) { return s + RN.calc.netoEsperadoMes(c, mes); }, 0);
     var pagaron = clientes.filter(function (c) {
       return RN.state.history.some(function (h) {
         return h.clienteId === c.id && h.tipo === 'servicio' && h.mes === mes;
@@ -403,10 +403,75 @@ RN.panelWidgets.renderReserva = function () {
 };
 
 /* ============================================================
+ * v5.44.0 — Atención priorizada con chips y Caja en tiempo real
+ * ============================================================ */
+
+RN.panelWidgets._filtroAtencion = '';
+
+/** Activa/desactiva un chip de filtro ('morosos' | 'hoy' | 'parciales' | 'inactivos'). */
+RN.panelWidgets.setFiltroAtencion = function (f) {
+  RN.panelWidgets._filtroAtencion = (RN.panelWidgets._filtroAtencion === f) ? '' : f;
+  RN.panelWidgets.renderAtencionClientes();
+};
+
+RN.panelWidgets.renderAtencionClientes = function () {
+  var chipsEl = document.getElementById('atencion-chips');
+  var lista = document.getElementById('panel-atencion-clientes');
+  if (!chipsEl || !lista) return;
+  var activo = RN.panelWidgets._filtroAtencion;
+  var defs = [
+    ['morosos', '🔴 Morosos'], ['hoy', '📅 Por cobrar hoy'],
+    ['parciales', '⏳ Parciales'], ['inactivos', '💤 Inactivos con deuda']
+  ];
+  chipsEl.innerHTML = defs.map(function (d) {
+    var n = RN.calc.clientesAtencion(d[0]).length;
+    return '<button type="button" class="chip' + (activo === d[0] ? ' active' : '') + '" aria-pressed="' +
+      (activo === d[0]) + '" onclick="RN.panelWidgets.setFiltroAtencion(\'' + d[0] + '\')">' +
+      d[1] + ' <span class="chip-n">' + n + '</span></button>';
+  }).join('');
+
+  var items = RN.calc.clientesAtencion(activo);
+  if (!items.length) {
+    lista.innerHTML = activo ? '<div class="muted" style="font-size:13px;padding:8px 0">Ningún cliente en este filtro.</div>' : '';
+    return;
+  }
+  var MAX = 8;
+  lista.innerHTML = items.slice(0, MAX).map(function (it) {
+    var c = it.cliente;
+    var det = it.mora > 0 ? it.mora + ' mes' + (it.mora > 1 ? 'es' : '') + ' de mora · ' : '';
+    return '<div class="atencion-cli">' +
+      '<div class="atencion-cli-info"><strong>' + RN.render.esc(c.nombre) + '</strong>' +
+      '<div class="muted" style="font-size:12px">' + det + RN.render.esc(it.motivo) + '</div></div>' +
+      '<div class="atencion-cli-monto">' + RN.calc.formatCUP(it.deuda) + '</div>' +
+      '<button class="btn sm primary" onclick="RN.modalCobro.abrir(\'' + c.id + '\')">Cobrar</button>' +
+    '</div>';
+  }).join('') + (items.length > MAX ? '<div class="muted" style="font-size:12px;padding-top:6px">y ' + (items.length - MAX) + ' más…</div>' : '');
+};
+
+RN.panelWidgets.renderCajaReal = function () {
+  var cont = document.getElementById('panel-caja-real');
+  if (!cont) return;
+  var s = RN.calc.saldosMoneda();
+  cont.innerHTML =
+    '<h3>💵 Caja ahora</h3>' +
+    '<div class="caja-real">' +
+      '<div class="caja-real-saldo"><span class="muted">Pesos (CUP)</span><strong>' + RN.calc.formatCUP(s.cup) + '</strong></div>' +
+      '<div class="caja-real-saldo"><span class="muted">Dólares (USD)</span><strong>$' + s.usd.toFixed(2) + '</strong></div>' +
+    '</div>' +
+    '<div class="muted" style="font-size:12px;margin:6px 0 10px">Total equivalente: ' + RN.calc.formatCUP(s.totalCUP) + '</div>' +
+    '<div class="flex wrap">' +
+      '<button class="btn primary" onclick="RN.cuadre.abrir()">🧮 Cuadrar caja</button>' +
+      '<button class="btn" onclick="RN.modalCobro.abrirDesdeCobros()">+ Cobrar ahora</button>' +
+    '</div>';
+};
+
+/* ============================================================
  * Orquestador
  * ============================================================ */
 
 RN.panelWidgets.renderAll = function () {
+  RN.panelWidgets.renderCajaReal();
+  RN.panelWidgets.renderAtencionClientes();
   RN.panelWidgets.renderTendencia();
   RN.panelWidgets.renderAtencion();
   RN.panelWidgets.renderCortes();

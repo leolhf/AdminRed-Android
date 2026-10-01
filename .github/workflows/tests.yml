@@ -1,0 +1,32 @@
+name: Tests
+
+# Corre la suite de cálculo (RN.tests.ejecutar) con Node en cada push y pull request,
+# y comprueba que las versiones (version.js, package.json, version.json, build.gradle)
+# estén sincronizadas.
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  tests:
+    name: Tests de cálculo y versión
+    runs-on: ubuntu-latest
+    steps:
+      - name: Descargar código
+        uses: actions/checkout@v4
+
+      - name: Instalar Node.js 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Revisar sintaxis de los JS
+        run: |
+          find www/js -name '*.js' -print0 | xargs -0 -n1 node --check
+
+      - name: Ejecutar tests
+        run: node tools/run-tests.js
+
+      - name: Comprobar versiones sincronizadas
+        run: python3 tools/sync-version.py --check

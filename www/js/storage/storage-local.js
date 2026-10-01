@@ -39,7 +39,7 @@ RN.storageLocal.cargar = function () {
     let data = JSON.parse(raw);
     data = RN.migration.migrar(data);
     RN.state.clients = data.clients || [];
-    RN.state.history = data.history || [];
+    RN.state.history = data.history || []; if (RN.calc && RN.calc.invalidarIndicePagos) RN.calc.invalidarIndicePagos();
     RN.state.gastos = data.gastos || [];
     RN.state.depositos = data.depositos || [];
     RN.state.retiros = data.retiros || [];
@@ -78,7 +78,7 @@ RN.storageLocal.persistir = function () {
 /** Aplica un objeto data al estado (usado por storage-file y export al importar). */
 RN.storageLocal._aplicarData = function (data) {
   RN.state.clients = data.clients || [];
-  RN.state.history = data.history || [];
+  RN.state.history = data.history || []; if (RN.calc && RN.calc.invalidarIndicePagos) RN.calc.invalidarIndicePagos();
   RN.state.gastos = data.gastos || [];
   RN.state.depositos = data.depositos || [];
   RN.state.retiros = data.retiros || [];

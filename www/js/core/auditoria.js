@@ -4,7 +4,7 @@
  * Verifica la coherencia interna de los datos financieros para detectar
  * silenciosamente inconsistencias que los cálculos normales no revelan:
  *
- *   1. Que la suma de (h.monto + h.montoEquipo) por mes coincida con
+ *   1. Que la suma de (h.monto + h.montoEquipo + h.montoMoraCobrada) por mes coincida con
  *      RN.calc.ingresosMes(mes) para cada mes con cobros.
  *   2. Que las deudas de equipo sean coherentes: 0 <= deudaEquipo <=
  *      deudaEquipoOriginal (no negativas, no mayores al original).
@@ -135,7 +135,7 @@ RN.auditoria.verificarCoherencia = function () {
   Object.keys(mesesConCobros).forEach(function (mes) {
     var sumaDirecta = history
       .filter(function (h) { return h.mes === mes; })
-      .reduce(function (s, h) { return s + (h.monto || 0) + (h.montoEquipo || 0); }, 0);
+      .reduce(function (s, h) { return s + RN.calc.ingresoCobro(h); }, 0);
     var viaFuncion = RN.calc.ingresosMes(mes);
     if (Math.abs(sumaDirecta - viaFuncion) > 0.01) {
       errores.push('Ingresos del mes ' + mes + ' incoherentes: suma directa=' +
@@ -180,7 +180,7 @@ RN.auditoria.verificarCoherencia = function () {
   clients.forEach(function (c) {
     if (!c.activo) return;
     if (RN.calc.getStatus(c) !== 'paid') return;
-    var netoEsperado = RN.calc.getPrecioNeto(c, mesActual);
+    var netoEsperado = RN.calc.netoEsperadoMes(c, mesActual);
     var cobrosMes = history.filter(function (h) {
       return h.clienteId === c.id && h.tipo === 'servicio' && h.mes === mesActual;
     });

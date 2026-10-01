@@ -119,6 +119,7 @@ RN.cuadre.construirMovimientos = function (opts) {
       categoria: RN.cuadre.CATEGORIA,
       esCuadreCaja: true,
       cuadreMoneda: 'CUP',
+      tasaAlMomento: tasa,
       tipoCuadre: esFaltanteCup ? 'faltante' : 'sobrante',
       saldoCalculado: dc.calculado,
       saldoReal: dc.contado,
@@ -151,7 +152,7 @@ RN.cuadre.construirMovimientos = function (opts) {
        * de caja (depósitos/retiros), que sí lo usan por moneda.
        */
       montoCuadreUSD: esFaltanteUsd ? Math.abs(du.diferencia) : -Math.abs(du.diferencia),
-      tasaUsada: tasa,
+      tasaUsada: tasa, tasaAlMomento: tasa,
       saldoCalculadoUSD: du.calculado,
       saldoRealUSD: du.contado,
       moneda: 'USD',
@@ -211,13 +212,15 @@ RN.cuadre.abrir = function () {
       <div class="form-row cols-2">
         <div>
           <label>🪙 Saldo real contado — CUP (pesos)</label>
-          <input id="cuadre-real-cup" type="number" step="0.01" placeholder="0.00"
+          <input id="cuadre-real-cup" type="number" step="0.01" inputmode="decimal" class="input-grande" placeholder="0.00"
                  oninput="RN.cuadre._recalcular()">
+          <button type="button" class="btn sm ghost" style="margin-top:6px" onclick="RN.cuadre.usarCalculado('cup')">Usar saldo calculado</button>
         </div>
         <div>
           <label>💵 Saldo real contado — USD (dólares)</label>
-          <input id="cuadre-real-usd" type="number" step="0.01" placeholder="0.00"
+          <input id="cuadre-real-usd" type="number" step="0.01" inputmode="decimal" class="input-grande" placeholder="0.00"
                  oninput="RN.cuadre._recalcular()">
+          <button type="button" class="btn sm ghost" style="margin-top:6px" onclick="RN.cuadre.usarCalculado('usd')">Usar saldo calculado</button>
         </div>
       </div>
       <div class="muted" style="font-size:12px;margin:-4px 0 12px">
@@ -247,6 +250,18 @@ RN.cuadre.abrir = function () {
 };
 
 /** v5.31.0 — HTML del resultado de una moneda (faltante / sobrante / exacto). */
+/**
+ * v5.44.0: pone el saldo contado = saldo calculado de esa moneda ('cup' | 'usd'),
+ * para cuadrar rápido cuando no hay diferencia.
+ */
+RN.cuadre.usarCalculado = function (moneda) {
+  var s = RN.calc.saldosMoneda();
+  var el = document.getElementById(moneda === 'usd' ? 'cuadre-real-usd' : 'cuadre-real-cup');
+  if (!el) return;
+  el.value = (moneda === 'usd' ? s.usd : s.cup).toFixed(2);
+  RN.cuadre._recalcular();
+};
+
 RN.cuadre._filaResultado = function (etiqueta, d, esUSD, tasa) {
   var t = +tasa || 0;
   var montoTxt;
@@ -263,7 +278,7 @@ RN.cuadre._filaResultado = function (etiqueta, d, esUSD, tasa) {
     badge = '<span class="badge due">⚠️ Faltante: ' + montoTxt +
       '. Se registrará como gasto (categoría "' + RN.cuadre.CATEGORIA + '").</span>';
   } else {
-    badge = '<span class="badge ok">💰 Sobrante: ' + montoTxt +
+    badge = '<span class="badge paid">💰 Sobrante: ' + montoTxt +
       '. Se registrará como ingreso de ajuste (categoría "' + RN.cuadre.CATEGORIA + '").</span>';
   }
   var detalle = '<div class="muted" style="font-size:11px;margin-top:3px">Contado: ' +
@@ -291,6 +306,13 @@ RN.cuadre._recalcular = function () {
   var html = '';
   if (dc) html += RN.cuadre._filaResultado('🪙 CUP (pesos)', dc, false, s.tasa);
   if (du) html += RN.cuadre._filaResultado('💵 USD (dólares)', du, true, s.tasa);
+  // v5.43.0: una moneda con saldo que el usuario dejó sin contar NO se ajustará.
+  if (dc && !du && s.usd > 0) {
+    html += '<div class="badge warn" style="margin-bottom:6px">⚠️ USD no contado — el saldo de dólares ($' + s.usd.toFixed(2) + ') no se ajustará.</div>';
+  }
+  if (du && !dc && s.cup > 0) {
+    html += '<div class="badge warn" style="margin-bottom:6px">⚠️ CUP no contado — el saldo de pesos (' + RN.calc.formatCUP(s.cup) + ') no se ajustará.</div>';
+  }
   if (faltaTasa) {
     html += '<div class="badge due">⚠️ Hay un descuadre en dólares y no hay tasa USD configurada. ' +
       'Configúrala en Ajustes para poder registrarlo.</div>';
@@ -310,6 +332,9 @@ RN.cuadre._recalcular = function () {
 /**
  * v5.31.0 — Calcula las diferencias POR MONEDA y las guarda como movimientos
  * de caja (uno por moneda con diferencia). Si todo cuadra, no registra nada.
+ * Lee los campos del modal (cuadre-real-cup / cuadre-real-usd); una moneda vacía
+ * se considera NO contada y no se ajusta. Guarda `tasaAlMomento` en cada movimiento.
+ * @returns {void}
  */
 RN.cuadre.guardar = function () {
   var s = RN.cuadre._snapshot || RN.calc.saldosMoneda();
