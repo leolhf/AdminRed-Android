@@ -294,7 +294,10 @@
         <button class="btn primary" onclick="RN.descuentos.abrirNuevoSelector()">🎁 + Nueva bonificación</button>
       </div>
       <div id="descuentos-resumen" class="kpi-grid" style="margin-bottom:16px"></div>
+      <!-- v5.47.0: chips de filtro rápido con contador (Activas por defecto) -->
+      <div class="chips" id="desc-chips" style="margin-bottom:12px"></div>
       <div class="toolbar">
+        <input id="filter-desc-buscar" type="search" placeholder="🔍 Buscar cliente o motivo…" style="flex:1;min-width:160px">
         <select id="filter-desc-mes"><option value="">Todos los meses</option></select>
         <select id="filter-desc-tipo"><option value="">Todos los tipos</option><option value="afectacion">Afectación</option><option value="bonificacion">Bonificación</option><option value="ajuste">Ajuste</option></select>
         <select id="filter-desc-estado"><option value="">Todos</option><option value="aplicado">Aplicado</option><option value="pendiente">Pendiente</option><option value="anulado">Anulado</option></select>

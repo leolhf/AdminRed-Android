@@ -24,11 +24,11 @@ RN.equiposRed.abrir = function (clienteId) {
       <h3 style="font-size:13px;text-transform:uppercase;color:var(--text-muted)">Agregar equipo</h3>
       <div class="form-row cols-2">
         <div><label>Tipo *</label><select id="eq-tipo"><option>Router</option><option>ONT</option><option>Switch</option><option>Antena</option><option>Cable</option><option>Otro</option></select></div>
-        <div><label>Modelo</label><input id="eq-modelo"></div>
+        <div><label>Modelo</label><input id="eq-modelo" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>
       </div>
       <div class="form-row cols-2">
-        <div><label>Serial/MAC</label><input id="eq-serial"></div>
-        <div><label>Ubicación</label><input id="eq-ubicacion" placeholder="dirección de instalación"></div>
+        <div><label>Serial/MAC</label><input id="eq-serial" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
+        <div><label>Ubicación</label><input id="eq-ubicacion" placeholder="dirección de instalación" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>
       </div>
     </div>
     <div class="modal-footer">

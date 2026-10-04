@@ -151,16 +151,29 @@ html, body {
 .tab-group.active .tab { color: var(--primary); border-bottom-color: var(--primary); }
 .tab-group .tab:active { background: var(--surface-2); }
 
-/* Subtabs: fila horizontal debajo, visible solo del grupo activo */
+/* Subtabs: fila horizontal debajo. v5.46.0: PLEGABLE — oculta por defecto; se muestra solo
+   cuando su grupo está activo Y abierto (clase .abierto, la pone tabs.js al tocar el grupo y
+   la quita tras 3 s de inactividad). */
 .subtabs {
-  display: none; position: absolute; top: 100%; left: 0; right: 0;
+  display: flex; position: absolute; top: 100%; left: 0; right: 0;
+  opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-6px);
+  transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
   background: var(--surface); border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow); z-index: 35;
   padding: 0; overflow-x: auto; -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 .subtabs::-webkit-scrollbar { display: none; }
-.tab-group.active .subtabs { display: flex; }
+.tab-group.active.abierto .subtabs {
+  opacity: 1; visibility: visible; pointer-events: auto; transform: none;
+  transition: opacity .18s ease, transform .18s ease, visibility 0s;
+}
+/* Indicador ▾ de que el grupo despliega un menú (gira al abrirse) */
+.tab-group .tab::after {
+  content: '\25BE'; font-size: 10px; opacity: .7; transition: transform .18s ease;
+}
+.tab-group.abierto .tab::after { transform: rotate(180deg); }
+.tab-group .tab:focus-visible { outline: 2px solid var(--primary); outline-offset: -2px; }
 
 .subtab {
   padding: 10px 16px; white-space: nowrap; cursor: pointer; color: var(--text-muted);

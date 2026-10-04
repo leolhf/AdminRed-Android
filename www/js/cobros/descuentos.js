@@ -8,6 +8,8 @@
  * Vigencia centralizada en RN.descuentos.vigenteEnMes (calculations.js) con fallbacks esquema 7.
  * Operaciones: crear, eliminar (revierte todos los cobros con valores congelados),
  * revertir (al eliminar cobro libera solo ese mes), lote.
+ * v5.47.0 — Lote táctil: el select múltiple de clientes se sustituye por una
+ * lista de checkboxes (mejor en móvil, donde no existe Ctrl/Cmd).
  */
 RN.descuentos = RN.descuentos || {};
 
@@ -187,7 +189,7 @@ RN.descuentos.abrirNuevo = function (clienteId, mes) {
       </div>
       <div class="form-row cols-2">
         <div><label id="dc-valor-label">Valor (CUP) *</label><input id="dc-valor" type="number" step="0.01" value="0"></div>
-        <div><label>Motivo *</label><input id="dc-motivo" placeholder="Ej: 2 días sin servicio"></div>
+        <div><label>Motivo *</label><input id="dc-motivo" placeholder="Ej: 2 días sin servicio" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>
       </div>
       ${RN.descuentos._htmlDuracion(mes)}
       <p class="muted" id="dc-preview"></p>
@@ -530,20 +532,20 @@ RN.descuentos.revertirPorCobro = function (cobroId) {
 RN.descuentos.abrirLote = function () {
   const activos = RN.calc.clientesActivos();
   if (!activos.length) { RN.notifyUI.toast('No hay clientes activos', 'warn'); return; }
-  const cliOpts = activos.map(c => `<option value="${c.id}">${RN.render.esc(c.nombre)}</option>`).join('');
+  const cliOpts = activos.map(c => `<label class="lot-cli-item"><input type="checkbox" value="${c.id}"><span>${RN.render.esc(c.nombre)}</span></label>`).join('');
   const html = `
     <div class="modal-header"><h3>Descuento por lote</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>
     <div class="modal-body">
       <p class="muted mb-16">Aplica el mismo descuento puntual a varios clientes a la vez.</p>
-      <div class="form-row"><div><label>Clientes (Ctrl/Cmd para varios) *</label>
-        <select id="lot-cli" multiple style="height:140px">${cliOpts}</select></div></div>
+      <div class="form-row"><div><label>Clientes (toca para marcar) *</label>
+        <div id="lot-cli" style="max-height:200px;overflow:auto;border:1px solid var(--neo-stroke);border-radius:8px;padding:4px 8px">${cliOpts}</div></div></div>
       <div class="form-row cols-2">
         <div><label>Tipo</label><select id="lot-tipo">${Object.keys(RN.descuentos.TIPOS).map(k => `<option value="${k}">${k}</option>`).join('')}</select></div>
         <div><label>Modo</label><select id="lot-modo">${Object.keys(RN.descuentos.MODOS).map(k => `<option value="${k}">${k}</option>`).join('')}</select></div>
       </div>
       <div class="form-row cols-2">
         <div><label>Valor</label><input id="lot-valor" type="number" step="0.01" value="0"></div>
-        <div><label>Motivo *</label><input id="lot-motivo" placeholder="Ej: interrupción general"></div>
+        <div><label>Motivo *</label><input id="lot-motivo" placeholder="Ej: interrupción general" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>
       </div>
       <!-- v5.14.4 (D3): el lote también recibe Duración -->
       <div class="form-row cols-2">
@@ -570,7 +572,8 @@ RN.descuentos.abrirLote = function () {
 };
 
 RN.descuentos.guardarLote = function () {
-  const clientes = Array.from(document.getElementById('lot-cli').selectedOptions).map(o => o.value);
+  // v5.47.0: los clientes llegan de la lista de checkboxes (táctil)
+  const clientes = Array.from(document.querySelectorAll('#lot-cli input[type="checkbox"]:checked')).map(el => el.value);
   if (!clientes.length) { RN.notifyUI.toast('Selecciona al menos un cliente', 'error'); return; }
   const tipo = document.getElementById('lot-tipo').value;
   const modo = document.getElementById('lot-modo').value;

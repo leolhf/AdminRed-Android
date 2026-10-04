@@ -119,7 +119,7 @@ RN.caja.depositar = function (monedaInicial) {
       <div class="form-row">
         <div>
           <label>Concepto / Origen</label>
-          <input id="deposito-concepto" placeholder="Ej: Aporte de capital, devolución de préstamo, venta externa...">
+          <input id="deposito-concepto" placeholder="Ej: Aporte de capital, devolución de préstamo, venta externa..." spellcheck="true" autocorrect="on" autocapitalize="sentences">
         </div>
       </div>
       <div class="form-row">
@@ -458,7 +458,7 @@ RN.caja.extraer = function (monedaInicial) {
       <div class="form-row">
         <div>
           <label>Concepto / Motivo</label>
-          <input id="retiro-concepto" placeholder="Ej: Retiro personal, compra de equipos, pago de servicios...">
+          <input id="retiro-concepto" placeholder="Ej: Retiro personal, compra de equipos, pago de servicios..." spellcheck="true" autocorrect="on" autocapitalize="sentences">
         </div>
       </div>
       <div class="form-row">

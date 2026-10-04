@@ -1,7 +1,7 @@
 name: Tests
 
 # Corre la suite de cálculo (RN.tests.ejecutar) con Node en cada push y pull request,
-# y comprueba que las versiones (version.js, package.json, version.json, build.gradle)
+# y comprueba que las versiones (version.js, package.json, package-lock.json, version.json, build.gradle)
 # estén sincronizadas.
 on:
   push:
@@ -27,6 +27,11 @@ jobs:
 
       - name: Ejecutar tests
         run: node tools/run-tests.js
+
+      - name: Probar el submenú plegable (jsdom)
+        run: |
+          npm i --no-save --no-audit --no-fund jsdom
+          node tools/test-tabs-menu.js
 
       - name: Comprobar versiones sincronizadas
         run: python3 tools/sync-version.py --check

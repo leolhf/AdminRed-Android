@@ -518,6 +518,19 @@ tr:hover td { background: rgba(59,130,246,.07); }
   border-radius: var(--neo-r-pill); font-weight: 700; letter-spacing: .2px;
   border: 1px solid transparent;
 }
+/* v5.47.0 — Vista de descuentos: grupos por estado (Vigentes / Finalizadas colapsable) */
+.desc-grupo-head td {
+  font-weight: 700; font-size: 12px; letter-spacing: .04em; text-transform: uppercase;
+  color: var(--neo-txt-muted); background: rgba(148,163,184,.08);
+  cursor: pointer; padding: 8px 10px; user-select: none;
+}
+.desc-grupo-head .chev { display: inline-block; transition: transform .15s ease; margin-right: 4px; font-size: 10px; }
+.desc-grupo-head.abierta .chev { transform: rotate(90deg); }
+.fila-finalizada td { opacity: .55; }
+/* v5.47.0 — Lote de descuentos: lista táctil de clientes (sustituye al select multiple) */
+.lot-cli-item { display: flex; align-items: center; gap: 8px; padding: 6px; min-height: 44px; cursor: pointer; }
+.lot-cli-item input[type="checkbox"] { width: 20px; height: 20px; flex: none; }
+
 .badge.ok   { background: rgba(34,197,94,.16);  color: var(--neo-green);  border-color: rgba(34,197,94,.35); }
 .badge.warn { background: rgba(245,158,11,.16); color: var(--neo-amber);  border-color: rgba(245,158,11,.35); }
 .badge.due  { background: rgba(239,68,68,.16);  color: var(--neo-red);    border-color: rgba(239,68,68,.35); }

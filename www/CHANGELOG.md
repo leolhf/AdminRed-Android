@@ -2,6 +2,31 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.47.1 — Corrección ortográfica del teclado en los campos de texto
+
+- Los campos de **texto libre** (notas de cobro, conceptos de gastos/caja/cuadre/inversión, motivos de descuentos, material y notas de inventario, nombre y dirección del cliente, nombre de paquete y proveedor, modelo y ubicación de equipos, plantillas de WhatsApp) activan ahora `spellcheck="true"`, `autocorrect="on"` y `autocapitalize="sentences"`: el teclado del sistema (Gboard, Samsung Keyboard, etc.) subraya faltas de ortografía y sugiere correcciones según el diccionario y los ajustes de ortografía del propio Android, que no se modifican.
+- Los campos **técnicos** quedan protegidos contra la autocorrección (evita que "corrija" direcciones IPs, números de teléfono o seriales): teléfono e IP del cliente, serial de equipos, y la URL/token de Google Drive (ya protegidos desde antes).
+- Los campos numéricos y de búsqueda no varían su comportamiento.
+- **VERSION**: `APP_VERSION` sube de `5.47.0` a `5.47.1` (`js/version.js`), sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle` (`versionName 5.47.1` / `versionCode 5471`).
+
+## v5.47.0 — Vista de descuentos reorganizada
+
+- La sección **Finanzas → Descuentos** se divide en dos grupos por estado: **"🏷️ Vigentes y pendientes"** (siempre visible, ordenado por urgencia: vence este mes → 1 solo pago → vence el mes próximo → otros N meses → permanentes) y **"🗄️ Finalizadas"** (Aplicado/Anulado), que queda **colapsada por defecto** con contador y se despliega tocando su cabecera; el histórico deja de mezclarse con lo vivo sin desaparecer.
+- **Chips de filtro rápido** con contador encima de la tabla: `Activas` (por defecto), `Vigentes este mes`, `Finalizadas` y `Todas`, combinables con los filtros de mes/tipo/estado.
+- **Búsqueda** por nombre de cliente o motivo en la propia sección (`filter-desc-buscar`).
+- **Badges de vencimiento**: la columna Vigencia avisa con "⚠ vence este mes" (rojo) y "vence el mes próximo" (ámbar) en las bonificaciones de N meses vivas.
+- **Lote de descuentos táctil**: el `<select multiple>` de clientes (requería Ctrl/Cmd, imposible en Android) se sustituye por una lista de checkboxes con áreas táctiles de 44 px.
+- Sin migración ni cambio de esquema: se reutilizan intactos los helpers de vigencia de v5.14.4 (`vigenteEnMes`, `venceEnMes`, `rangoVigencia`) y el formato del CSV no varía.
+- **VERSION**: `APP_VERSION` sube de `5.46.0` a `5.47.0` (`js/version.js`), sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle` (`versionName 5.47.0` / `versionCode 5470`). El Service Worker invalida la caché automáticamente al detectar la nueva versión.
+
+## v5.46.0 — Submenú plegable con cierre automático
+
+- Al tocar **🏠 Operación**, **💰 Finanzas** o **📊 Análisis** se despliega el menú de ese grupo (con animación suave) y se pliega solo tras **3 segundos sin actividad**. Cuenta como actividad tocar o arrastrar en la barra, desplazar el submenú o usar el teclado; elegir una sección navega y reinicia los 3 s.
+- Tocar el grupo ya abierto lo pliega; tocar fuera de la barra o pulsar Esc lo pliega de inmediato. Cambiar de grupo navega a su primera vista y abre su menú. Navegar desde otros puntos de la app (notificaciones, botones) no despliega el menú; el indicador "Estás en:" sigue mostrando dónde estás.
+- Los grupos muestran un ▾ que gira al abrirse y son accesibles (`role="button"`, `aria-expanded`, Enter/Espacio).
+- `tools/sync-version.py` ahora también sincroniza y verifica `package-lock.json` (quedaba atrasado en 5.41.5).
+- Prueba nueva `tools/test-tabs-menu.js` (jsdom, 30 comprobaciones con reloj falso; `npm run test:ui`) integrada en el workflow de CI.
+
 ## v5.45.0 — Lote 4: arquitectura y documentación
 
 - **`render.js` dividido** (1.256 → 261 líneas): las vistas pasan a `js/ui/views/` (`dashboard`, `clientes`, `cobros`, `realizados`, `finanzas`, `reportes`). Es un movimiento puro: el código no cambió (verificado comparando las 30 funciones de `RN.render` antes y después) y siguen colgando de `RN.render.*`. Registradas en `index.html` y en la precaché de `sw.js`.

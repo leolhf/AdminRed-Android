@@ -243,16 +243,16 @@ RN.modalCliente.abrir = function (id) {
   const html = `
     <div class="modal-header"><h3>${c ? 'Editar cliente' : 'Nuevo cliente'}</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">\u00d7</button></div>
     <div class="modal-body">
-      <div class="form-row"><div><label>Nombre *</label><input id="cl-nombre" value="${RN.render.esc(c ? c.nombre : '')}"></div></div>
+      <div class="form-row"><div><label>Nombre *</label><input id="cl-nombre" value="${RN.render.esc(c ? c.nombre : '')}" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>
       <div class="form-row cols-2">
         <div><label>Tel\u00e9fono</label>
           <div style="display:flex;gap:6px;align-items:flex-end">
-            <input id="cl-tel" value="${RN.render.esc(c ? c.telefono : '')}" placeholder="+53..." style="flex:1">
+            <input id="cl-tel" value="${RN.render.esc(c ? c.telefono : '')}" placeholder="+53..." style="flex:1" spellcheck="false" autocorrect="off" autocapitalize="off">
             ${RN.modalCliente.soportaContactos() ? '<button type="button" class="btn" style="white-space:nowrap;padding:8px 10px" onclick="RN.modalCliente.importarDeContactos()" title="Importar desde contactos del tel\u00e9fono">\ud83d\udccd Contactos</button>' : ''}
           </div>
         </div>
-        <div><label>Direcci\u00f3n</label><input id="cl-dir" value="${RN.render.esc(c ? c.direccion : '')}"></div>
-        <div><label>IP / Direcci\u00f3n de red <span class="muted" style="font-size:11px">(ej: 192.168.1.10)</span></label><input id="cl-ip" inputmode="decimal" pattern="[0-9.]*" maxlength="15" value="${RN.render.esc(c ? c.ip : '')}" placeholder="Ej: 192.168.1.10" oninput="this.value=this.value.replace(/[^0-9.]/g,'')"></div>
+        <div><label>Direcci\u00f3n</label><input id="cl-dir" value="${RN.render.esc(c ? c.direccion : '')}" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>
+        <div><label>IP / Direcci\u00f3n de red <span class="muted" style="font-size:11px">(ej: 192.168.1.10)</span></label><input id="cl-ip" inputmode="decimal" pattern="[0-9.]*" maxlength="15" value="${RN.render.esc(c ? c.ip : '')}" placeholder="Ej: 192.168.1.10" oninput="this.value=this.value.replace(/[^0-9.]/g,'')" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
       </div>
       <div class="form-row cols-2">
         <div><label>Plan de servicio</label>

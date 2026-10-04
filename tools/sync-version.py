@@ -9,7 +9,7 @@ repetido, Android NI SIQUIERA INSTALA el APK nuevo sobre el instalado, así que
 la app nunca recibe la actualización aunque se publique.
 
 Uso:
-    python3 tools/sync-version.py            # sincroniza gradle, package.json y version.json
+    python3 tools/sync-version.py            # sincroniza gradle, package.json, package-lock.json y version.json
     python3 tools/sync-version.py --print    # solo muestra los valores calculados
     python3 tools/sync-version.py --check    # verifica (exit 1 si hay desincronía)
 
@@ -29,6 +29,7 @@ VERSION_JS = os.path.join(ROOT, 'www', 'js', 'version.js')
 GRADLE = os.path.join(ROOT, 'android', 'app', 'build.gradle')
 PACKAGE = os.path.join(ROOT, 'package.json')
 VERSION_JSON = os.path.join(ROOT, 'version.json')
+LOCK = os.path.join(ROOT, 'package-lock.json')
 
 REPO = 'leolhf/AdminRed-Android'
 PAQUETE = 'com.rednet.adminred'
@@ -75,6 +76,25 @@ def json_version():
         return None
 
 
+def lock_versiones():
+    """Versiones de package-lock.json: (raíz, packages[""]). Ambas deben coincidir con la app."""
+    try:
+        d = json.load(open(LOCK, encoding='utf-8'))
+    except (IOError, ValueError):
+        return None, None
+    return d.get('version'), (d.get('packages', {}).get('', {}) or {}).get('version')
+
+
+def escribir_lock(version):
+    """Actualiza solo las dos líneas de versión del lockfile (sin reformatear el resto)."""
+    if not os.path.exists(LOCK):
+        return
+    txt = open(LOCK, encoding='utf-8').read()
+    txt = re.sub(r'(\A\{\s*"name":\s*"[^"]*",\s*"version":\s*")[^"]*(")', r'\g<1>' + version + r'\g<2>', txt, count=1)
+    txt = re.sub(r'("packages":\s*\{\s*"":\s*\{\s*"name":\s*"[^"]*",\s*"version":\s*")[^"]*(")', r'\g<1>' + version + r'\g<2>', txt, count=1)
+    open(LOCK, 'w', encoding='utf-8').write(txt)
+
+
 def escribir_gradle(txt, version_code, version_name):
     txt = re.sub(r'versionCode\s+\d+', 'versionCode %d' % version_code, txt, count=1)
     txt = re.sub(r'versionName\s+"[^"]*"', 'versionName "%s"' % version_name, txt, count=1)
@@ -119,12 +139,14 @@ def main():
     vc_actual, vn_actual, gtxt = gradle_valores()
     pkg = package_version()
     vjson = json_version()
+    lock_raiz, lock_pkg = lock_versiones()
 
     print('Versión de referencia (www/js/version.js): %s' % version)
     print('versionCode calculado:                     %d' % code)
     print('build.gradle actual:                       versionName "%s" / versionCode %s' % (vn_actual, vc_actual))
     print('package.json actual:                       %s' % pkg)
     print('version.json actual:                       %s' % vjson)
+    print('package-lock.json actual:                  %s / %s' % (lock_raiz, lock_pkg))
 
     if args.solo_print:
         return 0
@@ -139,13 +161,15 @@ def main():
             fallos.append('package.json version %s != %s' % (pkg, version))
         if vjson != version:
             fallos.append('version.json version %s != %s' % (vjson, version))
+        if os.path.exists(LOCK) and (lock_raiz != version or lock_pkg != version):
+            fallos.append('package-lock.json version %s / %s != %s' % (lock_raiz, lock_pkg, version))
         if fallos:
             print('\nDESINCRONIZADO:')
             for f in fallos:
                 print('  - ' + f)
             print('\nEjecuta: python3 tools/sync-version.py')
             return 1
-        print('\nOK: las cuatro versiones coinciden (%s, versionCode %d).' % (version, code))
+        print('\nOK: todas las versiones coinciden (%s, versionCode %d).' % (version, code))
         return 0
 
     # Nunca permitir que el versionCode decrezca: Android no instala un APK con
@@ -157,7 +181,8 @@ def main():
     escribir_gradle(gtxt, code, version)
     escribir_package(version)
     escribir_version_json(version, args.notas)
-    print('\n✓ Sincronizado: build.gradle (%s / %d), package.json y version.json.' % (version, code))
+    escribir_lock(version)
+    print('\n✓ Sincronizado: build.gradle (%s / %d), package.json, package-lock.json y version.json.' % (version, code))
     return 0
 
 

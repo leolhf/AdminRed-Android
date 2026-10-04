@@ -175,7 +175,7 @@ RN.modalCobro.abrir = function (clienteId) {
       </div>
       <div id="cobro-total-usd" style="text-align:right;margin-top:2px"></div>
 
-      <div class="mt-16"><label>Notas (opcional)</label><input id="cobro-notas" placeholder="Ej: pagó en efectivo"></div>
+      <div class="mt-16"><label>Notas (opcional)</label><input id="cobro-notas" placeholder="Ej: pagó en efectivo" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>
       <label style="margin-top:12px"><input type="checkbox" id="cobro-enviar-wa" ${c.telefono ? '' : 'disabled'}> Enviar comprobante por WhatsApp ${c.telefono ? '' : '(sin teléfono)'}</label>
     </div>
     <div class="modal-footer">

@@ -91,7 +91,7 @@ RN.inversion._form = function () {
   const html = `
     <div class="modal-header"><h3>${inv ? 'Editar inversión' : 'Nueva inversión personal'}</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>
     <div class="modal-body">
-      <div class="form-row"><div><label>Concepto *</label><input id="inv-concepto" value="${RN.render.esc(inv ? inv.concepto : '')}" placeholder="Ej: Compra de 5 routers"></div></div>
+      <div class="form-row"><div><label>Concepto *</label><input id="inv-concepto" value="${RN.render.esc(inv ? inv.concepto : '')}" placeholder="Ej: Compra de 5 routers" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>
       <div class="form-row">
         <div><label>Fecha de compra *</label><input id="inv-fecha-compra" type="date" value="${fechaCompraVal}"><small class="muted" style="display:block;margin-top:4px">Desde esta fecha se miden los aportes de los clientes a la recuperación.</small></div>
       </div>
@@ -384,7 +384,7 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
       '</div></div>' +
       '<div class="form-row"><div>' +
         '<label>Concepto (opcional)</label>' +
-        '<input id="dev-concepto" placeholder="Ej: Pago de cuota del préstamo a Juan">' +
+        '<input id="dev-concepto" placeholder="Ej: Pago de cuota del préstamo a Juan" spellcheck="true" autocorrect="on" autocapitalize="sentences">' +
       '</div></div>' +
       '<div class="form-row"><div>' +
         '<label>Fecha</label>' +

@@ -20,7 +20,7 @@ RN.modalPaquete.abrir = function () {
       <div class="table-wrap mb-16"><table><thead><tr><th>Nombre</th><th>Megas</th><th>Precio</th><th>Precio/M</th><th>Acciones</th></tr></thead><tbody>${rows}</tbody></table></div>
       <h3 style="font-size:13px;text-transform:uppercase;color:var(--text-muted)">Nuevo plan</h3>
       <div class="form-row cols-3">
-        <div><label>Nombre *</label><input id="pl-nombre" placeholder="Ej: Hogar 10M"></div>
+        <div><label>Nombre *</label><input id="pl-nombre" placeholder="Ej: Hogar 10M" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>
         <div><label>Megas (Mbps) *</label><input id="pl-megas" type="number" value="10"></div>
         <div><label>Precio (CUP) *</label><input id="pl-precio" type="number" step="0.01" value="0"></div>
       </div>

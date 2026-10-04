@@ -89,7 +89,7 @@ RN.paqueteProveedor.abrir = function () {
       '<p class="muted" style="margin-bottom:12px;font-size:13px">Aquí ajustas los datos del paquete de tu proveedor: <strong>megas, precio por mega y sobreventa</strong>. Si haces un cambio, decide si es <strong>vigente desde este mes</strong> o <strong>desde el próximo</strong>. También puedes registrar el pago mensual.</p>' +
 
       '<div class="form-row"><div><label>Proveedor de internet</label>' +
-      '<input type="text" id="prov-nombre" placeholder="Ej: ETECSA, FiberNet..." value="' + RN.render.esc(cfg.proveedorInternet || '') + '"></div></div>' +
+      '<input type="text" id="prov-nombre" placeholder="Ej: ETECSA, FiberNet..." value="' + RN.render.esc(cfg.proveedorInternet || '') + '" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>' +
 
       '<div class="form-row cols-2"><div><label>Megas contratados (Mbps)</label>' +
       '<input type="number" id="prov-megas" step="1" min="0" placeholder="Ej: 50" value="' + (cfg.proveedorMegas || 0) + '" oninput="RN.paqueteProveedor.actualizarAviso()"></div>' +

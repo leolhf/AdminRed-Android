@@ -47,11 +47,11 @@ RN.inventario.abrirNuevoLote = function (materialExistente) {
   var html = '\
     <div class="modal-header"><h3>Compra de inventario</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>\
     <div class="modal-body">\
-      <div class="form-row"><div><label>Material / Producto *</label><input id="lot-material" placeholder="Ej: Cable UTP cat6, Router TP-Link..." value="' + RN.render.esc(precargarMat) + '"></div></div>\
+      <div class="form-row"><div><label>Material / Producto *</label><input id="lot-material" placeholder="Ej: Cable UTP cat6, Router TP-Link..." value="' + RN.render.esc(precargarMat) + '" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>\
       ' + (precargarMat ? '<div class="cobro-desglose" style="background:var(--bg-alt);padding:10px 12px;border-radius:8px;margin-bottom:12px"><span class="muted">📋 Comprando más del producto <strong>' + RN.render.esc(precargarMat) + '</strong>. Se creará un nuevo lote que se añadirá al producto existente. El stock se vende por FIFO (lote más antiguo primero).</span></div>' : '') + '\
       <div class="form-row cols-2">\
         <div><label>Cantidad comprada *</label><input id="lot-cant" type="number" min="1" step="1" value="1" oninput="RN.inventario._recalcCostoLote()"></div>\
-        <div><label>Notas</label><input id="lot-notas" placeholder="proveedor, factura..."></div>\
+        <div><label>Notas</label><input id="lot-notas" placeholder="proveedor, factura..." spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>\
       </div>\
       <div class="form-row cols-2">\
         <div><label>Costo unitario (CUP) *</label><input id="lot-costo-u" type="number" step="0.01" min="0" placeholder="0.00" oninput="RN.inventario._recalcCostoLote()"></div>\

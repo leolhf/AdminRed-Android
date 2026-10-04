@@ -229,7 +229,7 @@ RN.cuadre.abrir = function () {
       <div class="form-row">
         <div>
           <label>Nota (opcional)</label>
-          <input id="cuadre-nota" placeholder="Ej: Cuadre semanal, arqueo de fin de mes...">
+          <input id="cuadre-nota" placeholder="Ej: Cuadre semanal, arqueo de fin de mes..." spellcheck="true" autocorrect="on" autocapitalize="sentences">
         </div>
       </div>
       <div class="form-row">
