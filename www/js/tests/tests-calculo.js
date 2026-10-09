@@ -892,9 +892,22 @@ RN.tests._testLote1Caja = function () {
     history: [],
     descuentos: [{ id: 'd1', clienteId: 'c1', tipo: 'descuento', modo: 'dias', valor: 7, estado: 'pendiente', mes: '2025-02', vigencia: 'meses', desde: '2025-02', durMeses: 1, aplicaciones: [] }]
   });
-  // 7 días sobre 28 (feb) = 560/28*7 = 140 (antes con base 30 habría sido 130.67)
-  RN.tests._assertEq(RN.calc.valorDescuento(RN.state.descuentos[0], 'c1', '2025-02'), 140, 'v5.43.0: descuento por días usa los días reales de febrero');
-  RN.tests._assertEq(RN.calc.getPrecioNeto(RN.state.clients[0], '2025-02'), 420, 'v5.43.0: neto con descuento por días en febrero');
+  // 7 días sobre 28 (feb) = 560/28*7 = 140 exacto; v5.47.2: se redondea hacia abajo a múltiplo de 100 = 100
+  RN.tests._assertEq(RN.calc.valorDescuento(RN.state.descuentos[0], 'c1', '2025-02'), 100, 'v5.43.0/v5.47.2: descuento por días usa los días reales de febrero y se redondea abajo a múltiplo de 100');
+  RN.tests._assertEq(RN.calc.getPrecioNeto(RN.state.clients[0], '2025-02'), 460, 'v5.43.0/v5.47.2: neto con descuento por días en febrero');
+
+  // v5.47.2: redondeo de descuentos calculados (siempre hacia abajo, a favor del negocio)
+  RN.tests._assertEq(RN.calc.redondearDescuento(988), 900, 'v5.47.2: 988 -> 900');
+  RN.tests._assertEq(RN.calc.redondearDescuento(1000), 1000, 'v5.47.2: 1000 exacto no cambia');
+  RN.tests._assertEq(RN.calc.redondearDescuento(95), 0, 'v5.47.2: menor a 100 -> 0');
+  RN.tests._assertEq(RN.calc.redondearDescuento(299.9999999999), 300, 'v5.47.2: tolera error de coma flotante');
+  RN.state.clients[0].precio = 2500;
+  RN.state.descuentos = [{ id: 'd2', clienteId: 'c1', tipo: 'descuento', modo: 'porcentaje', valor: 10, estado: 'pendiente', mes: '2025-02', vigencia: 'meses', desde: '2025-02', durMeses: 1, aplicaciones: [] }];
+  RN.tests._assertEq(RN.calc.valorDescuento(RN.state.descuentos[0], 'c1', '2025-02'), 200, 'v5.47.2: 10% de 2500 = 250 -> 200');
+  RN.tests._assertEq(RN.calc.getPrecioNeto(RN.state.clients[0], '2025-02'), 2300, 'v5.47.2: neto 2300 (múltiplo de 100)');
+  RN.state.descuentos[0].modo = 'fijo'; RN.state.descuentos[0].valor = 125;
+  RN.tests._assertEq(RN.calc.valorDescuento(RN.state.descuentos[0], 'c1', '2025-02'), 125, 'v5.47.2: modo fijo no se redondea');
+  RN.state.clients[0].precio = 560;
 
   // Tasa histórica por movimiento
   RN.state.config.tasaUsd = 500;

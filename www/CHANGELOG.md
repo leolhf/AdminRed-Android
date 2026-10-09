@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.47.2 — Descuentos calculados redondeados a múltiplos de 100
+
+- Los descuentos calculados por **porcentaje** o por **días de interrupción** se redondean ahora **hacia abajo al múltiplo de 100**, sin centavos: el descuento nunca supera al calculado (siempre a favor del negocio) y el cliente paga una cifra redonda. Ejemplos: 988 → 900; 250 → 200; 95 → 0.
+- Como las mensualidades son múltiplos de 100, el neto a cobrar también queda en múltiplo de 100 (p. ej. 2500 con 10% → descuento 200, cobra 2300).
+- El modo **fijo** no se redondea (lo escribe el usuario).
+- Un solo punto de cambio: `RN.calc.redondearDescuento` + `RN.calc.valorDescuento` (`js/core/calculations.js`); vista previa, cobro, recibos y reportes lo heredan. Pruebas actualizadas/añadidas en `tests-calculo.js`.
+- **VERSION**: `APP_VERSION` sube de `5.47.1` a `5.47.2`, sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle`.
+
 ## v5.47.1 — Corrección ortográfica del teclado en los campos de texto
 
 - Los campos de **texto libre** (notas de cobro, conceptos de gastos/caja/cuadre/inversión, motivos de descuentos, material y notas de inventario, nombre y dirección del cliente, nombre de paquete y proveedor, modelo y ubicación de equipos, plantillas de WhatsApp) activan ahora `spellcheck="true"`, `autocorrect="on"` y `autocapitalize="sentences"`: el teclado del sistema (Gboard, Samsung Keyboard, etc.) subraya faltas de ortografía y sugiere correcciones según el diccionario y los ajustes de ortografía del propio Android, que no se modifican.

@@ -600,17 +600,30 @@ RN.calc.diasDelMes = function (ym) {
   return new Date(+m[1], +m[2], 0).getDate();
 };
 
+/**
+ * v5.47.2: redondea un descuento CALCULADO (porcentaje / días) HACIA ABAJO al
+ * múltiplo de 100, sin centavos. Siempre a favor del negocio (el descuento
+ * nunca supera al calculado) y deja cifras redondas para facilitar el pago.
+ * El epsilon evita que errores de coma flotante (p. ej. 299.99999) bajen 100.
+ */
+RN.calc.redondearDescuento = function (v) {
+  v = +v || 0;
+  if (v <= 0) return 0;
+  return Math.floor((v + 1e-9) / 100) * 100;
+};
+
 RN.calc.valorDescuento = function (d, clienteId, mes) {
   const cliente = RN.state.clients.find(c => c.id === clienteId);
   const base = cliente ? RN.calc.getPrecioBase(cliente) : 0;
   switch (d.modo) {
+    // El modo fijo lo escribe el usuario: no se redondea.
     case 'fijo': return d.valor || 0;
-    case 'porcentaje': return +(base * (d.valor || 0) / 100).toFixed(2);
+    case 'porcentaje': return RN.calc.redondearDescuento(base * (d.valor || 0) / 100);
     case 'dias': {
       // v5.43.0: proporcional a días sin servicio sobre los días REALES del mes
       // (mes indicado, o el del descuento). Si no hay mes válido: días base (30).
       const dias = RN.calc.diasDelMes(mes || d.mes || d.desde) || RN.state.config.diasBaseMes || 30;
-      return +((base / dias) * (d.valor || 0)).toFixed(2);
+      return RN.calc.redondearDescuento((base / dias) * (d.valor || 0));
     }
     default: return 0;
   }
