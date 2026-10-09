@@ -528,8 +528,26 @@ tr:hover td { background: rgba(59,130,246,.07); }
 .desc-grupo-head.abierta .chev { transform: rotate(90deg); }
 .fila-finalizada td { opacity: .55; }
 /* v5.47.0 — Lote de descuentos: lista táctil de clientes (sustituye al select multiple) */
-.lot-cli-item { display: flex; align-items: center; gap: 8px; padding: 6px; min-height: 44px; cursor: pointer; }
-.lot-cli-item input[type="checkbox"] { width: 20px; height: 20px; flex: none; }
+/* v5.47.3 — La regla global `appearance:none` de los input quitaba el visto nativo y los
+   clientes marcados no se distinguían: checkbox propio con visto + fila resaltada. */
+.lot-cli-item { display: flex; align-items: center; gap: 10px; padding: 6px 8px; min-height: 44px; cursor: pointer;
+  margin: 2px 0; border: 1px solid transparent; border-radius: 8px; transition: background .12s, border-color .12s; }
+.lot-cli-item input[type="checkbox"] {
+  -webkit-appearance: none; appearance: none; backdrop-filter: none;
+  width: 22px; height: 22px; padding: 0; flex: none; border-radius: 6px;
+  border: 2px solid var(--neo-txt-muted); background: transparent; position: relative; cursor: pointer;
+}
+.lot-cli-item input[type="checkbox"]:checked { background: var(--neo-blue); border-color: var(--neo-blue); }
+.lot-cli-item input[type="checkbox"]:checked::after {
+  content: ""; position: absolute; left: 6px; top: 1px; width: 6px; height: 12px;
+  border: solid #fff; border-width: 0 3px 3px 0; transform: rotate(45deg);
+}
+.lot-cli-item span { flex: 1; min-width: 0; font-size: 15px; color: var(--neo-txt); }
+.lot-cli-item.marcado { background: rgba(59,130,246,.16); border-color: rgba(59,130,246,.55); }
+.lot-cli-item.marcado span { font-weight: 700; }
+.lot-cli-bar { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 6px; }
+.lot-cli-bar .lot-cli-count { font-size: 12px; font-weight: 700; color: var(--neo-blue); }
+.lot-cli-bar button { font-size: 12px; padding: 4px 10px; }
 
 .badge.ok   { background: rgba(34,197,94,.16);  color: var(--neo-green);  border-color: rgba(34,197,94,.35); }
 .badge.warn { background: rgba(245,158,11,.16); color: var(--neo-amber);  border-color: rgba(245,158,11,.35); }

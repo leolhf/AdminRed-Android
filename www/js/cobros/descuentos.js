@@ -528,6 +528,25 @@ RN.descuentos.revertirPorCobro = function (cobroId) {
   });
 };
 
+/** v5.47.3: resalta las filas marcadas del lote y actualiza el contador. */
+RN.descuentos._refrescarMarcasLote = function () {
+  const items = document.querySelectorAll('#lot-cli .lot-cli-item');
+  let n = 0;
+  items.forEach(function (it) {
+    const on = !!(it.querySelector('input') && it.querySelector('input').checked);
+    it.classList.toggle('marcado', on);
+    if (on) n++;
+  });
+  const c = document.getElementById('lot-cli-count');
+  if (c) c.textContent = n + (n === 1 ? ' marcado' : ' marcados');
+};
+
+/** v5.47.3: marcar o desmarcar todos los clientes del lote. */
+RN.descuentos.marcarLote = function (marcar) {
+  document.querySelectorAll('#lot-cli input[type="checkbox"]').forEach(function (el) { el.checked = !!marcar; });
+  RN.descuentos._refrescarMarcasLote();
+};
+
 /** Descuento por lote: aplicar el mismo descuento a varios clientes. */
 RN.descuentos.abrirLote = function () {
   const activos = RN.calc.clientesActivos();
@@ -538,6 +557,9 @@ RN.descuentos.abrirLote = function () {
     <div class="modal-body">
       <p class="muted mb-16">Aplica el mismo descuento puntual a varios clientes a la vez.</p>
       <div class="form-row"><div><label>Clientes (toca para marcar) *</label>
+        <div class="lot-cli-bar"><span class="lot-cli-count" id="lot-cli-count">0 marcados</span>
+          <span><button type="button" class="btn" onclick="RN.descuentos.marcarLote(true)">Todos</button>
+          <button type="button" class="btn" onclick="RN.descuentos.marcarLote(false)">Ninguno</button></span></div>
         <div id="lot-cli" style="max-height:200px;overflow:auto;border:1px solid var(--neo-stroke);border-radius:8px;padding:4px 8px">${cliOpts}</div></div></div>
       <div class="form-row cols-2">
         <div><label>Tipo</label><select id="lot-tipo">${Object.keys(RN.descuentos.TIPOS).map(k => `<option value="${k}">${k}</option>`).join('')}</select></div>
@@ -562,6 +584,8 @@ RN.descuentos.abrirLote = function () {
       <button class="btn primary" onclick="RN.descuentos.guardarLote()">Aplicar lote</button></div>`;
   RN.uiComponents.modal(html, { lg: true });
   // v5.14.4: mostrar/ocultar input de N meses según duración elegida
+  const lotCli = document.getElementById('lot-cli');
+  if (lotCli) lotCli.addEventListener('change', RN.descuentos._refrescarMarcasLote);
   const lotDur = document.getElementById('lot-duracion');
   if (lotDur) {
     lotDur.addEventListener('change', function () {

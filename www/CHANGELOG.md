@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.47.3 — Lote de descuentos: clientes marcados bien visibles
+
+- En **Descuento por lote → Clientes (toca para marcar)** no se distinguía qué clientes estaban marcados: la regla global `appearance:none` de los `input` quitaba el visto nativo del checkbox.
+- Ahora cada checkbox tiene **visto propio** (azul con ✓), la **fila marcada se resalta** y el nombre pasa a negrita.
+- Contador **«N marcados»** y botones **Todos / Ninguno**.
+- La selección que se aplica no cambia (`guardarLote` sigue leyendo los checkbox marcados).
+- **VERSION**: `APP_VERSION` sube de `5.47.2` a `5.47.3`, sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle`.
+
 ## v5.47.2 — Descuentos calculados redondeados a múltiplos de 100
 
 - Los descuentos calculados por **porcentaje** o por **días de interrupción** se redondean ahora **hacia abajo al múltiplo de 100**, sin centavos: el descuento nunca supera al calculado (siempre a favor del negocio) y el cliente paga una cifra redonda. Ejemplos: 988 → 900; 250 → 200; 95 → 0.
