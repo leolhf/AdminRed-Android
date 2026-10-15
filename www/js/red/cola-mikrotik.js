@@ -495,7 +495,7 @@ RN.cola.abrirResumen = function () {
   h += '</div><div class="modal-footer">' +
     '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cerrar</button>' +
     '<button class="btn" onclick="RN.cola.abrirAjustes()">\u2699 Reglas</button>' +
-    '<button class="btn primary" onclick="RN.cola.mostrarScript('simple')">Script estilo export</button> <button class="btn" onclick="RN.cola.mostrarScript('upsert')">Script upsert</button></div>';
+    '<button class="btn primary" onclick="RN.cola.mostrarScript(\'simple\')">Script estilo export</button> <button class="btn" onclick="RN.cola.mostrarScript(\'upsert\')">Script upsert</button></div>';
   RN.uiComponents.modal(h, { lg: true });
 };
 

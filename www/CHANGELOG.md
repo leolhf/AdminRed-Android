@@ -2,6 +2,12 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.53.7 — Fix botones tema / guardar / versión
+
+- Corregido error de sintaxis en `cola-mikrotik.js` (comillas en botones de script) que impedía cargar el módulo y hacía fallar el arranque al pintar el dashboard.
+- Los botones del header (tema, guardar, versión, menú) se registran **antes** de `render.todo`, así siguen activos aunque falle una vista.
+- `estadoCapacidad` y el widget de capacidad toleran ausencia de `RN.cola`.
+
 ## v5.53.6 — MikroTik: IP ya ocupada
 
 Tras guardar un cliente, el modal de comando muestra:

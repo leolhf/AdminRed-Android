@@ -72,7 +72,38 @@ RN.init.arrancar = async function () {
   // 11. UI: tabs, render
   RN.tabs.init();
   RN.tabs.ir(RN.tabs.actual || 'dashboard');
-  RN.render.todo();
+  // v5.53.7: botones de header ANTES del render, para que sigan funcionando
+  // aunque falle una vista (p. ej. error en cola MikroTik).
+  (function () {
+    try {
+      var btnSave = document.getElementById('btn-save');
+      if (btnSave) btnSave.addEventListener('click', function () { RN.storageFile.guardarAhora(); });
+      var btnUndo = document.getElementById('btn-undo');
+      if (btnUndo) btnUndo.addEventListener('click', function () { RN.undo.deshacer(); });
+      var btnTheme = document.getElementById('btn-theme');
+      if (btnTheme) btnTheme.addEventListener('click', function () { RN.theme.toggle(); });
+      var btnInstall = document.getElementById('btn-install');
+      if (btnInstall) btnInstall.addEventListener('click', function () { RN.pwa.instalar(); });
+      var btnMenu = document.getElementById('btn-menu');
+      if (btnMenu) btnMenu.addEventListener('click', RN.init.menuRapido);
+      var btnVersion = document.getElementById('btn-version');
+      if (btnVersion) btnVersion.addEventListener('click', function () {
+        if (RN.platform && RN.platform.esNativo()) {
+          if (RN.update && RN.update.buscarAhora) RN.update.buscarAhora();
+        } else if (RN.pwa && RN.pwa.forzarActualizacion) {
+          RN.pwa.forzarActualizacion();
+        }
+      });
+    } catch (e) { console.warn('[init] listeners header', e); }
+  })();
+
+  try {
+    RN.render.todo();
+  } catch (e) {
+    console.error('[init] render.todo', e);
+    try { RN.notifyUI.toast('Error al pintar la pantalla. Tema y guardado siguen activos.', 'error', 6000); } catch (e2) {}
+  }
+
 
   // 10b. v5.10.5: Aviso de cambio de mes — si hay cobros pendientes del mes
   // anterior (clientes que debían pagar el mes pasado y no lo hicieron), avisar
@@ -129,30 +160,7 @@ RN.init.arrancar = async function () {
   const sCo = document.getElementById('search-cobros');
   if (sCo) sCo.addEventListener('input', () => RN.render.cobros());
 
-  // 13. Botones de header
-  const btnSave = document.getElementById('btn-save');
-  if (btnSave) btnSave.addEventListener('click', () => RN.storageFile.guardarAhora());
-  const btnUndo = document.getElementById('btn-undo');
-  if (btnUndo) btnUndo.addEventListener('click', () => RN.undo.deshacer());
-  const btnTheme = document.getElementById('btn-theme');
-  if (btnTheme) btnTheme.addEventListener('click', () => RN.theme.toggle());
-  const btnInstall = document.getElementById('btn-install');
-  if (btnInstall) btnInstall.addEventListener('click', () => RN.pwa.instalar());
-  const btnMenu = document.getElementById('btn-menu');
-  if (btnMenu) btnMenu.addEventListener('click', RN.init.menuRapido);
-
-  // v5.13.12: Badge de versión clickeable para forzar la búsqueda/aplicación
-  // de actualizaciones de la app (Service Worker).
-  // v5.24.0: En modo nativo (APK) no hay Service Worker; el badge consulta
-  // directamente el repositorio de releases (RN.update).
-  const btnVersion = document.getElementById('btn-version');
-  if (btnVersion) btnVersion.addEventListener('click', () => {
-    if (RN.platform && RN.platform.esNativo()) {
-      if (RN.update && RN.update.buscarAhora) RN.update.buscarAhora();
-    } else {
-      RN.pwa.forzarActualizacion();
-    }
-  });
+  // 13. Botones de header: registrados antes de render.todo (v5.53.7)
 
   // FAB: botón flotante de acción rápida (móvil)
   const fab = document.getElementById('fab-action');

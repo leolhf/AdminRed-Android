@@ -1452,7 +1452,8 @@ RN.calc.topeMegas = function () {
  * Los megas vendidos quedan como dato informativo.
  */
 RN.calc.estadoCapacidad = function () {
-  return RN.cola.estadoCapacidad();
+  if (RN.cola && RN.cola.estadoCapacidad) return RN.cola.estadoCapacidad();
+  return { comprometido: 0, tope: 0, pct: 0, pctReal: 0, excedido: false, aviso: false, vendidos: 0, megasAdmin: 0, relacionVenta: 0, paquete: 0, reserva: 0, margen: 0 };
 };
 
 /** Utilidad neta del mes = ingresos - gastos. */

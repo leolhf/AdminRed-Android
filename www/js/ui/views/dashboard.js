@@ -145,7 +145,7 @@ RN.render.dashboard = function () {
     }
 
     // Indicador de capacidad: suma de Limit At comprometida vs tope (v5.50.0; antes megas vendidos vs tope)
-    if (cfg.proveedorMegas > 0) {
+    if (cfg.proveedorMegas > 0 && RN.cola && RN.cola.txtM) {
       const cap = RN.calc.estadoCapacidad();
       const cls = cap.excedido ? 'bar-red' : (cap.aviso ? 'bar-amber' : 'bar-green');
       const estadoTxt = cap.excedido
