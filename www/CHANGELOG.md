@@ -2,6 +2,213 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.53.6 — MikroTik: IP ya ocupada
+
+Tras guardar un cliente, el modal de comando muestra:
+
+- **Actualizar (upsert)** — si la IP ya tiene cola en el router (ej. nombre `28`), la actualiza a Pepe + límites del plan. Recomendado.
+- **ADD puro** — solo si la IP está libre.
+- Aviso si otra ficha de la app usa la misma IP.
+
+## v5.53.5 — Comandos MikroTik estilo RouterBoard
+
+- Genera `/queue simple add` igual que el **export** del RB (limit-at, max-limit, parent LEO, priority, pcq, target /32).
+- Tras **guardar un cliente** con IP y megas: modal con el comando listo para copiar al Terminal.
+- Script completo: **estilo export** o **upsert** (actualizar si ya existe).
+- Al dar de baja: copia comando de **remove** de la cola por IP.
+
+## v5.53.4 — Flujo de apertura de modales
+
+- `RN.uiComponents.trasCerrar(fn)` — cierra y ejecuta la acción en el siguiente frame (doble rAF).
+- `modal(..., { replace: true })` y `reemplazarModal()` — sustituyen sin apilar.
+- `cerrarModal({ todo: true })` — cierra toda la pila.
+- Aviso de inicio → Cobranza y refresh de WhatsApp en Cobranza usan el nuevo flujo.
+
+## v5.53.3 — Fix aviso → Cobranza
+
+- El botón **Ir a Cobranza** del modal al abrir ahora cierra el aviso y abre el modal de cobranza (con retardo para no chocar con el overlay).
+- Si no hay pendientes en Cobranza, redirige a **Cobros** con filtro de ciclo.
+
+## v5.53.2 — Avisos al abrir la app
+
+Máximo **1 modal** por apertura, en este orden:
+
+1. **Cobranza / ciclo** — hoy, en ventana o vencidos
+2. **Cierre de mes** — día ≥ 28 sin snapshot (o mes anterior sin cerrar)
+3. **Paquete proveedor** — día ≥ 10 y sin gasto de proveedor registrado
+4. **Tasa USD** — urgente o sin tasa (respeta posposición de tasa-aviso)
+
+Cada aviso tiene **No mostrar hoy**. El botón flotante de tasa sigue activo para avisos leves.
+
+## v5.53.1 — Cobranza: notificados por WhatsApp
+
+- En el modal **📋 Cobranza**, los clientes ya notificados en este ciclo muestran:
+  - Badge **💬 Notificado**
+  - Fila con fondo/borde verde
+  - Botón «💬 Otra vez» si se vuelve a avisar
+- Contador **💬 N notificados** por corte
+- Tras enviar WhatsApp se refresca el modal
+
+## v5.53.0 — Cierre reforzado + Fases 4–7
+
+### Cierre de mes
+- Checkbox obligatorio «He revisado los avisos».
+- Si hay pendientes de cobro: cierre normal bloqueado; solo **Forzar cierre** (con confirmación).
+- Snapshot guarda `cierreForzado` y `pendientesAlCerrar`.
+
+### Fase 4 — Préstamos
+- Meta mensual de devolución (CUP) + progreso del mes.
+- Saldo dual USD/CUP en deudas activas.
+- Estimación de meses restantes.
+
+### Fase 5 — Margen por cliente
+- Nueva vista **Análisis → Margen** (ranking neto − costo efectivo del mega).
+
+### Fase 6 — Morosos / bajas
+- Vista **Morosos / bajas**: listar mora, dar de baja con motivo, reactivar.
+
+### Fase 7 — Incidencias
+- Vista **Incidencias**: tickets simples (abierta/cerrada) por cliente.
+
+## v5.52.9 — Fase 3: cierre de mes guiado
+
+- Botón **Cerrar mes** abre un **asistente con checklist**:
+  - Paquete del proveedor (¿cubierto / gasto registrado?)
+  - Cobros pendientes y pagos parciales
+  - Deudas personales (devuelto vs por devolver)
+  - Mora
+  - Saldo de caja
+  - Descuentos puntuales a anular
+- Confirmar genera el **snapshot** y anula puntuales (igual que antes).
+- No obliga a tener todo en verde: puedes cerrar con advertencias.
+
+## v5.52.8 — Fase 2: recordatorios Hoy / En ciclo / Vencidos
+
+- En **Cobros**: chips **Todos · Hoy · En ciclo · Vencidos · 💬 Notificados** con contadores.
+- Orden por urgencia (hoy → en ventana → vencidos → resto).
+- Notificaciones locales con texto de **ciclo** (ej. «del 11 al 15»).
+- Cobranza: título de corte incluye la ventana de cobro.
+- `RN.ciclos.resumenRecordatorios()` clasifica pendientes del mes.
+
+## v5.52.7 — Fase 1: WhatsApp con ciclo de cobro + marca notificado
+
+- Ventanas de cobro: corte **5** → del 1 al 5; **15** → del 11 al 15; **25** → del 21 al 25.
+- Plantillas de recordatorio/mora incluyen **Ciclo de cobro** (`{cicloCobro}`).
+- Al abrir WhatsApp se marca el cliente; en **Cobros** aparece con borde verde, 💬 y badge «Notificado».
+- Botón **💬 WhatsApp** en cada ficha pendiente de cobro.
+- La marca vale para todo el ciclo (mes + día de pago), no solo el día del envío.
+
+## v5.52.6 — Recuperación topeada al 100 %
+
+- La barra **Recuperación de la inversión** ya no muestra 117 % u otros valores > 100.
+- **Recuperado** = capital cubierto (máx. = invertido); **Por recuperar** = 0 al completar.
+- Si el margen de clientes supera el capital, se muestra **Ganancia extra** (no “más recuperación”).
+- En tarjetas individuales: % topeado a 100 y nota de excedente.
+- **Préstamos externos** no se archivan por margen: solo al devolver el capital al prestamista (barra de deudas).
+
+## v5.52.5 — Cierre formal de inversiones de capital propio
+
+- Al alcanzar **≥ 100 %** de recuperación efectiva, la inversión de capital propio se marca con `inversionRecuperada` y `fechaRecuperacion`.
+- Se mueve a la sección **Inversiones recuperadas** (como las deudas concluidas).
+- Toast al marcar: *«Inversión recuperada… El margen de aquí en adelante es ganancia.»*
+- Badge **✓ Recuperada** en la tarjeta; la barra global muestra «✓ Inversión recuperada» cuando corresponde.
+- Los cobros posteriores siguen contando (excedente = ganancia del negocio).
+
+## v5.52.4 — Precio medio de venta corregido
+
+- **Bug:** el precio medio dividía ingresos cobrados del mes entre *todos* los megas vendidos. A mitad de mes (clientes sin pagar o con descuento) salía por debajo del costo de compra (ej. 885 vs 1.250) aunque vendieras a 1.500–2.500 CUP/M.
+- **Ahora:**
+  - **Precio medio de venta** = neto esperado de los clientes ÷ megas (tarifa real de venta).
+  - **Precio medio cobrado** = solo sobre quienes ya pagaron este mes (megas de esos clientes).
+  - **Ingreso de megas sin costo** usa el precio medio de venta, no el cobrado parcial.
+
+## v5.52.3 — Rentabilidad real: plus de cortesía + cobertura del paquete
+
+- **Plus de cortesía** en Gestionar servicio: megas que pagas (ej. 40) + plus gratis del proveedor (ej. 5). El costo del paquete sigue siendo solo `megas pagados × precio`.
+- Capacidad / tope de red = pagados + plus − reserva.
+- **Tarjeta Rentabilidad rediseñada:** resumen del paquete, cobertura con lo cobrado (y hasta qué corte), precio medio de venta, ganancia por mega, ahorro por megas sin costo e ingreso aprox. de esos megas.
+- Migración: si no había `plusMegas`, se toma el valor legacy de `sobreventaMegas`.
+
+## v5.52.2 — Botones de caja simplificados
+
+- En la tarjeta **🏦 Caja · Dos bolsillos** solo quedan: Depositar, Retirar, Depósitos, Retiros y Por moneda.
+- Se eliminaron los atajos Depositar/Retirar USD y CUP: la moneda (CUP / USD / Mixto) se elige dentro del modal.
+
+## v5.52.1 — Caja unificada (proyectada + dos bolsillos)
+
+- **Fusión de tarjetas:** "🏦 Caja proyectada" y "🔒 Caja — Dos bolsillos" se unifican en una sola tarjeta **🏦 Caja · Dos bolsillos**.
+- Muestra en un solo bloque: proyección al cierre del mes, reserva/libre proyectados, estado actual de la gaveta (USD/CUP físicos), barra de bolsillos y acciones.
+- **Botones simplificados:** solo Depositar, Retirar, historiales y «Por moneda». La moneda (CUP / USD / Mixto) se elige dentro del modal; se eliminaron los atajos Depositar/Retirar USD y CUP de la tarjeta.
+- La lógica de cálculo (`cajaProyeccion` y `bolsillos`) no cambia; solo se unifica el render.
+- `renderReserva` queda como no-op por compatibilidad.
+
+## v5.52.0 — Caja proyectada más clara, reserva que se reinicia cada mes y Ajustes como modal
+
+- **🏦 Caja proyectada rediseñada** (`RN.calc.cajaProyeccion`, `RN.panelWidgets.renderCajaProyectada`): resultado grande arriba («Al cerrar el mes tendrás») con aviso verde/amarillo/rojo; la cuenta en cuatro líneas (hoy en caja + te falta cobrar − te falta pagar = al cierre, con «faltan N de M clientes»); barra de **reserva y libre al cierre**; **«Puedes sacar hoy sin comprometer la reserva»** con botón Retirar; lo que falta cobrar **por corte**; **escenario con la tasa de cobro real** (promedio ponderado de los últimos 3 meses cerrados, aplicada a lo que falta cobrar); y una nota con lo no incluido (atrasos de meses anteriores y gastos sin registrar).
+- **«Te falta cobrar» ya no cuenta a quienes aún no empiezan a pagar** (`mesInicio` futuro), igual que la ganancia proyectada, y excluye administradores.
+- **La reserva se reinicia cada mes** (`RN.calc.bolsillos`): si en un mes se retira más de lo libre (se toca la reserva), al cerrar ese mes la reserva se recorta a lo que realmente quedó en caja y el mes siguiente arranca desde ahí, sin arrastrar un bolsillo libre negativo. En el mes en curso no se recorta y se sigue avisando el faltante. Se calcula con el historial existente (ingresos + depósitos − gastos − retiros por mes); no se guardan datos nuevos. `bolsillos()` devuelve además `reservaInicioMes` y `gananciaMes`. Al aplicarse sobre el historial, un retiro de más de meses pasados deja de figurar como deuda de libre.
+- **Retiro seguro**: `retirableHoy` = caja al cierre − reserva al cierre, sin pasar de lo que hay hoy en caja. Es una cifra distinta de «Puedes retirar» de la tarjeta Dos bolsillos (esa usa solo lo cobrado hasta hoy y no descuenta lo que falta pagar).
+- **⚙️ Ajustes ahora es un modal** que se abre desde ⚡ Acciones rápidas (`RN.ajustes.abrir()`, `js/ui/ajustes-modal.js`). Se quitó la pestaña Análisis → Ajustes; `RN.tabs.ir('ajustes')` abre el modal por compatibilidad. El contenido sigue en el DOM (`#ajustes-overlay`), así que todos sus ids y funciones (Drive, respaldo, configuración, PIN, actualizaciones) siguen igual; Esc o tocar fuera lo cierra, y los modales que se abren desde dentro quedan por encima.
+- Sin cambios en el esquema de datos. Pruebas nuevas (355/355) y prueba jsdom `tools/test-ajustes-modal.js` (27 comprobaciones; `npm run test:ui`, integrada en el CI).
+- **VERSION**: `APP_VERSION` sube de `5.51.0` a `5.52.0`, sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle`.
+
+## v5.51.0 — Editar descuentos y bonificaciones (también las permanentes)
+
+- **Botón ✏️ en Finanzas → Descuentos**: se pueden editar modo, valor, motivo y duración de cualquier descuento o bonificación vigente (incluidas las permanentes y las de N meses). El cliente y el tipo no cambian. Los ya finalizados o anulados no se editan.
+- **Los meses anteriores nunca se tocan.** Un cambio rige siempre desde el mes actual hacia adelante. Si el descuento viene de meses anteriores se **parte en dos**: el viejo se cierra en el último mes que no cambia (conserva sus aplicaciones y valores congelados) y se crea uno nuevo (`reemplazaA`) con los valores editados.
+- **Si el mes actual ya se cobró**, antes de guardar se pregunta:
+  - **Corregir también el cobro de este mes** (se cobró por error): el neto congelado del cobro se ajusta con la diferencia (valor cobrado → valor nuevo), se recalcula si queda completo, parcial o con vuelto, y el cobro anota la edición (`ediciones[]`). Muestra de antemano el neto resultante y el estado del cobro.
+  - **Solo desde el mes siguiente**: este mes queda como se cobró y el valor nuevo rige desde el próximo mes. Solo se ofrece si el descuento continúa el mes próximo (permanentes y de N meses con meses por delante); los puntuales y de «1 solo pago» ya cobrados solo admiten corregir.
+- Sin cobro este mes, el cambio rige desde este mes y no pregunta. Si el descuento se creó este mes, se edita en su sitio.
+- «N meses» en el formulario cuenta desde que el cambio empieza a regir (se precarga con los meses que le quedan).
+- Auditoría: nuevo evento `descuento_editar` con valores antes/después.
+- Sin cambios en el esquema de datos (campos opcionales nuevos: `reemplazaA`, `reemplazadoPor`, `cobro.ediciones`). Pruebas nuevas (333/333).
+- **VERSION**: `APP_VERSION` sube de `5.50.0` a `5.51.0`, sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle`.
+
+## v5.50.0 — Administradores, colas MikroTik (Limit At) y capacidad por Limit At
+
+- **Cliente administrador** (casilla «Administrador (no paga)»): acepta precio 0 (solo con la casilla; el resto de clientes sigue dando error), estado propio `admin`, mora siempre 0, y queda fuera de cobros, alertas, notificaciones, WhatsApp, estadísticas y cobranza. Sus megas cuentan para la red pero se muestran aparte («X M de administración»). `clientesActivos()` ahora excluye admins; `clientesEnRed()` los incluye (capacidad).
+- **Cola MikroTik** (`js/red/cola-mikrotik.js`): Max Limit, Limit At y prioridad por reglas editables en Ajustes (plus ≥8M 45 % prio 3; 5–7M 35 % prio 4; 4M prio 6; 3M prio 7; <3M prio 8; redondeo a 50k; admins prio 1 con Limit At manual obligatorio). Botón «Copiar comando» en la ficha y en la lista. La IP es obligatoria y válida (/32) para clientes con cola. Los admins no llevan `max-limit` en el comando. La app NO se conecta al router. Sintaxis del comando sin probar en RouterOS: probar con un solo cliente.
+- **Capacidad por Limit At**: `estadoCapacidad` = suma de Limit At de activos (admins incluidos) contra tope = paquete − reserva; aviso al 80 %, alerta al excederse; «cuántos caben»; pantalla «Resumen de capacidad» y script completo. «Sobreventa» pasa a «reserva» (`reservaMegas`, 1M por defecto). Megas vendidos quedan como dato informativo.
+- **Esquema de datos 10 → 11**: solo agrega valores por defecto de config; los clientes existentes no se modifican (`esAdmin` / `limitAtManual` ausentes).
+- Pruebas nuevas (288/288).
+- **VERSION**: `APP_VERSION` sube de `5.49.0` a `5.50.0`, sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle`.
+
+## v5.49.0 — Redondeo del resto en CUP de pagos mixtos (USD + CUP), configurable
+
+- Cuando el cliente paga con **USD + CUP**, el resto en CUP se redondea al múltiplo de 100 según el modo elegido en **Ajustes → «Redondeo del resto en CUP»**: **a favor del cliente** (por defecto: hacia abajo), **a mi favor** (hacia arriba) o **exacto**. Ej.: debe 10.50 USD, paga 10 USD y faltan ≈269 CUP → paga 200 CUP y el cobro queda **completo**.
+- Solo afecta pagos con USD de por medio: todo en CUP o todo en USD no se redondea. Si lo que falta es menos de 100 CUP, se da por saldado.
+- La diferencia no se pierde: el cobro guarda `ajusteRedondeo` (+ perdonado / − cobrado de más) y `modoRedondeo`; el ingreso de servicio (`monto`) es lo realmente recibido, así que caja y reportes cuadran. `precioNetoAplicado` y el estado del mes no cambian.
+- Se muestra en el modal de cobro (estado y hint del campo CUP), en el aviso al registrar, en el recibo y, en Ajustes, un resumen del mes (perdonado / cobrado de más).
+- Solo afecta pagos nuevos: los cobros ya registrados no cambian. Pruebas nuevas (232/232).
+- **VERSION**: `APP_VERSION` sube de `5.48.0` a `5.49.0`, sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle`.
+
+## v5.48.0 — Precio fijo en USD por mega (con regla de tasa a tiempo / tarde)
+
+- **Cliente Personalizado → «Moneda del precio por mega»**: `CUP` (como siempre) o `USD`. Con USD el precio fijo es megas × USD por mega (ej. 10 × 3.5 = 35 USD) y el CUP del mes se **deriva de la tasa** y se redondea **hacia arriba al múltiplo de 100**.
+- **Regla de tasa** (`RN.calc.infoTasa`): la tasa del mensaje es la vigente cuando se envía el recordatorio del mes (se guarda la 1.ª vez en `cliente.tasasMensaje[mes]`). **A tiempo** (hasta el día de pago/corte del cliente, inclusive) paga con la **menor** entre la del mensaje y la de hoy; **tarde** con la **mayor**. Sin mensaje enviado: tasa de hoy.
+- **Mensaje de WhatsApp**: para clientes USD, `{precioNeto}` y `{precioBase}` salen en ambas monedas («35.00 USD o 18,800.00 CUP (1 USD = 537 CUP)»). Marcadores nuevos: `{precioUSD}`, `{precioCUP}`, `{tasa}`.
+- **Cobro**: el modal muestra el precio en USD, la tasa aplicada y el motivo; pagar exactamente el neto en USD cubre el neto en CUP (aunque se haya redondeado hacia arriba). El historial guarda `tasaBaseUsd`, `tasaMensajeUsd`, `tasaHoyUsd`, `motivoTasa` y `precioNetoUSD`.
+- Los descuentos por porcentaje/días se calculan sobre el CUP ya convertido (con el redondeo a 100 de v5.47.2); el fijo sigue en CUP.
+- Los clientes en CUP y los de plan no cambian. Pruebas nuevas en `tests-calculo.js` (215/215).
+- **VERSION**: `APP_VERSION` sube de `5.47.3` a `5.48.0`, sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle`.
+
+## v5.47.3 — Lote de descuentos: clientes marcados bien visibles
+
+- En **Descuento por lote → Clientes (toca para marcar)** no se distinguía qué clientes estaban marcados: la regla global `appearance:none` de los `input` quitaba el visto nativo del checkbox.
+- Ahora cada checkbox tiene **visto propio** (azul con ✓), la **fila marcada se resalta** y el nombre pasa a negrita.
+- Contador **«N marcados»** y botones **Todos / Ninguno**.
+- La selección que se aplica no cambia (`guardarLote` sigue leyendo los checkbox marcados).
+- **VERSION**: `APP_VERSION` sube de `5.47.2` a `5.47.3`, sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle`.
+
+## v5.47.2 — Descuentos calculados redondeados a múltiplos de 100
+
+- Los descuentos calculados por **porcentaje** o por **días de interrupción** se redondean ahora **hacia abajo al múltiplo de 100**, sin centavos: el descuento nunca supera al calculado (siempre a favor del negocio) y el cliente paga una cifra redonda. Ejemplos: 988 → 900; 250 → 200; 95 → 0.
+- Como las mensualidades son múltiplos de 100, el neto a cobrar también queda en múltiplo de 100 (p. ej. 2500 con 10% → descuento 200, cobra 2300).
+- El modo **fijo** no se redondea (lo escribe el usuario).
+- Un solo punto de cambio: `RN.calc.redondearDescuento` + `RN.calc.valorDescuento` (`js/core/calculations.js`); vista previa, cobro, recibos y reportes lo heredan. Pruebas actualizadas/añadidas en `tests-calculo.js`.
+- **VERSION**: `APP_VERSION` sube de `5.47.1` a `5.47.2`, sincronizada con `package.json`, `package-lock.json`, `version.json` y `android/app/build.gradle`.
+
 ## v5.47.1 — Corrección ortográfica del teclado en los campos de texto
 
 - Los campos de **texto libre** (notas de cobro, conceptos de gastos/caja/cuadre/inversión, motivos de descuentos, material y notas de inventario, nombre y dirección del cliente, nombre de paquete y proveedor, modelo y ubicación de equipos, plantillas de WhatsApp) activan ahora `spellcheck="true"`, `autocorrect="on"` y `autocapitalize="sentences"`: el teclado del sistema (Gboard, Samsung Keyboard, etc.) subraya faltas de ortografía y sugiere correcciones según el diccionario y los ajustes de ortografía del propio Android, que no se modifican.

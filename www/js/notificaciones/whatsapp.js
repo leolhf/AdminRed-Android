@@ -35,14 +35,31 @@ RN.whatsapp.enviarRecordatorio = function (clienteId) {
   const mes = RN.calc.mesActualStr();
   const mora = RN.calc.getMora(c);
   const tpl = mora > 0 ? tpls.mora : tpls.recordatorio;
+  // v5.48.0: cliente con precio fijo en USD -> se fija la tasa del mensaje (1.ª vez del mes)
+  // y el mensaje sale en USD y CUP según la tasa que le corresponde.
+  const esUSD = RN.calc.esPrecioUSD(c);
+  if (esUSD && RN.calc.fijarTasaMensaje(c, mes)) {
+    try { RN.storageLocal.guardar(); } catch (e) { /* silencioso */ }
+  }
+  const netoCUP = RN.calc.getPrecioNeto(c, mes);
+  const tasaMsg = esUSD ? RN.calc.infoTasa(c, mes).tasa : (RN.moneda.tasa() || 0);
+  const netoUSD = esUSD ? RN.calc.getPrecioNetoUSD(c, mes) : (tasaMsg ? RN.moneda.aUSD(netoCUP) : 0);
   const ctx = {
     nombre: c.nombre,
-    precioBase: RN.calc.formatCUP(RN.calc.getPrecioBase(c)),
+    precioBase: esUSD
+      ? RN.waTemplates.montoDual(RN.calc.totalUSD(c), RN.calc.getPrecioBase(c, mes), tasaMsg)
+      : RN.calc.formatCUP(RN.calc.getPrecioBase(c)),
     descuentoRecurrente: RN.calc.formatCUP(RN.calc.getDescuentoRecurrente(c)),
     descuentoLinea: RN.calc.formatCUP(RN.calc.getDescuentosPuntualesMes(c.id, mes)),
-    precioNeto: RN.calc.formatCUP(RN.calc.getPrecioNeto(c, mes)),
+    precioNeto: esUSD ? RN.waTemplates.montoDual(netoUSD, netoCUP, tasaMsg) : RN.calc.formatCUP(netoCUP),
+    precioUSD: netoUSD ? RN.moneda.formatUSD(netoUSD) : '',
+    precioCUP: RN.calc.formatCUP(netoCUP),
+    tasa: tasaMsg ? String(tasaMsg) : '',
     mes: RN.calc.mesTexto(RN.calc.mesActualStr()),
-    diaPago: c.diaPago || 1,
+    diaPago: String(c.diaPago || 1),
+    cicloCobro: (RN.ciclos && RN.ciclos.ventanaCobro)
+      ? RN.ciclos.ventanaCobro(c.diaPago || 1).textoLargo
+      : ('día ' + (c.diaPago || 1)),
     mora: String(mora)
   };
   RN.whatsapp.enviar(c.telefono, RN.waTemplates.rellenar(tpl, ctx));
@@ -54,6 +71,10 @@ RN.whatsapp.enviarRecordatorio = function (clienteId) {
   try {
     if (RN.notifyState) RN.notifyState.marcar(c.id, c.diaPago, 'wa');
     if (RN.notify && RN.notify.cancelarCliente) RN.notify.cancelarCliente(c.id);
+    // v5.52.7: refrescar lista de cobros para mostrar marca visual "notificado"
+    if (RN.render && RN.render.cobros) {
+      try { RN.render.cobros(); } catch (e2) { /* silencioso */ }
+    }
   } catch (e) { /* silencioso */ }
 };
 

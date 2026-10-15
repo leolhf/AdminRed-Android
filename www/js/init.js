@@ -83,6 +83,11 @@ RN.init.arrancar = async function () {
   // desde la última actualización de la tasa y muestra el botón flotante + indicador.
   setTimeout(function () { if (RN.tasaAviso) RN.tasaAviso.comprobarAlIniciar(); }, 1000);
 
+  // 11c. v5.53.2: avisos al abrir (cobranza > cierre > paquete > tasa), máx. 1 modal
+  setTimeout(function () {
+    try { if (RN.avisosInicio) RN.avisosInicio.comprobarAlIniciar(); } catch (e) {}
+  }, 1500);
+
   // 11b. v5.10.3: Refrescar el estado del archivo vinculado DESPUÉS de renderizar.
   // restaurarHandle() corre en el paso 6, cuando #archivo-status aún no existía,
   // por lo que el "✅ Archivo vinculado" no se pintaba al reiniciar y la UI mostraba
@@ -233,6 +238,7 @@ RN.init.menuRapido = function () {
     <div class="modal-header"><h3>Acciones rápidas</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>
     <div class="modal-body">
       <div class="flex" style="flex-direction:column;gap:8px">
+        <button class="btn primary" onclick="RN.init._act(()=>RN.ajustes.abrir())">⚙️ Ajustes</button>
         <button class="btn" onclick="RN.init._act(()=>RN.mora.listar())">📋 Ver clientes con mora</button>
         <button class="btn" onclick="RN.init._act(()=>RN.historialMensual.ver())">📅 Historial mensual</button>
         <button class="btn" onclick="RN.init._act(()=>RN.prediccion.ver())">🔮 Predicción de ingresos</button>

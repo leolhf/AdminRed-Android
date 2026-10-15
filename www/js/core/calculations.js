@@ -134,6 +134,8 @@ RN.calc.getStatus = function (cliente, mes) {
   // en vez de 'ok'. Antes devolvia 'ok' (al d\u00eda) para clientes dados de baja,
   // lo que mostraba badge verde en clientes inactivos.
   if (!cliente) return 'ok';
+  // v5.50.0: administrador (no paga): estado propio, nunca por vencer ni moroso.
+  if (RN.calc.esAdmin(cliente)) return cliente.activo === false ? 'inactivo' : 'admin';
   // v5.43.0: interruptor "incluir inactivos con deuda" — un inactivo con mora
   // sigue debiendo: se muestra como 'due' (moroso) en vez de 'inactivo'.
   if (cliente.activo === false) {
@@ -268,6 +270,8 @@ RN.calc.ultimoMesPagado = function (clienteId) {
  * @returns {number} 0 si está al día
  */
 RN.calc.getMora = function (cliente) {
+  // v5.50.0: un administrador nunca tiene mora.
+  if (RN.calc.esAdmin(cliente)) return 0;
   const mes = RN.calc.mesActualStr();
   // v5.43.1: último mes pagado desde el índice (antes: filter+map+sort del historial).
   const ultimoPagado = RN.calc.ultimoMesPagado(cliente.id);
@@ -438,13 +442,185 @@ RN.calc.mesSiguiente = function (ym) {
   return y + '-' + String(m).padStart(2, '0');
 };
 
+/** v5.50.0: ¿es un cliente administrador (no paga, solo consume red)? */
+RN.calc.esAdmin = function (cliente) {
+  return !!(cliente && cliente.esAdmin === true);
+};
+
 /** Precio mensual del plan de un cliente (busca por planId o usa precio directo). */
-RN.calc.getPrecioBase = function (cliente) {
+RN.calc.getPrecioBase = function (cliente, mes) {
+  // v5.50.0: un administrador no paga; puede tener plan solo para definir sus megas.
+  if (RN.calc.esAdmin(cliente)) return 0;
   if (cliente.planId) {
     const plan = RN.state.planes.find(p => p.id === cliente.planId);
     if (plan) return plan.precio;
   }
+  // v5.48.0: cliente con precio fijo en USD -> el CUP se deriva de la tasa que le toca.
+  if (RN.calc.esPrecioUSD(cliente)) {
+    const info = RN.calc.infoTasa(cliente, mes);
+    if (info.tasa > 0) return RN.calc.redondearCobroCUP(RN.calc.totalUSD(cliente) * info.tasa);
+  }
   return cliente.precio || 0;
+};
+
+/* ============================================================
+ * v5.48.0 — Precio fijo en USD por mega (clientes "Personalizado").
+ *
+ * El cliente guarda megas + precioMega en USD (precioMoneda = 'USD'). El CUP del
+ * mes se deriva de la tasa que le corresponde:
+ *   - tasa del mensaje: la tasa vigente cuando se le envió el recordatorio del mes
+ *     (cliente.tasasMensaje[mes] = { tasa, fecha }).
+ *   - A TIEMPO (hasta el día de pago/corte del mes, inclusive): la MENOR entre la tasa
+ *     del mensaje y la de hoy (nunca paga más de lo que decía el mensaje).
+ *   - TARDE (pasado el día de pago): la MAYOR de las dos.
+ *   - Sin tasa de mensaje guardada: la tasa de hoy.
+ * El CUP se redondea hacia ARRIBA al múltiplo de 100 (a favor del negocio).
+ * ============================================================ */
+
+/** ¿El cliente tiene precio fijo en USD por mega? (solo personalizados con megas y precio) */
+RN.calc.esPrecioUSD = function (cliente) {
+  return !!cliente && cliente.precioMoneda === 'USD' && !cliente.planId &&
+    (+cliente.megas || 0) > 0 && (+cliente.precioMega || 0) > 0;
+};
+
+/** Total mensual del cliente en USD (megas × USD por mega), 2 decimales. */
+RN.calc.totalUSD = function (cliente) {
+  return +((+cliente.megas || 0) * (+cliente.precioMega || 0)).toFixed(2);
+};
+
+/** Redondea un monto CUP hacia ARRIBA al múltiplo de 100 (con tolerancia de coma flotante). */
+RN.calc.redondearCobroCUP = function (v) {
+  v = +v || 0;
+  if (v <= 0) return 0;
+  return Math.ceil((v - 1e-9) / 100) * 100;
+};
+
+/** Fin del día de pago (corte) del cliente en el mes 'YYYY-MM' (hora local). */
+RN.calc.fechaLimiteMes = function (cliente, mes) {
+  const m = /^(\d{4})-(\d{2})/.exec(mes || '');
+  if (!m) return null;
+  const diasMes = new Date(+m[1], +m[2], 0).getDate();
+  const dia = Math.min(Math.max(1, parseInt(cliente.diaPago, 10) || 1), diasMes);
+  return new Date(+m[1], +m[2] - 1, dia, 23, 59, 59, 999);
+};
+
+/** Tasa guardada cuando se envió el mensaje del mes (0 si no hay). */
+RN.calc.tasaMensajeMes = function (cliente, mes) {
+  const t = cliente && cliente.tasasMensaje && cliente.tasasMensaje[mes];
+  return t && +t.tasa > 0 ? +t.tasa : 0;
+};
+
+/**
+ * Tasa que corresponde al cliente (USD) para el mes, según la regla a tiempo/tarde.
+ * @param {Cliente} cliente
+ * @param {string} [mes] 'YYYY-MM' (default: mes actual)
+ * @param {Date} [ahora] solo para pruebas
+ * @returns {{tasa:number, tasaMensaje:number, tasaHoy:number, aTiempo:boolean, motivo:string}}
+ */
+RN.calc.infoTasa = function (cliente, mes, ahora) {
+  mes = mes || RN.calc.mesActualStr();
+  ahora = ahora || new Date();
+  const hoy = +RN.state.config.tasaUsd || 0;
+  const msg = RN.calc.tasaMensajeMes(cliente, mes);
+  const limite = RN.calc.fechaLimiteMes(cliente, mes);
+  const aTiempo = !limite || ahora.getTime() <= limite.getTime();
+  let tasa, motivo;
+  if (!msg) {
+    tasa = hoy; motivo = 'sin mensaje enviado: tasa de hoy';
+  } else if (!hoy) {
+    tasa = msg; motivo = 'tasa del mensaje';
+  } else if (aTiempo) {
+    tasa = Math.min(msg, hoy);
+    motivo = hoy < msg ? 'a tiempo: bajó la tasa, se usa la de hoy' : 'a tiempo: se mantiene la tasa del mensaje';
+  } else {
+    tasa = Math.max(msg, hoy);
+    motivo = hoy > msg ? 'pago tarde: subió la tasa, se usa la de hoy' : 'pago tarde: se usa la tasa más alta (la del mensaje)';
+  }
+  return { tasa: tasa, tasaMensaje: msg, tasaHoy: hoy, aTiempo: aTiempo, motivo: motivo };
+};
+
+/** Neto del mes en USD para un cliente con precio USD (descuentos CUP convertidos a la tasa aplicada). */
+RN.calc.getPrecioNetoUSD = function (cliente, mes) {
+  if (!RN.calc.esPrecioUSD(cliente)) return 0;
+  mes = mes || RN.calc.mesActualStr();
+  const info = RN.calc.infoTasa(cliente, mes);
+  const total = RN.calc.totalUSD(cliente);
+  if (!(info.tasa > 0)) return total;
+  const desc = RN.calc.getDescuentoRecurrente(cliente) + RN.calc.getDescuentosPuntualesMes(cliente.id, mes);
+  return Math.max(0, +(total - desc / info.tasa).toFixed(2));
+};
+
+/* ============================================================
+ * v5.49.0 — Redondeo del resto en CUP de pagos mixtos (USD + CUP).
+ * Modo (config.redondeoPagoMixto): 'cliente' (default: el resto se redondea hacia ABAJO al
+ * múltiplo de 100, a favor del cliente), 'negocio' (hacia ARRIBA) o 'exacto' (sin redondeo).
+ * La diferencia queda registrada en el cobro (h.ajusteRedondeo) para que caja y reportes cuadren:
+ *   ajuste > 0 = perdonado al cliente · ajuste < 0 = cobrado de más (modo negocio).
+ * Solo afecta pagos con USD de por medio; todo en CUP o todo en USD no se redondea.
+ * ============================================================ */
+RN.calc.modoRedondeoMixto = function () {
+  const m = RN.state.config && RN.state.config.redondeoPagoMixto;
+  return (m === 'negocio' || m === 'exacto') ? m : 'cliente';
+};
+
+/** Resto en CUP sugerido según el modo (solo si hubo USD; si no, el resto exacto). */
+RN.calc.restoCUPRedondeado = function (falta, usd, modo) {
+  falta = +falta || 0;
+  modo = modo || RN.calc.modoRedondeoMixto();
+  if (!(usd > 0) || falta <= 0 || modo === 'exacto') return +falta.toFixed(2);
+  if (modo === 'negocio') return Math.ceil((falta - 1e-9) / 100) * 100;
+  return Math.floor((falta + 1e-9) / 100) * 100;
+};
+
+/**
+ * Ajuste por redondeo de un pago: diferencia (aPagar - pagadoCUP) que se da por saldada.
+ * Positivo = perdonado al cliente; negativo = cobrado de más (cabe < 100 CUP); 0 = nada.
+ */
+RN.calc.ajusteRedondeoPago = function (usd, pagadoCUP, aPagar, modo) {
+  modo = modo || RN.calc.modoRedondeoMixto();
+  if (!(usd > 0) || modo === 'exacto') return 0;
+  const dif = +((+aPagar || 0) - (+pagadoCUP || 0)).toFixed(2);
+  if (modo === 'cliente' && dif > 0.005 && dif < 100) return dif;
+  if (modo === 'negocio' && dif < -0.005 && dif > -100) return dif;
+  return 0;
+};
+
+/** Suma de ajustes por redondeo de un mes: { perdonado, cobrado, neto } en CUP. */
+RN.calc.totalAjustesRedondeoMes = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  let perdonado = 0, cobrado = 0;
+  (RN.state.history || []).forEach(function (h) {
+    if (!h || h.mes !== mes || !h.ajusteRedondeo) return;
+    if (h.ajusteRedondeo > 0) perdonado += h.ajusteRedondeo; else cobrado += -h.ajusteRedondeo;
+  });
+  return { perdonado: +perdonado.toFixed(2), cobrado: +cobrado.toFixed(2), neto: +(cobrado - perdonado).toFixed(2) };
+};
+
+/**
+ * Tasa de conversión interna para el cobro: neto CUP ÷ neto USD. Así pagar exactamente
+ * el neto en USD cubre el neto en CUP aunque éste se haya redondeado hacia arriba.
+ */
+RN.calc.tasaConversionCobro = function (cliente, mes) {
+  mes = mes || RN.calc.mesActualStr();
+  const usd = RN.calc.getPrecioNetoUSD(cliente, mes);
+  const cup = RN.calc.getPrecioNeto(cliente, mes);
+  if (usd > 0 && cup > 0) return +(cup / usd).toFixed(6);
+  return RN.calc.infoTasa(cliente, mes).tasa;
+};
+
+/**
+ * Guarda la tasa del mensaje del mes (solo la primera vez que se envía ese mes).
+ * Conserva solo los últimos 12 meses. Devuelve true si guardó algo.
+ */
+RN.calc.fijarTasaMensaje = function (cliente, mes) {
+  const hoy = +RN.state.config.tasaUsd || 0;
+  if (!RN.calc.esPrecioUSD(cliente) || !(hoy > 0)) return false;
+  mes = mes || RN.calc.mesActualStr();
+  if (!cliente.tasasMensaje) cliente.tasasMensaje = {};
+  if (cliente.tasasMensaje[mes] && +cliente.tasasMensaje[mes].tasa > 0) return false;
+  cliente.tasasMensaje[mes] = { tasa: hoy, fecha: new Date().toISOString() };
+  Object.keys(cliente.tasasMensaje).sort().slice(0, -12).forEach(function (k) { delete cliente.tasasMensaje[k]; });
+  return true;
 };
 
 /** Descuento recurrente (permanente por cliente) en CUP. */
@@ -600,17 +776,30 @@ RN.calc.diasDelMes = function (ym) {
   return new Date(+m[1], +m[2], 0).getDate();
 };
 
+/**
+ * v5.47.2: redondea un descuento CALCULADO (porcentaje / días) HACIA ABAJO al
+ * múltiplo de 100, sin centavos. Siempre a favor del negocio (el descuento
+ * nunca supera al calculado) y deja cifras redondas para facilitar el pago.
+ * El epsilon evita que errores de coma flotante (p. ej. 299.99999) bajen 100.
+ */
+RN.calc.redondearDescuento = function (v) {
+  v = +v || 0;
+  if (v <= 0) return 0;
+  return Math.floor((v + 1e-9) / 100) * 100;
+};
+
 RN.calc.valorDescuento = function (d, clienteId, mes) {
   const cliente = RN.state.clients.find(c => c.id === clienteId);
-  const base = cliente ? RN.calc.getPrecioBase(cliente) : 0;
+  const base = cliente ? RN.calc.getPrecioBase(cliente, mes) : 0;
   switch (d.modo) {
+    // El modo fijo lo escribe el usuario: no se redondea.
     case 'fijo': return d.valor || 0;
-    case 'porcentaje': return +(base * (d.valor || 0) / 100).toFixed(2);
+    case 'porcentaje': return RN.calc.redondearDescuento(base * (d.valor || 0) / 100);
     case 'dias': {
       // v5.43.0: proporcional a días sin servicio sobre los días REALES del mes
       // (mes indicado, o el del descuento). Si no hay mes válido: días base (30).
       const dias = RN.calc.diasDelMes(mes || d.mes || d.desde) || RN.state.config.diasBaseMes || 30;
-      return +((base / dias) * (d.valor || 0)).toFixed(2);
+      return RN.calc.redondearDescuento((base / dias) * (d.valor || 0));
     }
     default: return 0;
   }
@@ -624,7 +813,7 @@ RN.calc.valorDescuento = function (d, clienteId, mes) {
  * @returns {number} CUP
  */
 RN.calc.getPrecioNeto = function (cliente, mes) {
-  const base = RN.calc.getPrecioBase(cliente);
+  const base = RN.calc.getPrecioBase(cliente, mes);
   const rec = RN.calc.getDescuentoRecurrente(cliente);
   const punt = RN.calc.getDescuentosPuntualesMes(cliente.id, mes);
   return Math.max(0, +(base - rec - punt).toFixed(2));
@@ -982,6 +1171,14 @@ RN.calc.fondoCaja = function () {
  *           reservaAcum, libreAcum, gananciaTotal, retiros, depositos,
  *           saldoInicial, meses }.
  */
+/*
+ * v5.52.0 — REINICIO MENSUAL DE LA RESERVA.
+ * Si en un mes se retira más de lo que había libre (se toca la reserva), al
+ * CERRAR ese mes la reserva se recorta a lo que realmente quedó en caja y el mes
+ * siguiente arranca desde ahí, sin arrastrar un bolsillo libre negativo. Dentro
+ * del mes en curso la reserva no se recorta (se sigue avisando el faltante).
+ * Además devuelve `reservaInicioMes` (reserva con la que arrancó el mes pedido).
+ */
 RN.calc.bolsillos = function (mes) {
   mes = mes || RN.calc.mesActualStr();
   var pct = +RN.state.config.pctReservaCaja;
@@ -997,8 +1194,26 @@ RN.calc.bolsillos = function (mes) {
   if (inicio > mes) inicio = mes;
 
   var reservaAcum = 0, libreAcum = 0, gananciaTotal = 0, nMeses = 0;
+  var reservaInicioMes = 0;
+  // v5.52.0: movimiento neto de caja por mes (ingresos + depósitos − gastos − retiros)
+  // para conocer el fondo al cierre de cada mes. Sin mes ('') se cuenta desde el inicio.
+  var netoMes = {};
+  var sumarNeto = function (lista, signo, valor) {
+    (lista || []).forEach(function (x) {
+      var k = x.mes ? String(x.mes).slice(0, 7) : '';
+      netoMes[k] = (netoMes[k] || 0) + signo * valor(x);
+    });
+  };
+  sumarNeto(RN.state.history, 1, RN.calc.ingresoCobro);
+  sumarNeto(RN.state.depositos, 1, function (d) { return d.monto || 0; });
+  sumarNeto(RN.state.gastos, -1, function (x) { return x.monto || 0; });
+  sumarNeto(RN.state.retiros, -1, function (x) { return x.monto || 0; });
+  var fondoCorrido = +(RN.state.config.fondoInicial || 0);
+  Object.keys(netoMes).forEach(function (k) { if (k < inicio) fondoCorrido += netoMes[k]; });
   var m = inicio, guard = 0;
   while (m <= mes && guard < 1200) {
+    fondoCorrido += (netoMes[m] || 0);
+    if (m === mes) reservaInicioMes = reservaAcum;
     var g = RN.calc.utilidadMes(m); // ingresos − gastos (los retiros ya no son gastos)
     gananciaTotal += g;
     if (g > 0) {
@@ -1007,6 +1222,11 @@ RN.calc.bolsillos = function (mes) {
       libreAcum += (g - r);
     } else {
       libreAcum += g; // la pérdida reduce el bolsillo libre, no la reserva
+    }
+    // v5.52.0: al cerrar un mes (no el actual) la reserva no puede exceder lo que quedó en caja.
+    if (m < mes) {
+      var tope = Math.max(0, fondoCorrido);
+      if (reservaAcum > tope) reservaAcum = tope;
     }
     nMeses++;
     // mes siguiente
@@ -1031,12 +1251,111 @@ RN.calc.bolsillos = function (mes) {
     retirable: retirable,
     cubierta: fondo >= reserva,
     reservaAcum: reserva,
-    libreAcum: +libreAcum.toFixed(2),
+    libreAcum: libre,
     gananciaTotal: +gananciaTotal.toFixed(2),
     retiros: RN.calc.totalRetiros(),
     depositos: RN.calc.totalDepositos(),
     saldoInicial: +(RN.state.config.fondoInicial || 0).toFixed(2),
-    meses: nMeses
+    meses: nMeses,
+    reservaInicioMes: +reservaInicioMes.toFixed(2),
+    gananciaMes: +RN.calc.utilidadMes(mes).toFixed(2)
+  };
+};
+
+/**
+ * v5.52.0 — Fracción (0-1) de lo esperado que de verdad se cobró en los últimos `n`
+ * meses CERRADOS (promedio ponderado). Aproximación: usa los clientes activos de
+ * hoy. Devuelve null si no hay meses con ingreso esperado.
+ */
+RN.calc.tasaCobroHistorica = function (n, mes) {
+  n = n || 3;
+  var m = mes || RN.calc.mesActualStr();
+  var cobrado = 0, esperado = 0;
+  for (var i = 0; i < n; i++) {
+    m = RN.calc.mesAnterior(m);
+    var esp = 0;
+    RN.calc.clientesActivos().forEach(function (c) {
+      if (RN.calc.mesInicioCliente(c) > m) return; // aún no le tocaba pagar
+      esp += RN.calc.netoEsperadoMes(c, m);
+    });
+    if (esp > 0) { esperado += esp; cobrado += RN.calc.ingresosServicioMes(m); }
+  }
+  if (esperado <= 0) return null;
+  return Math.max(0, Math.min(1, cobrado / esperado));
+};
+
+/**
+ * v5.52.0 — Caja proyectada al cierre del mes (todo lo que muestra la tarjeta).
+ *   cierre        = fondo hoy + lo que falta cobrar − lo que falta pagar (paquete)
+ *   reservaCierre = reserva con la que arrancó el mes + pct% de la ganancia proyectada
+ *   retirableHoy  = lo que se puede sacar hoy sin que, al cierre, la caja quede por
+ *                   debajo de la reserva (nunca más de lo que hay hoy en caja).
+ * "Falta cobrar" solo cuenta a los clientes a quienes ya les toca pagar este mes
+ * (mesInicio <= mes), igual que la ganancia proyectada. `escenario` aplica la tasa
+ * de cobro de los últimos 3 meses a lo que falta cobrar (null si no hay datos).
+ */
+RN.calc.cajaProyeccion = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  var hoy = RN.calc.fondoCaja();
+  var b = RN.calc.bolsillos(mes);
+  var pct = b.pct;
+  var cortesMap = {};
+  var pendiente = 0, nPend = 0, nTotal = 0;
+  RN.calc.clientesActivos().forEach(function (c) {
+    if (RN.calc.mesInicioCliente(c) > mes) return;
+    nTotal++;
+    var esperado = RN.calc.netoEsperadoMes(c, mes);
+    var cobrado = RN.calc.cobrosServicio(c.id, mes).reduce(function (s, h) { return s + (h.monto || 0); }, 0);
+    var falta = +(esperado - cobrado).toFixed(2);
+    if (falta > 0.009) {
+      var dia = c.diaPago || 1;
+      if (!cortesMap[dia]) cortesMap[dia] = { dia: dia, clientes: 0, monto: 0 };
+      cortesMap[dia].clientes++;
+      cortesMap[dia].monto = +(cortesMap[dia].monto + falta).toFixed(2);
+      pendiente += falta;
+      nPend++;
+    }
+  });
+  pendiente = +pendiente.toFixed(2);
+  var cortes = Object.keys(cortesMap).map(function (k) { return cortesMap[k]; })
+    .sort(function (x, y) { return x.dia - y.dia; });
+
+  var costoPaquete = RN.calc.montoPaqueteProveedor();
+  var porPagar = (costoPaquete > 0 && !RN.calc.pagoProveedorMes(mes)) ? costoPaquete : 0;
+  var utilHoy = RN.calc.utilidadMes(mes);
+
+  var resolver = function (fraccion) {
+    var cobra = +(pendiente * fraccion).toFixed(2);
+    var cierre = +(hoy + cobra - porPagar).toFixed(2);
+    var ganancia = +(utilHoy + cobra - porPagar).toFixed(2);
+    var reservaCierre = +(b.reservaInicioMes + Math.max(0, ganancia) * pct / 100).toFixed(2);
+    var libreCierre = +(cierre - reservaCierre).toFixed(2);
+    return {
+      cobra: cobra, cierre: cierre, ganancia: ganancia,
+      reservaCierre: reservaCierre, libreCierre: libreCierre,
+      retirableHoy: +Math.max(0, Math.min(hoy, libreCierre)).toFixed(2),
+      cubierta: cierre >= reservaCierre - 0.005
+    };
+  };
+  var base = resolver(1);
+  var tasa = RN.calc.tasaCobroHistorica(3, mes);
+  var escenario = (tasa !== null && pendiente > 0) ? resolver(tasa) : null;
+
+  var atrasos = 0, nAtrasos = 0;
+  RN.calc.clientesActivos().forEach(function (c) {
+    var d = RN.calc.detalleMora(c);
+    if (d && d.total > 0) { atrasos += d.total; nAtrasos++; }
+  });
+
+  var estado = 'ok';
+  if (!base.cubierta || base.cierre < 0) estado = 'bajo';
+  else if (escenario && !escenario.cubierta) estado = 'ajustada';
+
+  return {
+    mes: mes, pct: pct, hoy: hoy, pendiente: pendiente, nPend: nPend, nTotal: nTotal,
+    cortes: cortes, costoPaquete: costoPaquete, porPagar: porPagar,
+    reservaInicio: b.reservaInicioMes, base: base, tasa: tasa, escenario: escenario,
+    atrasos: +atrasos.toFixed(2), nAtrasos: nAtrasos, estado: estado
   };
 };
 
@@ -1066,6 +1385,27 @@ RN.calc.pagoProveedorMes = function (mes) {
   return RN.state.gastos.find(g => g.esPagoProveedor && (g.mes || '').slice(0, 7) === mes.slice(0, 7)) || null;
 };
 
+
+/** v5.52.3 — Megas de cortesía del proveedor (plus), sin costo. */
+RN.calc.plusMegas = function () {
+  var cfg = RN.state.config || {};
+  var p = +cfg.plusMegas;
+  if (isNaN(p) || p < 0) {
+    // compat: si aún no está, usar sobreventaMegas legacy
+    p = +cfg.sobreventaMegas || 0;
+  }
+  return Math.max(0, p);
+};
+
+/**
+ * v5.52.3 — Capacidad del proveedor sin costo extra = megas pagados + plus.
+ * El costo del paquete sigue siendo solo proveedorMegas × precio.
+ */
+RN.calc.capacidadProveedor = function () {
+  var cfg = RN.state.config || {};
+  return Math.max(0, (+cfg.proveedorMegas || 0) + RN.calc.plusMegas());
+};
+
 /** Monto del paquete del proveedor según la config (megas × precio por mega). v5.8.6 */
 RN.calc.montoPaqueteProveedor = function () {
   const cfg = RN.state.config;
@@ -1083,31 +1423,36 @@ RN.calc.getMegasCliente = function (cliente) {
   return +cliente.megas || 0;
 };
 
-/** Suma de megas vendidos a clientes activos. v5.8.7 */
+/** Suma de megas vendidos a clientes activos que pagan (sin administradores). v5.8.7 */
 RN.calc.megasVendidos = function () {
   return RN.calc.clientesActivos().reduce((s, c) => s + RN.calc.getMegasCliente(c), 0);
 };
 
-/** Tope vendible = megas del paquete del proveedor + sobreventa. v5.8.7 */
-RN.calc.topeMegas = function () {
-  const cfg = RN.state.config;
-  return (+cfg.proveedorMegas || 0) + (+cfg.sobreventaMegas || 0);
+/** v5.50.0: megas de administración (consumen red real pero no se venden). */
+RN.calc.megasAdmin = function () {
+  return RN.calc.administradoresActivos().reduce((s, c) => s + RN.calc.getMegasCliente(c), 0);
 };
 
 /**
- * Estado de capacidad de la red respecto al paquete del proveedor. v5.8.7
- * Devuelve { paquete, sobreventa, tope, vendidos, excedido, pct }.
- * pct = porcentaje de uso del tope (0 si no hay tope).
+ * Tope de capacidad en Mbps. v5.50.0: ya no es paquete + sobreventa, sino
+ * paquete - reserva (tope de la suma de Limit At). Ver RN.cola.topeKbps.
+ */
+RN.calc.topeMegas = function () {
+  if (RN.cola && RN.cola.topeKbps) return RN.cola.topeKbps() / 1000;
+  const cfg = RN.state.config;
+  // v5.52.3: capacidad = (pagados + plus) − reserva
+  return Math.max(0, RN.calc.capacidadProveedor() - (+cfg.reservaMegas || 0));
+};
+
+/**
+ * Estado de capacidad de la red. v5.50.0: se calcula con la suma de Limit At de
+ * los clientes activos (administradores incluidos) contra el tope, no con los
+ * megas vendidos. Devuelve { paquete, reserva, tope, comprometido, margen, pct,
+ * excedido, aviso, vendidos, megasAdmin, relacionVenta, ... } (ver RN.cola.estadoCapacidad).
+ * Los megas vendidos quedan como dato informativo.
  */
 RN.calc.estadoCapacidad = function () {
-  const cfg = RN.state.config;
-  const paquete = +cfg.proveedorMegas || 0;
-  const sobreventa = +cfg.sobreventaMegas || 0;
-  const tope = paquete + sobreventa;
-  const vendidos = RN.calc.megasVendidos();
-  const excedido = tope > 0 && vendidos > tope;
-  const pct = tope > 0 ? Math.min(100, Math.round(vendidos / tope * 100)) : 0;
-  return { paquete, sobreventa, tope, vendidos, excedido, pct };
+  return RN.cola.estadoCapacidad();
 };
 
 /** Utilidad neta del mes = ingresos - gastos. */
@@ -1196,9 +1541,25 @@ RN.calc.clientesAtencion = function (filtro) {
   });
 };
 
-/** Clientes activos. */
+/**
+ * Clientes activos QUE PAGAN (excluye administradores). v5.50.0.
+ * Es la base de cobros, alertas, notificaciones, promedios y estadísticas.
+ */
 RN.calc.clientesActivos = function () {
+  return RN.state.clients.filter(c => c.activo !== false && !RN.calc.esAdmin(c));
+};
+
+/**
+ * v5.50.0: todos los clientes activos que usan la red, administradores incluidos.
+ * Es la base de la capacidad (Limit At, megas comprometidos), no de los cobros.
+ */
+RN.calc.clientesEnRed = function () {
   return RN.state.clients.filter(c => c.activo !== false);
+};
+
+/** v5.50.0: administradores activos. */
+RN.calc.administradoresActivos = function () {
+  return RN.state.clients.filter(c => c.activo !== false && RN.calc.esAdmin(c));
 };
 
 /**

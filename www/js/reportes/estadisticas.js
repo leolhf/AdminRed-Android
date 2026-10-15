@@ -5,7 +5,8 @@ RN.estadisticas = RN.estadisticas || {};
 
 RN.estadisticas.calcular = function () {
   const clientes = RN.calc.clientesActivos();
-  const totalClientes = RN.state.clients.length;
+  // v5.50.0: los administradores no cuentan como clientes (no pagan).
+  const totalClientes = RN.state.clients.filter(c => !RN.calc.esAdmin(c)).length;
   // v5.13.1: Bug #7 — Ticket promedio del mes actual, solo cobros de servicio.
   // Antes usaba TODO el historial (todos los meses + cobros de equipo/venta),
   // lo que diluía el ticket real y mezclaba conceptos.

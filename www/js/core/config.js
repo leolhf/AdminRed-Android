@@ -15,6 +15,8 @@ RN.config.cargar = function () {
     try {
       const c = JSON.parse(raw);
       Object.assign(RN.state.config, c);
+      // v5.50.0: valores por defecto de colas MikroTik / reserva (configs anteriores no los tienen)
+      if (RN.cola && RN.cola.asegurarConfig) RN.cola.asegurarConfig(RN.state.config);
       // Migracion v5.8.5: fondoCaja manual -> fondoInicial
       if (RN.state.config.fondoCaja !== undefined && RN.state.config.fondoInicial === undefined) {
         RN.state.config.fondoInicial = RN.state.config.fondoCaja;
@@ -28,6 +30,10 @@ RN.config.cargar = function () {
       RN.state.config.proveedorPrecioMega = RN.state.config.proveedorPrecioMega || 0;
       if (RN.state.config.sobreventaMegas === undefined || RN.state.config.sobreventaMegas === null) {
         RN.state.config.sobreventaMegas = 5;
+      }
+      // v5.52.3: plusMegas = cortesía del proveedor (sin costo). Migra desde sobreventaMegas si hace falta.
+      if (RN.state.config.plusMegas === undefined || RN.state.config.plusMegas === null) {
+        RN.state.config.plusMegas = +RN.state.config.sobreventaMegas || 0;
       }
       // v5.11.3: % de ganancia personal (no recupera inversión)
       if (RN.state.config.pctPersonalInversion === undefined || RN.state.config.pctPersonalInversion === null) {
@@ -93,6 +99,9 @@ RN.config.guardar = function () {
   RN.state.config.graciaDias = graciaDias;
   RN.state.config.mencionarDescuentoRecurrente = mencion;
   RN.state.config.tasaAuto = auto;
+  // v5.49.0: modo de redondeo del resto en CUP de pagos mixtos (solo afecta pagos nuevos)
+  const redMixEl = document.getElementById('cfg-redondeo-mixto');
+  if (redMixEl) RN.state.config.redondeoPagoMixto = (redMixEl.value === 'negocio' || redMixEl.value === 'exacto') ? redMixEl.value : 'cliente';
   RN.state.config.fondoInicial = fondo;
   // v5.11.3: % de ganancia personal (no recupera inversión)
   const pctPersonal = parseFloat((document.getElementById('cfg-pct-personal') || {}).value) || 0;
@@ -133,6 +142,15 @@ RN.config.rellenarForm = function () {
   t('cfg-mencion-desc', String(c.mencionarDescuentoRecurrente));
   t('cfg-inactivos-deuda', String(!!c.incluirInactivosConDeuda));
   t('cfg-tasa-auto', String(c.tasaAuto));
+  t('cfg-redondeo-mixto', RN.calc.modoRedondeoMixto());
+  // v5.49.0: resumen de redondeos del mes actual
+  const resEl = document.getElementById('cfg-redondeo-resumen');
+  if (resEl) {
+    const aj = RN.calc.totalAjustesRedondeoMes();
+    resEl.textContent = (aj.perdonado || aj.cobrado)
+      ? 'Este mes: perdonado al cliente ' + RN.calc.formatCUP(aj.perdonado) + ' · cobrado de más ' + RN.calc.formatCUP(aj.cobrado)
+      : 'Este mes aún no hay redondeos. Solo afecta pagos nuevos.';
+  }
   t('cfg-fondo-caja', c.fondoInicial || 0);
   // v5.11.3: % de ganancia personal (no recupera inversión)
   t('cfg-pct-personal', c.pctPersonalInversion || 0);

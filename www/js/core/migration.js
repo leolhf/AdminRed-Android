@@ -5,7 +5,7 @@
 
 RN.migration = RN.migration || {};
 
-RN.migration.VERSION_ESQUEMA = 10;
+RN.migration.VERSION_ESQUEMA = 11;
 
 /** Aplica migraciones al blob de datos cargado. */
 RN.migration.migrar = function (data) {
@@ -18,6 +18,7 @@ RN.migration.migrar = function (data) {
     data.asignacionesInventario = data.asignacionesInventario || [];
     data.descuentos = data.descuentos || [];
     data.snapshots = data.snapshots || [];
+    data.incidencias = data.incidencias || [];
     data.equiposRed = data.equiposRed || [];
     data.planes = data.planes || [];
     v = 2;
@@ -62,6 +63,9 @@ RN.migration.migrar = function (data) {
       data.config.proveedorPrecioMega = data.config.proveedorPrecioMega || 0;
       if (data.config.sobreventaMegas === undefined || data.config.sobreventaMegas === null) {
         data.config.sobreventaMegas = 5;
+      }
+      if (data.config.plusMegas === undefined || data.config.plusMegas === null) {
+        data.config.plusMegas = +data.config.sobreventaMegas || 0;
       }
       // v5.11.3: % de ganancia personal (no recupera inversión)
       if (data.config.pctPersonalInversion === undefined || data.config.pctPersonalInversion === null) {
@@ -275,6 +279,15 @@ RN.migration.migrar = function (data) {
         inv.recuperado = 0; // sin clientes vinculados: recuperación manual por defecto 0
       }
     });
+  }
+
+  // v10→v11 (v5.50.0): administradores, colas MikroTik (Limit At) y capacidad por Limit At.
+  // Solo se agregan valores por defecto a la config; los clientes existentes NO se tocan
+  // (esAdmin / limitAtManual ausentes = falso / sin manual).
+  if (v < 11) {
+    data.config = data.config || {};
+    if (RN.cola && RN.cola.asegurarConfig) RN.cola.asegurarConfig(data.config);
+    v = 11;
   }
 
   data.esquema = RN.migration.VERSION_ESQUEMA;

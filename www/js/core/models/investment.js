@@ -710,6 +710,64 @@ RN.investment.verificarConclusion = function (inv) {
 };
 
 /**
+ * v5.52.5 — Lista de inversiones de capital propio ACTIVAS (aún no recuperadas).
+ */
+RN.investment.inversionesActivas = function () {
+  return (RN.state.investments || []).filter(function (i) {
+    return RN.investment.origenCapital(i) !== 'prestado_externo'
+      && !i.inversionRecuperada;
+  });
+};
+
+/**
+ * v5.52.5 — Lista de inversiones de capital propio ya recuperadas
+ * (capital cubierto por margen de clientes + aporte extra).
+ */
+RN.investment.inversionesRecuperadas = function () {
+  return (RN.state.investments || []).filter(function (i) {
+    return RN.investment.origenCapital(i) !== 'prestado_externo'
+      && !!i.inversionRecuperada;
+  });
+};
+
+/**
+ * v5.52.5 — Verifica si una inversión de capital propio debe marcarse como recuperada.
+ * Criterio: recuperadoEfectivo >= monto (incluye aporte extra de ganancia del mes).
+ * Si se marca, guarda fechaRecuperacion. Devuelve true si se marcó en esta llamada.
+ * Los cobros posteriores siguen contando (excedente = ganancia), pero el estado formal queda cerrado.
+ */
+RN.investment.verificarRecuperacion = function (inv) {
+  if (!inv) return false;
+  if (RN.investment.origenCapital(inv) === 'prestado_externo') return false;
+  if (inv.inversionRecuperada) return false;
+  var monto = +(inv.monto || 0);
+  if (monto <= 0) return false;
+  var recuperado = RN.investment.recuperadoEfectivo
+    ? RN.investment.recuperadoEfectivo(inv)
+    : RN.investment.recuperadoRealInv(inv);
+  if (recuperado + 0.005 >= monto) {
+    inv.inversionRecuperada = true;
+    inv.fechaRecuperacion = new Date().toISOString();
+    return true;
+  }
+  return false;
+};
+
+/**
+ * v5.52.5 — Verifica todas las inversiones de capital propio y marca las que
+ * ya alcanzaron el 100 %. Devuelve la lista de las recién marcadas (para toast).
+ */
+RN.investment.verificarRecuperaciones = function () {
+  var recien = [];
+  (RN.state.investments || []).forEach(function (inv) {
+    if (RN.investment.verificarRecuperacion(inv)) recien.push(inv);
+  });
+  return recien;
+};
+
+
+
+/**
  * v5.13.0 — Total de devuelto por todas las deudas concluidas.
  */
 RN.investment.totalDevueltoConcluidas = function () {
@@ -746,4 +804,122 @@ RN.investment.porcentajeDevueltoDeudas = function () {
   var total = RN.investment.totalPrestadoActivas();
   if (!total) return 0;
   return +(RN.investment.totalDevueltoActivas() / total * 100).toFixed(1);
+};
+
+
+/* ============================================================
+ * v5.53.0 Fase 4 — Meta de devolución de préstamos + saldo USD/CUP
+ * ============================================================ */
+
+/** Meta mensual de devolución (CUP) guardada en config. */
+RN.investment.metaDevolucionMensual = function () {
+  var m = RN.state.config && RN.state.config.metaDevolucionPrestamo;
+  return (typeof m === 'number' && m >= 0) ? m : 0;
+};
+
+RN.investment.setMetaDevolucionMensual = function (cup) {
+  RN.state.config.metaDevolucionPrestamo = Math.max(0, +cup || 0);
+  try { RN.config.persistir(); } catch (e) {}
+  try { RN.storageLocal.guardar(); } catch (e) {}
+};
+
+/** Total devuelto en el mes (todas las deudas activas). */
+RN.investment.devueltoEnMes = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  var total = 0;
+  (RN.state.investments || []).forEach(function (inv) {
+    if (RN.investment.origenCapital(inv) !== 'prestado_externo') return;
+    RN.investment.devolucionesInv(inv).forEach(function (d) {
+      var dm = d.mes || (d.fecha ? String(d.fecha).slice(0, 7) : '');
+      if (dm === mes) total += (+d.monto || 0);
+    });
+  });
+  return +total.toFixed(2);
+};
+
+/**
+ * Resumen de deudas activas en CUP y USD (si el préstamo se registró en USD).
+ */
+RN.investment.resumenDeudasDual = function () {
+  var tasa = (RN.moneda && RN.moneda.tasa) ? RN.moneda.tasa() : (RN.state.config.tasaUsd || 0);
+  var prestadoCUP = 0, devueltoCUP = 0, prestadoUSD = 0, devueltoUSD = 0;
+  (RN.investment.deudasActivas ? RN.investment.deudasActivas() : []).forEach(function (inv) {
+    var m = +inv.monto || 0;
+    var d = RN.investment.totalDevuelto(inv);
+    prestadoCUP += m;
+    devueltoCUP += d;
+    if (inv.monedaPago === 'USD' && inv.montoPagoUSD) {
+      prestadoUSD += +inv.montoPagoUSD;
+      // proporción devuelta
+      var pct = m > 0 ? d / m : 0;
+      devueltoUSD += +(inv.montoPagoUSD * pct).toFixed(2);
+    } else if (tasa > 0) {
+      prestadoUSD += m / tasa;
+      devueltoUSD += d / tasa;
+    }
+  });
+  var faltaCUP = Math.max(0, prestadoCUP - devueltoCUP);
+  var faltaUSD = Math.max(0, prestadoUSD - devueltoUSD);
+  var meta = RN.investment.metaDevolucionMensual();
+  var devMes = RN.investment.devueltoEnMes();
+  var mesesEst = (meta > 0 && faltaCUP > 0) ? Math.ceil(faltaCUP / meta) : null;
+  return {
+    prestadoCUP: +prestadoCUP.toFixed(2),
+    devueltoCUP: +devueltoCUP.toFixed(2),
+    faltaCUP: +faltaCUP.toFixed(2),
+    prestadoUSD: +prestadoUSD.toFixed(2),
+    devueltoUSD: +devueltoUSD.toFixed(2),
+    faltaUSD: +faltaUSD.toFixed(2),
+    tasa: tasa,
+    metaMensual: meta,
+    devueltoMes: devMes,
+    mesesEstimados: mesesEst,
+    pctMetaMes: meta > 0 ? Math.min(100, +(devMes / meta * 100).toFixed(1)) : null
+  };
+};
+
+/** HTML compacto para la barra de deudas (meta + dual). */
+RN.investment.htmlMetaDevolucion = function () {
+  var r = RN.investment.resumenDeudasDual();
+  if (r.prestadoCUP <= 0) return '';
+  var f = RN.calc.formatCUP;
+  var metaTxt = r.metaMensual > 0
+    ? ('Meta mes: ' + f(r.metaMensual) + ' · devuelto este mes: ' + f(r.devueltoMes) +
+       (r.pctMetaMes != null ? ' (' + r.pctMetaMes + '%)' : '') +
+       (r.mesesEstimados != null ? ' · ~' + r.mesesEstimados + ' mes(es) restantes' : ''))
+    : 'Sin meta mensual configurada';
+  var dual = r.prestadoUSD > 0
+    ? ('USD orig./equiv.: prestado ' + r.prestadoUSD.toFixed(2) +
+       ' · devuelto ' + r.devueltoUSD.toFixed(2) +
+       ' · falta ' + r.faltaUSD.toFixed(2) +
+       (r.tasa ? ' (tasa ' + r.tasa + ')' : ''))
+    : '';
+  return '<div class="meta-dev-box muted" style="font-size:12px;margin-top:8px">' +
+    '<div>' + metaTxt +
+    ' <button type="button" class="btn sm" style="margin-left:6px" onclick="RN.investment.abrirMetaDevolucion()">⚙️ Meta</button></div>' +
+    (dual ? '<div style="margin-top:4px">' + dual + '</div>' : '') +
+    '</div>';
+};
+
+RN.investment.abrirMetaDevolucion = function () {
+  var actual = RN.investment.metaDevolucionMensual();
+  var html = '<div class="modal-header"><h3>Meta de devolución mensual</h3>' +
+    '<button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>' +
+    '<div class="modal-body">' +
+    '<p class="muted">Cuánto pretendes devolver cada mes a los préstamos externos (CUP).</p>' +
+    '<div class="form-row"><div><label>Meta mensual (CUP)</label>' +
+    '<input type="number" id="meta-dev-input" min="0" step="100" value="' + actual + '"></div></div>' +
+    '</div><div class="modal-footer">' +
+    '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>' +
+    '<button class="btn primary" onclick="RN.investment.guardarMetaDevolucion()">Guardar</button></div>';
+  RN.uiComponents.modal(html, {});
+};
+
+RN.investment.guardarMetaDevolucion = function () {
+  var el = document.getElementById('meta-dev-input');
+  RN.investment.setMetaDevolucionMensual(el ? el.value : 0);
+  RN.uiComponents.cerrarModal();
+  if (RN.render && RN.render.inversion) RN.render.inversion();
+  else if (RN.render && RN.render.todo) RN.render.todo();
+  RN.notifyUI.toast('Meta de devolución guardada', 'success');
 };

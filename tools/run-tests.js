@@ -13,6 +13,7 @@ const WWW = path.join(__dirname, '..', 'www');
 const MODULOS = [
   'js/core/keys.js',
   'js/core/calculations.js',
+  'js/red/cola-mikrotik.js',
   'js/core/moneda.js',
   'js/core/models/investment.js',
   'js/core/models/inventario.js',

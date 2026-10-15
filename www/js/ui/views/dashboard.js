@@ -144,17 +144,19 @@ RN.render.dashboard = function () {
       html += '<div class="prov-widget-actions"><button class="btn sm primary" onclick="RN.paqueteProveedor.abrir()">📡 Registrar mi servicio</button></div>';
     }
 
-    // Indicador de capacidad vendida vs tope (v5.8.7)
+    // Indicador de capacidad: suma de Limit At comprometida vs tope (v5.50.0; antes megas vendidos vs tope)
     if (cfg.proveedorMegas > 0) {
       const cap = RN.calc.estadoCapacidad();
-      const cls = cap.excedido ? 'bar-red' : (cap.pct >= 80 ? 'bar-amber' : 'bar-green');
+      const cls = cap.excedido ? 'bar-red' : (cap.aviso ? 'bar-amber' : 'bar-green');
       const estadoTxt = cap.excedido
         ? '<span style="color:var(--danger)">⚠ Excedido</span>'
-        : (cap.pct >= 80 ? '<span style="color:var(--warn)">Cerca del tope</span>' : '<span style="color:var(--success)">✓ Capacidad ok</span>');
+        : (cap.aviso ? '<span style="color:var(--warn)">Cerca del tope</span>' : '<span style="color:var(--success)">✓ Capacidad ok</span>');
       html += '<div class="prov-cap">';
-      html += '<div class="prov-cap-label"><span class="muted">Capacidad de red</span> <strong>' + cap.vendidos + 'M vendidos / ' + cap.tope + 'M</strong> (' + cap.pct + '%) ' + estadoTxt + '</div>';
+      html += '<div class="prov-cap-label"><span class="muted">Capacidad de red</span> <strong>' + RN.cola.txtM(cap.comprometido) + ' comprometidos / ' + RN.cola.txtM(cap.tope) + '</strong> (' + cap.pctReal + '%) ' + estadoTxt + '</div>';
       html += '<div class="prov-cap-bar"><div class="prov-cap-fill ' + cls + '" style="width:' + (cap.pct || 1) + '%"></div></div>';
-      html += '<div class="prov-cap-sub muted">' + cap.paquete + 'M paquete + ' + cap.sobreventa + 'M sobreventa = ' + cap.tope + 'M tope vendible</div>';
+      html += '<div class="prov-cap-sub muted">' + cap.paquete + 'M paquete − ' + cap.reserva + 'M reserva = ' + RN.cola.txtM(cap.tope) + ' tope · margen ' + RN.cola.txtM(cap.margen) + '</div>';
+      html += '<div class="prov-cap-sub muted">Informativo: ' + RN.cola.txtM(cap.vendidos) + ' vendidos' + (cap.relacionVenta > 0 ? ' (' + cap.relacionVenta + ' a 1)' : '') + (cap.megasAdmin > 0 ? ' · ' + RN.cola.txtM(cap.megasAdmin) + ' de administración' : '') + '</div>';
+      html += '<div class="prov-widget-actions"><button class="btn sm" onclick="RN.cola.abrirResumen()">📊 Resumen de capacidad</button></div>';
       html += '</div>';
     }
 
@@ -165,7 +167,7 @@ RN.render.dashboard = function () {
       html += '<div class="prov-widget-row" style="color:var(--primary);border-top:1px solid var(--border);padding-top:8px;margin-top:4px">';
       html += '<span class="badge" style="background:var(--primary-soft);color:var(--primary);margin-right:6px">⏳ Pendiente para ' + RN.calc.mesTexto(mesProx) + '</span>';
       html += '<span class="muted">Próximo paquete: ' + (pp.megas || 0) + 'M × ' + (pp.precioMega || 0) + ' CUP/M';
-      if (pp.sobreventa !== undefined) html += ' · sobreventa ' + pp.sobreventa + 'M';
+      if (pp.reserva !== undefined) html += ' · reserva ' + pp.reserva + 'M';
       html += '. Se aplicará al cerrar el mes.</span></div>';
     }
     prov.innerHTML = html;

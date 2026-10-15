@@ -17,7 +17,8 @@ RN.cobranza = RN.cobranza || {};
  * Abre la ventana de cobranza del mes (todos los pendientes, agrupados por corte).
  * No se abre si no hay pendientes.
  */
-RN.cobranza.abrir = function () {
+RN.cobranza.abrir = function (opts) {
+  opts = opts || {};
   var grupos = RN.ciclos.clientesCobranzaPendientes();
   var totalPend = grupos.reduce(function (s, g) { return s + g.clientes.length; }, 0);
   if (!totalPend) {
@@ -55,19 +56,33 @@ RN.cobranza.abrir = function () {
       var totalTxt = RN.calc.formatCUP(total) + (cuotaEq > 0 ? ' <span class="pill">+equipo ' + RN.calc.formatCUP(cuotaEq) + '</span>' : '') + moraBadge;
       // v5.13.8 (BUG-6): escAttr en IDs de onclick
       var cid = RN.render.escAttr(c.id);
-      return '<tr>' +
-        '<td><strong>' + RN.render.esc(c.nombre) + '</strong><br><span class="muted" style="font-size:12px">' + planTxt + '</span></td>' +
+      // v5.53.1: marca si ya se abrió WhatsApp en este ciclo de cobro
+      var notificadoWa = false;
+      try {
+        notificadoWa = !!(RN.notifyState && RN.notifyState.notificadoWaCiclo
+          && RN.notifyState.notificadoWaCiclo(c.id, c.diaPago || 1));
+      } catch (e) { notificadoWa = false; }
+      var waBadge = notificadoWa
+        ? ' <span class="badge ok" title="Notificado por WhatsApp en este ciclo">💬 Notificado</span>'
+        : '';
+      var trCls = notificadoWa ? ' class="cobranza-notificado-wa"' : '';
+      var waBtnLabel = notificadoWa ? '💬 Otra vez' : 'WhatsApp';
+      return '<tr' + trCls + '>' +
+        '<td><strong>' + RN.render.esc(c.nombre) + '</strong>' + waBadge +
+          '<br><span class="muted" style="font-size:12px">' + planTxt + '</span></td>' +
         '<td style="text-align:center">' + estadoBadge + '</td>' +
         '<td>' + tel + '</td>' +
         '<td style="text-align:right">' + totalTxt + '</td>' +
         '<td style="text-align:center;white-space:nowrap">' +
           '<button class="btn sm primary" onclick="RN.cobranza._cobrar(\'' + cid + '\')">Cobrar</button> ' +
-          '<button class="btn sm" onclick="RN.cobranza._recordar(\'' + cid + '\')">WhatsApp</button>' +
+          '<button class="btn sm' + (notificadoWa ? ' ghost' : '') + '" onclick="RN.cobranza._recordar(\'' + cid + '\')">' + waBtnLabel + '</button>' +
         '</td>' +
       '</tr>';
     }).join('');
 
-    var titulo = 'Corte del día ' + g.diaPago;
+    var venG = RN.ciclos.ventanaCobro ? RN.ciclos.ventanaCobro(g.diaPago) : null;
+    var titulo = 'Corte del día ' + g.diaPago +
+      (venG ? ' · ciclo ' + venG.texto : '');
     var badgeVigente = g.vigente
       ? ' <span class="badge paid" style="margin-left:6px">● Vigente</span>'
       : '';
@@ -76,9 +91,19 @@ RN.cobranza.abrir = function () {
       : (g.vigente ? ' <span class="muted" style="font-size:12px;font-weight:normal">— hoy es la fecha de pago</span>' : '');
     var destacado = g.vigente ? ' style="border-left:4px solid var(--primary);padding-left:10px"' : '';
 
+    var nNotif = g.clientes.filter(function (c) {
+      try {
+        return RN.notifyState && RN.notifyState.notificadoWaCiclo
+          && RN.notifyState.notificadoWaCiclo(c.id, c.diaPago || 1);
+      } catch (e) { return false; }
+    }).length;
+    var badgeNotif = nNotif
+      ? ' <span class="badge ok" style="margin-left:6px">💬 ' + nNotif + ' notificado' + (nNotif > 1 ? 's' : '') + '</span>'
+      : '';
     return '<div style="margin-bottom:16px"' + destacado + '>' +
       '<h4 style="margin:4px 0 8px">' + titulo + badgeVigente + subGrupo +
-      ' <span class="badge warn" style="margin-left:6px">' + g.clientes.length + ' pendiente' + (g.clientes.length > 1 ? 's' : '') + '</span></h4>' +
+      ' <span class="badge warn" style="margin-left:6px">' + g.clientes.length + ' pendiente' + (g.clientes.length > 1 ? 's' : '') + '</span>' +
+      badgeNotif + '</h4>' +
       '<div class="table-wrap"><table><thead><tr>' +
         '<th>Cliente</th><th>Estado</th><th>Teléfono</th>' +
         '<th style="text-align:right">A cobrar</th><th style="text-align:center">Acciones</th>' +
@@ -116,7 +141,7 @@ RN.cobranza.abrir = function () {
       '<button class="btn primary" onclick="RN.cobranza._recordarMasivo()">💬 Recordar a todos (WhatsApp)</button>' +
     '</div>';
 
-  RN.uiComponents.modal(html, { lg: true });
+  RN.uiComponents.modal(html, { lg: true, replace: !!opts.replace });
 };
 
 /** Abre el modal de cobro para un cliente (cierra esta ventana primero). */
@@ -128,6 +153,16 @@ RN.cobranza._cobrar = function (clienteId) {
 /** Envía recordatorio de WhatsApp a un cliente. */
 RN.cobranza._recordar = function (clienteId) {
   RN.whatsapp.enviarRecordatorio(clienteId);
+  // v5.53.4: refrescar Cobranza sustituyendo el modal (sin apilar)
+  if (RN.uiComponents.trasCerrar) {
+    RN.uiComponents.trasCerrar(function () {
+      try { RN.cobranza.abrir({ replace: true }); } catch (e) {}
+    }, { todo: true });
+  } else {
+    setTimeout(function () {
+      try { RN.cobranza.abrir({ replace: true }); } catch (e) {}
+    }, 200);
+  }
 };
 
 /** Recordatorio masivo a todos los pendientes del mes. */

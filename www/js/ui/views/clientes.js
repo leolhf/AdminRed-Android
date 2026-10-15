@@ -43,6 +43,7 @@ RN.render.clientes = function () {
     const mora = r.mora;
     // v5.13.7 (LOG-1): si hay mora, el total incluye los meses atrasados.
     const total = mora > 0 ? r.totalDeuda : r.totalMes;
+    const esAdm = RN.calc.esAdmin(c);
     const ipHtml = c.ip ? '<span class="acc-ip">' + RN.render.esc(c.ip) + '</span>' : '';
     const telHtml = c.telefono ? RN.render.esc(c.telefono) : '';
     const subParts = [];
@@ -58,8 +59,8 @@ RN.render.clientes = function () {
           '<div class="acc-summary-sub">' + subParts.join('') + '</div>' +
         '</div>' +
         '<div class="acc-summary-total">' +
-          '<div class="amt ' + (estado === 'paid' ? 'paid' : '') + '">' + (estado === 'paid' ? 'Pagado' : RN.calc.formatCUP(total)) + '</div>' +
-          '<div class="lbl">' + (estado === 'paid' ? 'Este mes' : (mora > 0 ? 'Deuda total' : 'Total')) + '</div>' +
+          '<div class="amt ' + (estado === 'paid' ? 'paid' : '') + '">' + (esAdm ? 'No paga' : (estado === 'paid' ? 'Pagado' : RN.calc.formatCUP(total))) + '</div>' +
+          '<div class="lbl">' + (esAdm ? (RN.calc.getMegasCliente(c) > 0 ? RN.calc.getMegasCliente(c) + 'M admin.' : 'Administrador') : (estado === 'paid' ? 'Este mes' : (mora > 0 ? 'Deuda total' : 'Total'))) + '</div>' +
         '</div>' +
         '<span class="acc-chevron">▼</span>' +
       '</div>' +
@@ -68,13 +69,15 @@ RN.render.clientes = function () {
         '<div class="acc-row"><span class="acc-label">Teléfono</span><span class="acc-value">' + (c.telefono ? RN.render.esc(c.telefono) : '<span class="muted">—</span>') + '</span></div>' +
         '<div class="acc-row"><span class="acc-label">IP / Red</span><span class="acc-value">' + (c.ip ? '<span style="font-family:monospace">' + RN.render.esc(c.ip) + '</span>' : '<span class="muted">—</span>') + '</span></div>' +
         '<div class="acc-row"><span class="acc-label">Dirección</span><span class="acc-value">' + (c.direccion ? RN.render.esc(c.direccion) : '<span class="muted">—</span>') + '</span></div>' +
-        '<div class="acc-row"><span class="acc-label">Pago día</span><span class="acc-value">Día ' + (c.diaPago || 1) + '</span></div>' +
+        (RN.cola.tieneCola(c) ? (function () { var d = RN.cola.datos(c); return '<div class="acc-row"><span class="acc-label">Cola MikroTik</span><span class="acc-value">' + (d.esAdmin ? 'Max Limit: no se toca' : 'Max ' + RN.cola.formatoVel(d.maxLimitKbps)) + '<br><span class="muted" style="font-size:12px">Limit At ' + (d.limitAtKbps > 0 ? RN.cola.formatoVel(d.limitAtKbps) : '—') + ' · prioridad ' + d.prioridad + '</span></span></div>'; })() : '') +
+        (esAdm ? '' : '<div class="acc-row"><span class="acc-label">Pago día</span><span class="acc-value">Día ' + (c.diaPago || 1) + '</span></div>') +
         '<div class="acc-row"><span class="acc-label">Estado</span><span class="acc-value">' + RN.render.badgeEstado(estado) + '</span></div>' +
-        '<div class="acc-row"><span class="acc-label">Saldo equipo</span><span class="acc-value">' + (deuda > 0 ? '<span class="badge due">' + RN.calc.formatCUP(deuda) + '</span>' : '<span class="muted">—</span>') + '</span></div>' +
+        (esAdm ? '' : '<div class="acc-row"><span class="acc-label">Saldo equipo</span><span class="acc-value">' + (deuda > 0 ? '<span class="badge due">' + RN.calc.formatCUP(deuda) + '</span>' : '<span class="muted">—</span>') + '</span></div>') +
         '<div class="acc-actions">' +
-          '<button class="btn sm primary" onclick="RN.modalCobro.abrir(\'' + RN.render.escAttr(c.id) + '\')">Cobrar</button>' +
-          '<button class="btn sm" onclick="RN.clientHistory.abrir(\'' + c.id + '\')">Historial</button>' +
-          '<button class="btn sm" onclick="RN.whatsapp.enviarRecordatorio(\'' + c.id + '\')">WhatsApp</button>' +
+          (esAdm ? '' : '<button class="btn sm primary" onclick="RN.modalCobro.abrir(\'' + RN.render.escAttr(c.id) + '\')">Cobrar</button>') +
+          (esAdm ? '' : '<button class="btn sm" onclick="RN.clientHistory.abrir(\'' + c.id + '\')">Historial</button>' +
+          '<button class="btn sm" onclick="RN.whatsapp.enviarRecordatorio(\'' + c.id + '\')">WhatsApp</button>') +
+          (RN.cola.tieneCola(c) ? '<button class="btn sm" onclick="RN.cola.copiarDeCliente(\'' + c.id + '\')" title="Copia el comando de la cola para pegarlo en Winbox">Cola</button>' : '') +
           '<button class="btn sm" onclick="RN.equiposRed.abrir(\'' + c.id + '\')">Equipos</button>' +
           '<button class="btn sm" onclick="RN.modalCliente.editar(\'' + c.id + '\')">Editar</button>' +
           '<button class="btn sm danger" onclick="RN.confirmDelete.cliente(\'' + c.id + '\')">🗑</button>' +

@@ -65,18 +65,25 @@ RN.uiComponents._restaurarValores = function (root, vals) {
   });
 };
 
-/** Abre un modal con contenido HTML. */
+/**
+ * Abre un modal con contenido HTML.
+ * @param {string} html
+ * @param {object} [opts]
+ * @param {boolean} [opts.lg] — modal ancho
+ * @param {boolean} [opts.replace] — v5.53.4: no apilar; sustituye el modal actual
+ *   (útil al pasar de un aviso a Cobranza, etc.)
+ */
 RN.uiComponents.modal = function (html, opts) {
   opts = opts || {};
   const box = document.getElementById('modal-box');
   const overlay = document.getElementById('modal-overlay');
 
-  // v5.13.18 (BUG-CRITICO): Si ya hay un modal abierto, guardar su contenido
-  // y className en la pila antes de sobrescribir, para poder restaurarlo al
-  // cerrar este nuevo modal (modales anidados).
-  // v5.20.0: además se capturan los valores vivos de los campos, porque
-  // innerHTML no los conserva al restaurar.
-  if (overlay.classList.contains('open')) {
+  if (opts.replace) {
+    // Sustituir: vaciar pila y no guardar el modal actual
+    RN.uiComponents._modalStack = [];
+  } else if (overlay.classList.contains('open')) {
+    // v5.13.18: apilar el modal actual antes de sobrescribir
+    // v5.20.0: capturar valores vivos de campos
     RN.uiComponents._modalStack.push({
       html: box.innerHTML,
       className: box.className,
@@ -87,28 +94,75 @@ RN.uiComponents.modal = function (html, opts) {
   box.className = 'modal' + (opts.lg ? ' lg' : '');
   box.innerHTML = html;
   overlay.classList.add('open');
-  // cerrar al click fuera
-  overlay.onclick = (e) => { if (e.target === overlay) RN.uiComponents.cerrarModal(); };
+  overlay.onclick = function (e) {
+    if (e.target === overlay) RN.uiComponents.cerrarModal();
+  };
 };
 
-/** Cierra el modal. Si hay modales apilados, restaura el nivel anterior. */
-RN.uiComponents.cerrarModal = function () {
-  // v5.13.18 (BUG-CRITICO): Si hay modales en la pila, restaurar el anterior
-  // en lugar de cerrar el overlay. Esto permite que confirm/prompt abiertos
-  // sobre otro modal se cierren sin destruir el modal padre.
-  if (RN.uiComponents._modalStack.length > 0) {
-    var prev = RN.uiComponents._modalStack.pop();
-    var box = document.getElementById('modal-box');
-    box.className = prev.className;
-    box.innerHTML = prev.html;
-    // v5.20.0: re-aplicar los valores vivos de los campos (innerHTML no los conserva).
-    RN.uiComponents._restaurarValores(box, prev.valores);
-    // Re-asignar el onclick del overlay (se perdió al restaurar innerHTML)
-    var overlay = document.getElementById('modal-overlay');
-    overlay.onclick = (e) => { if (e.target === overlay) RN.uiComponents.cerrarModal(); };
+/**
+ * Cierra el modal superior. Si hay pila, restaura el anterior.
+ * @param {object} [opts]
+ * @param {boolean} [opts.todo] — cierra todo y vacía la pila
+ */
+RN.uiComponents.cerrarModal = function (opts) {
+  opts = opts || {};
+  var overlay = document.getElementById('modal-overlay');
+  var box = document.getElementById('modal-box');
+
+  if (opts.todo) {
+    RN.uiComponents._modalStack = [];
+    if (overlay) overlay.classList.remove('open');
     return;
   }
-  document.getElementById('modal-overlay').classList.remove('open');
+
+  if (RN.uiComponents._modalStack.length > 0) {
+    var prev = RN.uiComponents._modalStack.pop();
+    box.className = prev.className;
+    box.innerHTML = prev.html;
+    RN.uiComponents._restaurarValores(box, prev.valores);
+    overlay.onclick = function (e) {
+      if (e.target === overlay) RN.uiComponents.cerrarModal();
+    };
+    return;
+  }
+  if (overlay) overlay.classList.remove('open');
+};
+
+/**
+ * v5.53.4 — Cierra el modal actual (o toda la pila) y ejecuta `fn` en el
+ * siguiente frame de pintado, cuando el overlay ya puede recibir un modal nuevo.
+ * Evita setTimeout mágicos y condiciones de carrera al encadenar modales.
+ *
+ * @param {function} fn
+ * @param {object} [opts]
+ * @param {boolean} [opts.todo=true] — por defecto cierra toda la pila (flujo "ir a X")
+ */
+RN.uiComponents.trasCerrar = function (fn, opts) {
+  opts = opts || {};
+  var todo = opts.todo !== false; // default true
+  RN.uiComponents.cerrarModal({ todo: todo });
+  // Doble rAF: esperar a que el navegador aplique classList.remove('open')
+  var run = function () {
+    if (typeof fn === 'function') {
+      try { fn(); } catch (e) { console.warn('[uiComponents.trasCerrar]', e); }
+    }
+  };
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(function () {
+      requestAnimationFrame(run);
+    });
+  } else {
+    setTimeout(run, 0);
+  }
+};
+
+/**
+ * v5.53.4 — Abre un modal sustituyendo el actual (alias de modal + replace).
+ */
+RN.uiComponents.reemplazarModal = function (html, opts) {
+  opts = opts || {};
+  opts.replace = true;
+  RN.uiComponents.modal(html, opts);
 };
 
 /** Diálogo de confirmación reutilizable.

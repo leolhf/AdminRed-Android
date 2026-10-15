@@ -25,13 +25,14 @@ RN.paqueteProveedor.calcMontoPaquete = function () {
   return +(megas * precioMega).toFixed(2);
 };
 
-/** Lee los campos del modal y devuelve un objeto {proveedor, megas, precioMega, sobreventa, monto}. */
+/** Lee los campos del modal y devuelve un objeto {proveedor, megas, precioMega, reserva, monto}. */
 RN.paqueteProveedor.leerCampos = function () {
   return {
     proveedor: ((document.getElementById('prov-nombre') || {}).value || '').trim(),
     megas: parseFloat((document.getElementById('prov-megas') || {}).value) || 0,
     precioMega: parseFloat((document.getElementById('prov-precio-mega') || {}).value) || 0,
-    sobreventa: parseFloat((document.getElementById('prov-sobreventa') || {}).value),
+    plus: parseFloat((document.getElementById('prov-plus') || {}).value) || 0,
+    reserva: parseFloat((document.getElementById('prov-reserva') || {}).value),
     monto: RN.paqueteProveedor.calcMontoPaquete()
   };
 };
@@ -43,13 +44,14 @@ RN.paqueteProveedor.hayCambios = function () {
   return c.proveedor !== (cfg.proveedorInternet || '') ||
          c.megas !== (+cfg.proveedorMegas || 0) ||
          c.precioMega !== (+cfg.proveedorPrecioMega || 0) ||
-         (isNaN(c.sobreventa) ? 5 : c.sobreventa) !== (+cfg.sobreventaMegas || 0);
+         c.plus !== (+cfg.plusMegas || 0) ||
+         (isNaN(c.reserva) ? 1 : c.reserva) !== (+cfg.reservaMegas || 0);
 };
 
 /** Actualiza el aviso de capacidad dentro del modal (en vivo). v5.12.4 */
 RN.paqueteProveedor.actualizarAviso = function () {
   var c = RN.paqueteProveedor.leerCampos();
-  var sobreventa = isNaN(c.sobreventa) ? 5 : c.sobreventa;
+  var reserva = isNaN(c.reserva) ? 1 : c.reserva;
   var aviso = document.getElementById('prov-aviso-capacidad');
   if (!aviso) return;
 
@@ -63,16 +65,20 @@ RN.paqueteProveedor.actualizarAviso = function () {
     return;
   }
 
-  var vendidos = RN.calc.megasVendidos();
-  var tope = c.megas + sobreventa;
-  var excedido = tope > 0 && vendidos > tope;
-  var pct = tope > 0 ? Math.min(100, Math.round(vendidos / tope * 100)) : 0;
+  // v5.52.3: tope = (pagados + plus) − reserva
+  var comprometido = RN.cola.sumaLimitAtKbps().kbps / 1000;
+  var plus = Math.max(0, +c.plus || 0);
+  var tope = Math.max(0, c.megas + plus - reserva);
+  var excedido = tope > 0 && comprometido > tope;
+  var pct = tope > 0 ? Math.min(100, Math.round(comprometido / tope * 100)) : 0;
+  var cM = RN.cola.txtM(comprometido), tM = RN.cola.txtM(tope);
   var estadoTxt = excedido
-    ? '<strong style="color:var(--danger)">\u26a0 Excedido: vendes ' + vendidos + 'M y tu tope es ' + tope + 'M</strong>. Reduce clientes o sube la sobreventa.'
+    ? '<strong style="color:var(--danger)">\u26a0 Excedido: ' + cM + ' comprometidos y tu tope es ' + tM + '</strong>. Reduce clientes o baja la reserva.'
     : (pct >= 80
-        ? '<strong style="color:var(--warn)">Cerca del tope: ' + vendidos + 'M / ' + tope + 'M (' + pct + '%)</strong>. Vigila tu capacidad.'
-        : '<strong style="color:var(--success)">\u2713 Capacidad ok: ' + vendidos + 'M vendidos / ' + tope + 'M disponibles (' + pct + '%)</strong>.');
-  aviso.innerHTML = 'Tope vendible: <strong>' + tope + 'M</strong> (' + c.megas + 'M paquete + ' + sobreventa + 'M sobreventa) \u00b7 ' + estadoTxt;
+        ? '<strong style="color:var(--warn)">Cerca del tope: ' + cM + ' / ' + tM + ' (' + pct + '%)</strong>. Vigila tu capacidad.'
+        : '<strong style="color:var(--success)">\u2713 Capacidad ok: ' + cM + ' comprometidos / ' + tM + ' disponibles (' + pct + '%)</strong>.');
+  var desgloseCap = c.megas + 'M pagados' + (plus > 0 ? ' + ' + plus + 'M plus' : '') + ' \u2212 ' + reserva + 'M reserva';
+  aviso.innerHTML = 'Tope: <strong>' + tM + '</strong> (' + desgloseCap + ') \u00b7 ' + estadoTxt;
   aviso.className = 'prov-cap-aviso' + (excedido ? ' prov-cap-alert' : (pct >= 80 ? ' prov-cap-warn' : ' prov-cap-ok'));
 
   // Actualizar tambien el desglose del pago si existe
@@ -82,24 +88,28 @@ RN.paqueteProveedor.actualizarAviso = function () {
 /** Abre el modal de gestión del proveedor. */
 RN.paqueteProveedor.abrir = function () {
   var cfg = RN.state.config;
-  var sobreventa = (cfg.sobreventaMegas === undefined || cfg.sobreventaMegas === null) ? 5 : cfg.sobreventaMegas;
+  var reserva = (cfg.reservaMegas === undefined || cfg.reservaMegas === null) ? 1 : cfg.reservaMegas;
   var html =
     '<div class="modal-header"><h3>\ud83d\udce1 Gestionar mi servicio de internet</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">\u00d7</button></div>' +
     '<div class="modal-body">' +
-      '<p class="muted" style="margin-bottom:12px;font-size:13px">Aquí ajustas los datos del paquete de tu proveedor: <strong>megas, precio por mega y sobreventa</strong>. Si haces un cambio, decide si es <strong>vigente desde este mes</strong> o <strong>desde el próximo</strong>. También puedes registrar el pago mensual.</p>' +
+      '<p class="muted" style="margin-bottom:12px;font-size:13px">Aquí ajustas el paquete: <strong>megas que pagas, precio, plus de cortesía y reserva</strong>. Si haces un cambio, decide si es <strong>vigente desde este mes</strong> o <strong>desde el próximo</strong>. También puedes registrar el pago mensual.</p>' +
 
       '<div class="form-row"><div><label>Proveedor de internet</label>' +
       '<input type="text" id="prov-nombre" placeholder="Ej: ETECSA, FiberNet..." value="' + RN.render.esc(cfg.proveedorInternet || '') + '" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>' +
 
-      '<div class="form-row cols-2"><div><label>Megas contratados (Mbps)</label>' +
-      '<input type="number" id="prov-megas" step="1" min="0" placeholder="Ej: 50" value="' + (cfg.proveedorMegas || 0) + '" oninput="RN.paqueteProveedor.actualizarAviso()"></div>' +
+      '<div class="form-row cols-2"><div><label>Megas que pagas (Mbps)</label>' +
+      '<input type="number" id="prov-megas" step="1" min="0" placeholder="Ej: 40" value="' + (cfg.proveedorMegas || 0) + '" oninput="RN.paqueteProveedor.actualizarAviso()"></div>' +
       '<div><label>Precio por mega (CUP/Mbps)</label>' +
-      '<input type="number" id="prov-precio-mega" step="0.01" min="0" placeholder="Ej: 25" value="' + (cfg.proveedorPrecioMega || 0) + '" oninput="RN.paqueteProveedor.actualizarAviso()"></div></div>' +
+      '<input type="number" id="prov-precio-mega" step="0.01" min="0" placeholder="Ej: 1250" value="' + (cfg.proveedorPrecioMega || 0) + '" oninput="RN.paqueteProveedor.actualizarAviso()"></div></div>' +
 
-      '<div class="form-row cols-2"><div><label>Sobreventa permitida (Mbps extra)</label>' +
-      '<input type="number" id="prov-sobreventa" step="1" min="0" placeholder="5" value="' + sobreventa + '" oninput="RN.paqueteProveedor.actualizarAviso()"></div>' +
-      '<div><label>Monto mensual calculado</label>' +
-      '<div id="prov-monto-calc" style="font-size:18px;font-weight:700;padding-top:6px">' + RN.calc.formatCUP(RN.calc.montoPaqueteProveedor()) + '</div></div></div>' +
+      '<div class="form-row cols-2"><div><label>Plus de cortesía (Mbps gratis)</label>' +
+      '<input type="number" id="prov-plus" step="1" min="0" placeholder="Ej: 5" value="' + ((cfg.plusMegas !== undefined && cfg.plusMegas !== null) ? cfg.plusMegas : (cfg.sobreventaMegas || 0)) + '" oninput="RN.paqueteProveedor.actualizarAviso()" title="Megas que el proveedor te da sin costo (ej: pagas 40 y te dan 5 de plus)"></div>' +
+      '<div><label>Reserva (Mbps que no se comprometen)</label>' +
+      '<input type="number" id="prov-reserva" step="0.5" min="0" placeholder="1" value="' + reserva + '" oninput="RN.paqueteProveedor.actualizarAviso()"></div></div>' +
+
+      '<div class="form-row"><div><label>Monto mensual del paquete (solo megas pagados)</label>' +
+      '<div id="prov-monto-calc" style="font-size:18px;font-weight:700;padding-top:6px">' + RN.calc.formatCUP(RN.calc.montoPaqueteProveedor()) + '</div>' +
+      '<p class="muted" style="font-size:12px;margin-top:4px">Costo = megas que pagas × precio. El plus no se cobra.</p></div></div>' +
 
       '<div id="prov-aviso-capacidad" class="prov-cap-aviso muted" style="margin-bottom:16px"></div>' +
 
@@ -241,7 +251,7 @@ RN.paqueteProveedor.recalcular = function () {
  */
 RN.paqueteProveedor.guardarCambios = function () {
   var c = RN.paqueteProveedor.leerCampos();
-  var sobreventa = isNaN(c.sobreventa) ? 5 : c.sobreventa;
+  var reserva = isNaN(c.reserva) ? 1 : c.reserva;
 
   if (!c.megas || c.megas <= 0) {
     RN.notifyUI.toast('Ingresa los megas contratados', 'error');
@@ -259,7 +269,8 @@ RN.paqueteProveedor.guardarCambios = function () {
     RN.state.config.proveedorMegas = c.megas;
     RN.state.config.proveedorPrecioMega = c.precioMega;
     RN.state.config.proveedorMonto = c.monto;
-    RN.state.config.sobreventaMegas = sobreventa;
+    RN.state.config.plusMegas = Math.max(0, +c.plus || 0);
+    RN.state.config.reservaMegas = reserva;
     // Limpiar cualquier pendiente anterior (ya se aplicó)
     RN.state.config.paquetePendiente = null;
     // v5.13.5 (ISSUE #22): Eliminar persistir() redundante.
@@ -274,7 +285,8 @@ RN.paqueteProveedor.guardarCambios = function () {
       proveedor: c.proveedor,
       megas: c.megas,
       precioMega: c.precioMega,
-      sobreventa: sobreventa
+      plus: Math.max(0, +c.plus || 0),
+      reserva: reserva
     };
     // v5.13.5 (ISSUE #22): Eliminar persistir() redundante.
     RN.storageLocal.guardar();
@@ -315,6 +327,7 @@ RN.paqueteProveedor.confirmar = function () {
   RN.state.config.proveedorMonto = c.monto;
   RN.state.config.proveedorMegas = c.megas;
   RN.state.config.proveedorPrecioMega = c.precioMega;
+  RN.state.config.plusMegas = Math.max(0, +c.plus || 0);
   // v5.13.5 (ISSUE #22): Eliminar persistir() y guardar() aquí; se consolidará
   // en un solo guardar() tras agregar el gasto (evita triple escritura).
 

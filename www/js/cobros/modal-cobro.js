@@ -18,6 +18,16 @@ RN.modalCobro = RN.modalCobro || {};
 
 RN.modalCobro._clienteId = null;
 /** Moneda "activa" (enfocada) para el toggle visual: 'CUP' o 'USD'. */
+/**
+ * v5.48.0: tasa de conversión del cobro en curso. Para clientes con precio fijo en USD es la
+ * que les corresponde (a tiempo = la menor, tarde = la mayor; ver RN.calc.infoTasa); para el resto
+ * es la tasa vigente. Se fija al abrir el modal y todas las conversiones del cobro la usan.
+ */
+RN.modalCobro._tasaCobro = 0;
+RN.modalCobro._infoTasa = null;
+RN.modalCobro._tasa = function () { return RN.modalCobro._tasaCobro > 0 ? RN.modalCobro._tasaCobro : RN.moneda.tasa(); };
+RN.modalCobro._aCUP = function (usd) { var t = RN.modalCobro._tasa(); return t ? +((+usd || 0) * t).toFixed(2) : 0; };
+RN.modalCobro._aUSD = function (cup) { var t = RN.modalCobro._tasa(); return t ? +((+cup || 0) / t).toFixed(2) : 0; };
 RN.modalCobro._moneda = 'CUP';
 /** Estado interno: monto USD ingresado (se mantiene al cambiar de moneda). */
 RN.modalCobro._usdIngresado = 0;
@@ -55,7 +65,10 @@ RN.modalCobro.abrir = function (clienteId) {
   RN.modalCobro._usdIngresado = 0;
   RN.modalCobro._cupIngresado = 0;
   const mes = RN.calc.mesActualStr();
-  const base = RN.calc.getPrecioBase(c);
+  // v5.48.0: tasa que le toca al cliente con precio USD (o 0 = tasa vigente normal)
+  RN.modalCobro._infoTasa = RN.calc.esPrecioUSD(c) ? RN.calc.infoTasa(c, mes) : null;
+  RN.modalCobro._tasaCobro = RN.modalCobro._infoTasa ? RN.calc.tasaConversionCobro(c, mes) : 0;
+  const base = RN.calc.getPrecioBase(c, mes);
   const rec = RN.calc.getDescuentoRecurrente(c);
   const cuotaEq = RN.investment.getCuotaEquipoCliente(c);
   const deudaEq = RN.investment.getDeudaEquipoCliente(c);
@@ -63,7 +76,7 @@ RN.modalCobro.abrir = function (clienteId) {
   const resumen = RN.calc.resumenCliente(c, mes);
   // v5.14.4: vigencia centralizada en RN.descuentos.vigenteEnMes (helper único)
   const descPunt = RN.state.descuentos.filter(d => d.clienteId === clienteId && RN.descuentos.vigenteEnMes(d, mes));
-  const tasa = RN.moneda.tasa();
+  const tasa = RN.modalCobro._tasa();
   const fondo = RN.calc.fondoCaja();
 
   const descRows = descPunt.length ? descPunt.map(d => `<tr>
@@ -119,7 +132,7 @@ RN.modalCobro.abrir = function (clienteId) {
             <button type="button" class="btn sm" data-moneda="USD" onclick="RN.modalCobro.setMoneda('USD')" ${tasa ? '' : 'disabled title="Configura la tasa USD en Ajustes"'}>USD</button>
           </div>
         </div>
-        ${tasa ? `<div class="muted" style="font-size:12px;margin-bottom:10px">Tasa vigente: <strong>1 USD = ${tasa} CUP</strong> · Fondo de caja: <strong>${RN.calc.formatCUP(fondo)}</strong></div>` : `<div class="muted" style="font-size:12px;margin-bottom:10px;color:var(--danger)">⚠ No hay tasa USD configurada. Configúrala en Ajustes para aceptar pagos en USD.</div>`}
+        ${RN.modalCobro._infoTasa ? `<div class="muted" style="font-size:12px;margin-bottom:10px">Precio fijo: <strong>${RN.moneda.formatUSD(RN.calc.getPrecioNetoUSD(c, mes))}</strong> · Tasa aplicada: <strong>1 USD = ${RN.modalCobro._infoTasa.tasa} CUP</strong> (${RN.render.esc(RN.modalCobro._infoTasa.motivo)}${RN.modalCobro._infoTasa.tasaMensaje ? ' · mensaje: ' + RN.modalCobro._infoTasa.tasaMensaje + ', hoy: ' + RN.modalCobro._infoTasa.tasaHoy : ''}) · Fondo de caja: <strong>${RN.calc.formatCUP(fondo)}</strong></div>` : tasa ? `<div class="muted" style="font-size:12px;margin-bottom:10px">Tasa vigente: <strong>1 USD = ${tasa} CUP</strong> · Fondo de caja: <strong>${RN.calc.formatCUP(fondo)}</strong></div>` : `<div class="muted" style="font-size:12px;margin-bottom:10px;color:var(--danger)">⚠ No hay tasa USD configurada. Configúrala en Ajustes para aceptar pagos en USD.</div>`}
 
         <!-- Monto a pagar (siempre visible, referencia) -->
         <div class="cobro-desglose-row" style="border-bottom:1px dashed var(--border);padding-bottom:8px;margin-bottom:10px">
@@ -265,9 +278,9 @@ RN.modalCobro._recalcularCUPFaltante = function () {
   if (!inpCup) return;
 
   var usd = inpUsd ? (parseFloat(inpUsd.value) || 0) : 0;
-  var tasa = RN.moneda.tasa();
+  var tasa = RN.modalCobro._tasa();
   var aPagar = RN.modalCobro._totalAPagar();
-  var cupDesdeUSD = RN.moneda.aCUP(usd); // lo que el USD cubre en CUP
+  var cupDesdeUSD = RN.modalCobro._aCUP(usd); // lo que el USD cubre en CUP
   var falta = aPagar - cupDesdeUSD;
 
   if (falta <= 0) {
@@ -275,9 +288,10 @@ RN.modalCobro._recalcularCUPFaltante = function () {
     inpCup.value = '0.00';
     RN.modalCobro._cupIngresado = 0;
   } else {
-    // Mostrar lo que falta en CUP
-    inpCup.value = falta.toFixed(2);
-    RN.modalCobro._cupIngresado = falta;
+    // v5.49.0: con USD de por medio, el resto en CUP se redondea según el modo de Ajustes
+    var sugerido = RN.calc.restoCUPRedondeado(falta, usd);
+    inpCup.value = sugerido.toFixed(2);
+    RN.modalCobro._cupIngresado = sugerido;
   }
 };
 
@@ -293,7 +307,7 @@ RN.modalCobro.onUSDChange = function () {
   // Actualizar texto de conversión USD → CUP
   var elConv = document.getElementById('cobro-usd-conv');
   if (elConv) {
-    var cupEquiv = RN.moneda.aCUP(usd);
+    var cupEquiv = RN.modalCobro._aCUP(usd);
     elConv.textContent = '↳ Equivale a ' + RN.calc.formatCUP(cupEquiv);
   }
 
@@ -335,23 +349,28 @@ RN.modalCobro.recalcularDesdePago = function () {
 
   var usd = inpUsd ? (parseFloat(inpUsd.value) || 0) : 0;
   var cup = parseFloat(inpCup.value) || 0;
-  var tasa = RN.moneda.tasa();
+  var tasa = RN.modalCobro._tasa();
   var aPagar = RN.modalCobro._totalAPagar();
 
   // Actualizar "monto a pagar" por si cambió el equipo
   if (elAPagar) elAPagar.textContent = RN.calc.formatCUP(aPagar);
 
   // Total pagado en CUP = (USD convertido) + CUP directo
-  var cupDesdeUSD = RN.moneda.aCUP(usd);
+  var cupDesdeUSD = RN.modalCobro._aCUP(usd);
   var pagadoCUP = cupDesdeUSD + cup;
-  var pagadoUSD = usd + (tasa ? parseFloat(RN.moneda.aUSD(cup)) : 0);
+  var pagadoUSD = usd + (tasa ? parseFloat(RN.modalCobro._aUSD(cup)) : 0);
+
+  // v5.49.0: ajuste por redondeo (pagos mixtos): + perdonado al cliente / − cobrado de más
+  var ajuste = RN.calc.ajusteRedondeoPago(usd, pagadoCUP, aPagar);
 
   // Actualizar hint del campo CUP
   if (elCupHint) {
     if (usd > 0) {
       var faltaCalc = aPagar - cupDesdeUSD;
       if (faltaCalc > 0) {
-        elCupHint.textContent = '(falta ' + RN.calc.formatCUP(faltaCalc) + ' después de USD)';
+        var sugCup = RN.calc.restoCUPRedondeado(faltaCalc, usd);
+        elCupHint.textContent = '(falta ' + RN.calc.formatCUP(faltaCalc) + ' después de USD' +
+          (Math.abs(sugCup - faltaCalc) > 0.005 ? ' · se cobra ' + RN.calc.formatCUP(sugCup) : '') + ')';
       } else {
         elCupHint.textContent = '(USD cubre el total)';
       }
@@ -363,7 +382,7 @@ RN.modalCobro.recalcularDesdePago = function () {
   // Si no hay ningún monto ingresado, mostrar total como referencia
   if (pagadoCUP <= 0 && usd <= 0 && cup <= 0) {
     if (elTot) elTot.textContent = RN.calc.formatCUP(aPagar);
-    if (elTotUsd) elTotUsd.innerHTML = (tasa && aPagar > 0) ? '<span class="muted" style="font-size:13px">≈ ' + RN.moneda.formatUSD(RN.moneda.aUSD(aPagar)) + '</span>' : '';
+    if (elTotUsd) elTotUsd.innerHTML = (tasa && aPagar > 0) ? '<span class="muted" style="font-size:13px">≈ ' + RN.moneda.formatUSD(RN.modalCobro._aUSD(aPagar)) + '</span>' : '';
     if (desg) desg.style.display = 'none';
     return;
   }
@@ -386,7 +405,7 @@ RN.modalCobro.recalcularDesdePago = function () {
   }
 
   // ====== Calcular faltante o excedente ======
-  var diferencia = pagadoCUP - aPagar;
+  var diferencia = pagadoCUP + ajuste - aPagar;
   var filaFalta = document.getElementById('cobro-fila-falta');
   var filaExcede = document.getElementById('cobro-fila-excede');
   var filaEstado = document.getElementById('cobro-fila-estado');
@@ -403,7 +422,7 @@ RN.modalCobro.recalcularDesdePago = function () {
 
   if (Math.abs(diferencia) < 0.01) {
     // Pago exacto
-    if (dEstado) dEstado.innerHTML = '<strong style="color:var(--green)">✓ Pago completo</strong>';
+    if (dEstado) dEstado.innerHTML = '<strong style="color:var(--green)">✓ Pago completo</strong>' + (ajuste ? '<br><span class="muted" style="font-size:11px">' + (ajuste > 0 ? 'Redondeo a favor del cliente: −' : 'Redondeo a tu favor: +') + RN.calc.formatCUP(Math.abs(ajuste)) + '</span>' : '');
     if (elTot) elTot.textContent = RN.calc.formatCUP(pagadoCUP);
   } else if (diferencia < 0) {
     // Pago parcial — falta dinero
@@ -431,7 +450,7 @@ RN.modalCobro.recalcularDesdePago = function () {
   if (elTotUsd) {
     var totalDisplay = (diferencia > 0) ? aPagar : pagadoCUP;
     if (tasa && totalDisplay > 0) {
-      elTotUsd.innerHTML = '<span class="muted" style="font-size:13px">≈ ' + RN.moneda.formatUSD(RN.moneda.aUSD(totalDisplay)) + '</span>';
+      elTotUsd.innerHTML = '<span class="muted" style="font-size:13px">≈ ' + RN.moneda.formatUSD(RN.modalCobro._aUSD(totalDisplay)) + '</span>';
     } else {
       elTotUsd.innerHTML = '';
     }
@@ -442,9 +461,9 @@ RN.modalCobro.recalcularDesdePago = function () {
 RN.modalCobro._actualizarEquivalenciaUSD = function (totalCUP) {
   var el = document.getElementById('cobro-total-usd');
   if (!el) return;
-  var tasa = RN.moneda.tasa();
+  var tasa = RN.modalCobro._tasa();
   if (tasa && totalCUP > 0) {
-    el.innerHTML = '<span class="muted" style="font-size:13px">≈ ' + RN.moneda.formatUSD(RN.moneda.aUSD(totalCUP)) + '</span>';
+    el.innerHTML = '<span class="muted" style="font-size:13px">≈ ' + RN.moneda.formatUSD(RN.modalCobro._aUSD(totalCUP)) + '</span>';
   }
 };
 
@@ -530,7 +549,7 @@ RN.modalCobro.confirmar = function () {
   var inpCup = document.getElementById('cobro-monto-cup');
   var usd = inpUsd ? (parseFloat(inpUsd.value) || 0) : 0;
   var cup = inpCup ? (parseFloat(inpCup.value) || 0) : 0;
-  var tasa = RN.moneda.tasa();
+  var tasa = RN.modalCobro._tasa();
 
   // ====== v5.13.4 (Mejora #5): Validación visual de campos financieros ======
   // Validar que los montos no sean negativos
@@ -563,9 +582,9 @@ RN.modalCobro.confirmar = function () {
   var aPagar = +(neto + detMora.total + montoEq).toFixed(2);
 
   // Total pagado en CUP = (USD convertido) + CUP directo
-  var cupDesdeUSD = RN.moneda.aCUP(usd);
+  var cupDesdeUSD = RN.modalCobro._aCUP(usd);
   var pagadoCUP = cupDesdeUSD + cup;
-  var pagadoUSD = usd + (tasa ? parseFloat(RN.moneda.aUSD(cup)) : 0);
+  var pagadoUSD = usd + (tasa ? parseFloat(RN.modalCobro._aUSD(cup)) : 0);
 
   // Determinar moneda principal (para compatibilidad con recibo/historial)
   var moneda = 'CUP';
@@ -576,12 +595,15 @@ RN.modalCobro.confirmar = function () {
   if (pagadoCUP <= 0 && usd <= 0 && cup <= 0) {
     pagadoCUP = aPagar;
     cup = aPagar;
-    pagadoUSD = tasa ? parseFloat(RN.moneda.aUSD(aPagar)) : 0;
+    pagadoUSD = tasa ? parseFloat(RN.modalCobro._aUSD(aPagar)) : 0;
     moneda = 'CUP';
   }
 
+  // v5.49.0: ajuste por redondeo del resto en CUP (pagos mixtos USD + CUP, según Ajustes)
+  var ajusteRedondeo = RN.calc.ajusteRedondeoPago(usd, pagadoCUP, aPagar);
+
   // ====== Determinar tipo de pago: completo, parcial o excedente ======
-  var diferencia = pagadoCUP - aPagar;
+  var diferencia = pagadoCUP + ajusteRedondeo - aPagar;
   var tipoPago = 'completo';
   var falta = 0;
   var excedente = 0;
@@ -632,6 +654,8 @@ RN.modalCobro.confirmar = function () {
     }
   }
   moraCobrada = +moraCobrada.toFixed(2);
+  // v5.49.0: el ingreso de servicio es lo realmente recibido: perdonado (+) lo reduce, cobrado de más (−) lo aumenta
+  if (ajusteRedondeo) montoServicioRegistrado = Math.max(0, +(montoServicioRegistrado - ajusteRedondeo).toFixed(2));
   // v5.43.0: el fondo después del cobro incluye lo realmente ingresado (servicio + mora + equipo)
   fondoDespues = +(fondoAntes + montoServicioRegistrado + moraCobrada + montoEquipoPagado).toFixed(2);
 
@@ -670,6 +694,15 @@ RN.modalCobro.confirmar = function () {
     totalCUP: +(montoServicioRegistrado + moraCobrada + montoEquipoPagado).toFixed(2),
     totalAPagar: aPagar,
     tasaUsd: tasa,
+    // v5.48.0: detalle de la regla de tasa (clientes con precio fijo en USD)
+    tasaBaseUsd: RN.modalCobro._infoTasa ? RN.modalCobro._infoTasa.tasa : undefined,
+    tasaMensajeUsd: RN.modalCobro._infoTasa ? (RN.modalCobro._infoTasa.tasaMensaje || undefined) : undefined,
+    tasaHoyUsd: RN.modalCobro._infoTasa ? RN.modalCobro._infoTasa.tasaHoy : undefined,
+    motivoTasa: RN.modalCobro._infoTasa ? RN.modalCobro._infoTasa.motivo : undefined,
+    precioNetoUSD: RN.modalCobro._infoTasa ? RN.calc.getPrecioNetoUSD(c, mes) : undefined,
+    // v5.49.0: ajuste por redondeo del resto en CUP (+ perdonado al cliente / − cobrado de más)
+    ajusteRedondeo: ajusteRedondeo || undefined,
+    modoRedondeo: ajusteRedondeo ? RN.calc.modoRedondeoMixto() : undefined,
     // ====== Campos de tipo de pago ======
     tipoPago: tipoPago,
     falta: falta,
@@ -724,6 +757,7 @@ RN.modalCobro.confirmar = function () {
   } else if (usd > 0) {
     msg += ` (${RN.moneda.formatUSD(usd)})`;
   }
+  if (ajusteRedondeo) msg += ` · Redondeo ${ajusteRedondeo > 0 ? 'a favor del cliente −' : '+'}${RN.calc.formatCUP(Math.abs(ajusteRedondeo))}`;
   msg += ` · ${reciboNum}`;
   RN.notifyUI.toast(msg, 'success');
 

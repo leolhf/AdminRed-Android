@@ -41,7 +41,7 @@ RN.render.badgeTipoPago = function (h) {
 
 /** Badge de estado de cliente. */
 RN.render.badgeEstado = function (estado) {
-  const map = { ok: ['ok', 'Al día'], warn: ['warn', 'Por vencer'], due: ['due', 'Atrasado'], paid: ['paid', 'Pagado'], parcial: ['parcial', 'Pago parcial'], 'por-iniciar': ['por-iniciar', 'Por iniciar'], inactivo: ['muted', 'Inactivo'] };
+  const map = { ok: ['ok', 'Al día'], warn: ['warn', 'Por vencer'], due: ['due', 'Atrasado'], paid: ['paid', 'Pagado'], parcial: ['parcial', 'Pago parcial'], 'por-iniciar': ['por-iniciar', 'Por iniciar'], inactivo: ['muted', 'Inactivo'], admin: ['admin', 'Administrador'] };
   const [cls, txt] = map[estado] || ['muted', estado];
   return `<span class="badge ${cls}">${txt}</span>`;
 };
@@ -53,6 +53,7 @@ RN.render.nombrePlan = function (cliente) {
     if (p) return `${RN.render.esc(p.nombre)} · ${p.megas || '?'}M`;
   }
   const m = RN.calc.getMegasCliente(cliente);
+  if (RN.calc.esPrecioUSD(cliente)) return `Personalizado · ${m}M · ${+cliente.precioMega} USD/M`;
   return m > 0 ? `Personalizado · ${m}M` : 'Personalizado';
 };
 
@@ -105,7 +106,7 @@ RN.render.compararClientePorIP = function (a, b) {
 
 /** Render completo: refresca todas las vistas. */
 RN.render.todo = function () {
-  ['dashboard', 'clientes', 'cobros', 'realizados', 'inversion', 'inventario', 'gastos', 'reportes', 'calendario', 'descuentos', 'salud'].forEach(v => {
+  ['dashboard', 'clientes', 'cobros', 'realizados', 'inversion', 'inventario', 'gastos', 'reportes', 'calendario', 'descuentos', 'salud', 'margen', 'morosos', 'incidencias'].forEach(v => {
     RN.render.vista(v);
   });
   RN.config.rellenarForm();
@@ -128,6 +129,9 @@ RN.render.vista = function (view) {
     case 'calendario': RN.calendario && RN.calendario.render(); break;
     case 'descuentos': RN.descuentosView && RN.descuentosView.render(); break;
     case 'salud': RN.salud && RN.salud.render(); break;
+    case 'margen': RN.margenClientes && RN.margenClientes.render(); break;
+    case 'morosos': RN.lifecycle && RN.lifecycle.renderPanel(); break;
+    case 'incidencias': RN.incidencias && RN.incidencias.render(); break;
   }
 };
 
@@ -187,9 +191,18 @@ RN.render.barraRecuperacion = function (inv, rec, pctParam, opts) {
   var textoProceso = opts.textoProceso || 'En proceso de recuperación';
   var avisoCosto = (opts.avisoCosto !== false); // por defecto muestra el aviso de costo de mega sin configurar
 
-  // Limitar el ancho visual a 100% aunque el % supere 100 (recuperada)
-  var pctVisual = Math.min(100, Math.max(0, pct));
-  var faltante = Math.max(0, +(invertido - recuperado).toFixed(2));
+  // v5.52.6: el capital recuperado se cierra en 100 %. Lo que pase de ahí
+  // es ganancia extra del negocio, no "más recuperación".
+  var recuperadoBruto = +(recuperado || 0);
+  var recuperadoCapital = Math.min(recuperadoBruto, invertido); // tope = capital
+  var excedente = Math.max(0, +(recuperadoBruto - invertido).toFixed(2));
+  var pctReal = invertido > 0 ? +((recuperadoBruto / invertido) * 100).toFixed(1) : 0;
+  // % mostrado nunca pasa de 100 (capital ya cubierto)
+  var pct = Math.min(100, Math.max(0, pctReal));
+  var pctVisual = pct;
+  var faltante = Math.max(0, +(invertido - recuperadoCapital).toFixed(2));
+  // Para la UI usamos el capital recuperado (topeado), no el bruto
+  recuperado = recuperadoCapital;
 
   // Color de la barra según progreso
   var cls = 'recup-green';
@@ -200,8 +213,15 @@ RN.render.barraRecuperacion = function (inv, rec, pctParam, opts) {
 
   var estadoTxt;
   if (invertido <= 0) estadoTxt = '<span class="muted">' + textoVacio + '</span>';
-  else if (pct >= 100) estadoTxt = '<span style="color:var(--green)">' + textoCompleto + '</span>';
-  else estadoTxt = '<span class="muted">' + textoProceso + '</span>';
+  else if (pct >= 100) {
+    estadoTxt = '<span style="color:var(--green)">' + textoCompleto + '</span>';
+    if (excedente > 0.009 && avisoCosto !== false) {
+      // Solo en barra de inversión (no en deudas): mostrar ganancia extra
+      estadoTxt += ' <span class="muted" style="font-size:12px">· Ganancia extra ' + RN.calc.formatCUP(excedente) + '</span>';
+    }
+  } else {
+    estadoTxt = '<span class="muted">' + textoProceso + '</span>';
+  }
 
   // v5.13.4: Bug #17 - Advertencia visible cuando no hay precio de proveedor
   // configurado. Sin ese dato, el margen y el % de recuperacion se calculan

@@ -158,7 +158,7 @@ RN.descuentosView.render = function () {
       <td data-label="Valor">${d.modo === 'porcentaje' ? d.valor + '%' : (d.modo === 'dias' ? d.valor + ' días' : RN.calc.formatCUP(d.valor))}</td>
       <td data-label="Vigencia">${RN.descuentos.rangoVigencia(d)}${_alertaVenc(d)}</td>
       <td data-label="Estado"><span class="badge ${_ed[0]}">${_ed[1]}</span></td>
-      <td data-label="Acciones">${d.estado !== 'anulado' ? `<button class="btn sm danger" onclick="RN.descuentos.eliminar('${d.id}')">🗑</button>` : ''}</td>
+      <td data-label="Acciones">${RN.descuentos.puedeEditar(d) ? `<button class="btn sm" title="Editar" onclick="RN.descuentos.abrirEditar('${d.id}')">✏️</button> ` : ''}${d.estado !== 'anulado' ? `<button class="btn sm danger" onclick="RN.descuentos.eliminar('${d.id}')">🗑</button>` : ''}</td>
     </tr>`;
   };
 

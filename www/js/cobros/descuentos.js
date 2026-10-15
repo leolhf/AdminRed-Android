@@ -8,6 +8,7 @@
  * Vigencia centralizada en RN.descuentos.vigenteEnMes (calculations.js) con fallbacks esquema 7.
  * Operaciones: crear, eliminar (revierte todos los cobros con valores congelados),
  * revertir (al eliminar cobro libera solo ese mes), lote.
+ * v5.51.0 — Edición de descuentos/bonificaciones (ver bloque al final del archivo).
  * v5.47.0 — Lote táctil: el select múltiple de clientes se sustituye por una
  * lista de checkboxes (mejor en móvil, donde no existe Ctrl/Cmd).
  */
@@ -528,6 +529,25 @@ RN.descuentos.revertirPorCobro = function (cobroId) {
   });
 };
 
+/** v5.47.3: resalta las filas marcadas del lote y actualiza el contador. */
+RN.descuentos._refrescarMarcasLote = function () {
+  const items = document.querySelectorAll('#lot-cli .lot-cli-item');
+  let n = 0;
+  items.forEach(function (it) {
+    const on = !!(it.querySelector('input') && it.querySelector('input').checked);
+    it.classList.toggle('marcado', on);
+    if (on) n++;
+  });
+  const c = document.getElementById('lot-cli-count');
+  if (c) c.textContent = n + (n === 1 ? ' marcado' : ' marcados');
+};
+
+/** v5.47.3: marcar o desmarcar todos los clientes del lote. */
+RN.descuentos.marcarLote = function (marcar) {
+  document.querySelectorAll('#lot-cli input[type="checkbox"]').forEach(function (el) { el.checked = !!marcar; });
+  RN.descuentos._refrescarMarcasLote();
+};
+
 /** Descuento por lote: aplicar el mismo descuento a varios clientes. */
 RN.descuentos.abrirLote = function () {
   const activos = RN.calc.clientesActivos();
@@ -538,6 +558,9 @@ RN.descuentos.abrirLote = function () {
     <div class="modal-body">
       <p class="muted mb-16">Aplica el mismo descuento puntual a varios clientes a la vez.</p>
       <div class="form-row"><div><label>Clientes (toca para marcar) *</label>
+        <div class="lot-cli-bar"><span class="lot-cli-count" id="lot-cli-count">0 marcados</span>
+          <span><button type="button" class="btn" onclick="RN.descuentos.marcarLote(true)">Todos</button>
+          <button type="button" class="btn" onclick="RN.descuentos.marcarLote(false)">Ninguno</button></span></div>
         <div id="lot-cli" style="max-height:200px;overflow:auto;border:1px solid var(--neo-stroke);border-radius:8px;padding:4px 8px">${cliOpts}</div></div></div>
       <div class="form-row cols-2">
         <div><label>Tipo</label><select id="lot-tipo">${Object.keys(RN.descuentos.TIPOS).map(k => `<option value="${k}">${k}</option>`).join('')}</select></div>
@@ -562,6 +585,8 @@ RN.descuentos.abrirLote = function () {
       <button class="btn primary" onclick="RN.descuentos.guardarLote()">Aplicar lote</button></div>`;
   RN.uiComponents.modal(html, { lg: true });
   // v5.14.4: mostrar/ocultar input de N meses según duración elegida
+  const lotCli = document.getElementById('lot-cli');
+  if (lotCli) lotCli.addEventListener('change', RN.descuentos._refrescarMarcasLote);
   const lotDur = document.getElementById('lot-duracion');
   if (lotDur) {
     lotDur.addEventListener('change', function () {
@@ -613,5 +638,432 @@ RN.descuentos.guardarLote = function () {
   if (vigencia === 'permanente') msg += ' (permanente)';
   else if (vigencia === 'unPago') msg += ' (1 solo pago)';
   else if (durMeses > 1) msg += ' (' + durMeses + ' meses)';
+  RN.notifyUI.toast(msg, 'success');
+};
+
+/* ============================================================
+ * v5.51.0 — EDICIÓN de descuentos y bonificaciones.
+ *
+ * Regla de oro: los meses ANTERIORES al actual no se tocan nunca (ya se
+ * cobraron). Un cambio rige siempre desde el mes actual hacia adelante:
+ *  - Sin cobro este mes ('directo'): el cambio rige desde este mes.
+ *  - Con el mes ya cobrado:
+ *      'corregir' → se corrige también el cobro de este mes (se cobró por error).
+ *      'proximo'  → este mes queda como se cobró; el cambio rige desde el mes siguiente.
+ * Si el descuento viene de meses anteriores se PARTE en dos: el viejo se
+ * cierra en el último mes que no cambia (conserva sus aplicaciones y valores
+ * congelados) y se crea uno nuevo (reemplazaA) con los valores editados.
+ * ============================================================ */
+
+/** Cobro vivo de ESTE mes que ya aplicó el descuento, o null. */
+RN.descuentos._cobroDelMes = function (d, mes) {
+  var apps = RN.descuentos._aplicacionesDe(d);
+  for (var i = 0; i < apps.length; i++) {
+    if (apps[i].mes !== mes) continue;
+    var cobro = (RN.state.history || []).find(function (h) { return h.id === apps[i].cobroHid; });
+    if (cobro) return { app: apps[i], cobro: cobro };
+  }
+  return null;
+};
+
+/** Situación del descuento respecto al mes actual (para decidir qué preguntar). */
+RN.descuentos.infoEdicion = function (d) {
+  var mes = RN.calc.mesActualStr();
+  var hit = RN.descuentos._cobroDelMes(d, mes);
+  var aFuturo = RN.descuentos.aplicaAFuturo(d, mes);
+  return {
+    mes: mes,
+    cobro: hit ? hit.cobro : null,
+    app: hit ? hit.app : null,
+    aplicaAFuturo: aFuturo,
+    ofreceProximo: !!hit && aFuturo
+  };
+};
+
+/** ¿Se puede editar? Vigente este mes, cobrado este mes o aún por empezar. */
+RN.descuentos.puedeEditar = function (d) {
+  if (!d || d.estado === 'anulado') return false;
+  var mes = RN.calc.mesActualStr();
+  if (RN.descuentos.vigenteEnMes(d, mes)) return true;
+  if (RN.descuentos._cobroDelMes(d, mes)) return true;
+  return RN.descuentos.desdeDe(d) > mes;
+};
+
+/** Valida los cambios ya resueltos. Devuelve un texto de error o null. */
+RN.descuentos._validarCambios = function (c) {
+  if (!c || !c.motivo) return 'El motivo es obligatorio';
+  if (!(c.valor > 0)) return 'El valor debe ser mayor que 0';
+  if (['fijo', 'porcentaje', 'dias'].indexOf(c.modo) < 0) return 'Modo de cálculo no válido';
+  if (['meses', 'permanente', 'unPago'].indexOf(c.vigencia) < 0) return 'Duración no válida';
+  if (c.vigencia === 'meses' && !(c.durMeses >= 1)) return 'Indica la duración en meses';
+  return null;
+};
+
+/**
+ * Cierra el descuento d: deja de regir DESPUÉS de `hasta` (YYYY-MM). Los meses
+ * hasta `hasta` conservan su efecto y sus aplicaciones. Queda finalizado.
+ */
+RN.descuentos._cerrarEnMes = function (d, hasta) {
+  var vig = RN.descuentos.vigenciaDe(d);
+  if (vig === 'meses') {
+    var vence = RN.descuentos.venceEnMes(d);
+    if (!vence || vence > hasta) {
+      d.durMeses = Math.max(1, RN.calc.mesesEntre(RN.descuentos.desdeDe(d), hasta) + 1);
+    }
+  } else if (vig === 'permanente') {
+    d.vigencia = 'meses';
+    d.durMeses = Math.max(1, RN.calc.mesesEntre(RN.descuentos.desdeDe(d), hasta) + 1);
+  }
+  d.soloPago = false;
+  d.estado = 'aplicado';
+  d.cobroHid = (d.aplicaciones && d.aplicaciones.length) ? d.aplicaciones[d.aplicaciones.length - 1].cobroHid : null;
+};
+
+/** Crea el descuento nuevo que continúa a d con los valores editados. */
+RN.descuentos._crearSegmento = function (d, cambios, desde) {
+  var nuevo = {
+    id: RN.calc.uid('desc'),
+    clienteId: d.clienteId,
+    tipo: d.tipo,
+    motivo: cambios.motivo,
+    modo: cambios.modo,
+    valor: cambios.valor,
+    mes: desde,
+    soloPago: !!cambios.soloPago,
+    vigencia: cambios.vigencia,
+    desde: desde,
+    durMeses: cambios.durMeses,
+    aplicaciones: [],
+    fecha: new Date().toISOString(),
+    estado: 'pendiente',
+    cobroHid: null,
+    reemplazaA: d.id
+  };
+  d.reemplazadoPor = nuevo.id;
+  RN.state.descuentos.push(nuevo);
+  return nuevo;
+};
+
+/**
+ * Cálculo (sin modificar nada) de cómo queda el cobro de un mes si el
+ * descuento pasa de valorViejo a valorNuevo (CUP). Usa el neto congelado del
+ * cobro, así que NO arrastra cambios posteriores de plan o descuento recurrente.
+ */
+RN.descuentos._calcularCobroCorregido = function (cobro, valorViejo, valorNuevo) {
+  var ajuste = +cobro.ajusteRedondeo || 0;
+  var netoViejo = (typeof cobro.precioNetoAplicado === 'number')
+    ? cobro.precioNetoAplicado
+    : +((+cobro.monto || 0) + ajuste).toFixed(2); // cobros antiguos sin neto congelado
+  var netoNuevo = Math.max(0, +(netoViejo + (valorViejo || 0) - (valorNuevo || 0)).toFixed(2));
+  var aPagarViejo = (typeof cobro.totalAPagar === 'number') ? cobro.totalAPagar : netoViejo;
+  var aPagar = Math.max(0, +(aPagarViejo + (netoNuevo - netoViejo)).toFixed(2));
+  var pagado = +cobro.totalPagadoCUP || 0;
+  var eq = +cobro.montoEquipo || 0;
+  var mora = +cobro.montoMora || 0;
+
+  var dif = +(pagado + ajuste - aPagar).toFixed(2);
+  var tipoPago = 'completo', falta = 0, excedente = 0;
+  if (Math.abs(dif) < 0.01) tipoPago = 'completo';
+  else if (dif < 0) { tipoPago = 'parcial'; falta = Math.abs(dif); }
+  else { tipoPago = 'excedente'; excedente = dif; }
+
+  var servicio, moraCobrada;
+  if (tipoPago === 'parcial') {
+    var resto = Math.max(0, pagado - eq);
+    servicio = Math.min(resto, netoNuevo);
+    moraCobrada = Math.min(Math.max(0, resto - servicio), mora);
+  } else {
+    servicio = netoNuevo;
+    moraCobrada = mora;
+  }
+  if (ajuste) servicio = Math.max(0, +(servicio - ajuste).toFixed(2));
+  servicio = +servicio.toFixed(2);
+  moraCobrada = +moraCobrada.toFixed(2);
+  return {
+    netoViejo: netoViejo, netoNuevo: netoNuevo, aPagar: aPagar,
+    tipoPago: tipoPago, tipoPagoAntes: cobro.tipoPago, falta: falta, excedente: excedente,
+    monto: servicio, moraCobrada: moraCobrada,
+    totalCUP: +(servicio + moraCobrada + eq).toFixed(2)
+  };
+};
+
+/** Aplica el resultado de _calcularCobroCorregido al cobro (queda anotado). */
+RN.descuentos._aplicarCorreccionACobro = function (cobro, r, descuentoId) {
+  cobro.precioNetoAplicado = r.netoNuevo;
+  cobro.totalAPagar = r.aPagar;
+  cobro.monto = r.monto;
+  cobro.montoMoraCobrada = r.moraCobrada;
+  cobro.totalCUP = r.totalCUP;
+  cobro.tipoPago = r.tipoPago;
+  cobro.falta = r.falta;
+  cobro.excedente = r.excedente;
+  if (typeof cobro.fondoAntes === 'number') {
+    cobro.fondoDespues = +(cobro.fondoAntes + r.monto + r.moraCobrada + (+cobro.montoEquipo || 0)).toFixed(2);
+  }
+  if (!Array.isArray(cobro.ediciones)) cobro.ediciones = [];
+  cobro.ediciones.push({
+    fecha: new Date().toISOString(), origen: 'edicion_descuento', descuentoId: descuentoId,
+    netoAntes: r.netoViejo, netoDespues: r.netoNuevo
+  });
+  if (RN.calc.invalidarIndicePagos) RN.calc.invalidarIndicePagos();
+};
+
+/**
+ * Aplica la edición de un descuento. `cambios` = {modo, valor, motivo,
+ * vigencia, durMeses, soloPago}; `opcion` = 'directo' | 'corregir' | 'proximo'.
+ * Devuelve {ok, error?, msg?, delta?, reemplazo?}.
+ */
+RN.descuentos.aplicarEdicion = function (id, cambios, opcion) {
+  var d = RN.state.descuentos.find(function (x) { return x.id === id; });
+  if (!d || d.estado === 'anulado') return { ok: false, error: 'El descuento ya no existe o está anulado' };
+  var err = RN.descuentos._validarCambios(cambios);
+  if (err) return { ok: false, error: err };
+
+  var info = RN.descuentos.infoEdicion(d);
+  var mes = info.mes;
+  opcion = opcion || 'directo';
+  if (info.cobro && opcion === 'directo') {
+    return { ok: false, error: 'Este mes ya está cobrado: elige corregir el cobro o aplicar desde el próximo mes' };
+  }
+  if (!info.cobro) opcion = 'directo';
+  if (opcion === 'proximo') {
+    if (!info.ofreceProximo) return { ok: false, error: 'Este descuento no continúa el mes próximo' };
+    if (cambios.vigencia === 'unPago') return { ok: false, error: '"1 solo pago" no se puede programar para el mes próximo' };
+  }
+
+  var vigAnt = RN.descuentos.vigenciaDe(d);
+  var desdeAnt = RN.descuentos.desdeDe(d);
+  var antes = { modo: d.modo, valor: d.valor, motivo: d.motivo, vigencia: vigAnt, durMeses: d.durMeses };
+
+  // Normalizar el dato legado (un único cobroHid) a aplicaciones[] para poder editarlas.
+  if (!Array.isArray(d.aplicaciones)) d.aplicaciones = [];
+  if (!d.aplicaciones.length) d.aplicaciones = RN.descuentos._aplicacionesDe(d);
+
+  var valorViejoMes = 0, valorNuevoMes = 0, resCobro = null;
+  if (info.cobro) {
+    var ap0 = d.aplicaciones.find(function (a) { return a.mes === mes && a.cobroHid === info.cobro.id; });
+    valorViejoMes = (ap0 && ap0.valor != null) ? +ap0.valor : (RN.calc.valorDescuento(d, d.clienteId, mes) || 0);
+    valorNuevoMes = RN.calc.valorDescuento({ modo: cambios.modo, valor: cambios.valor }, d.clienteId, mes) || 0;
+  }
+
+  var reemplazo = null;
+  if (opcion === 'proximo') {
+    // Este mes queda tal cual se cobró; el cambio rige desde el mes siguiente.
+    RN.descuentos._cerrarEnMes(d, mes);
+    reemplazo = RN.descuentos._crearSegmento(d, cambios, RN.calc.mesSiguiente(mes));
+  } else if (vigAnt !== 'unPago' && desdeAnt < mes) {
+    // Viene de meses anteriores: se parte en dos para no tocarlos.
+    var movida = null;
+    if (info.cobro) {
+      movida = d.aplicaciones.find(function (a) { return a.mes === mes && a.cobroHid === info.cobro.id; });
+      d.aplicaciones = d.aplicaciones.filter(function (a) { return a !== movida; });
+    }
+    RN.descuentos._cerrarEnMes(d, RN.calc.mesAnterior(mes));
+    reemplazo = RN.descuentos._crearSegmento(d, cambios, mes);
+    if (info.cobro) {
+      RN.descuentos.aplicarEnMes(reemplazo, mes, info.cobro.id, valorNuevoMes);
+      if (Array.isArray(info.cobro.descuentosPuntualesIds)) {
+        info.cobro.descuentosPuntualesIds = info.cobro.descuentosPuntualesIds.map(function (x) { return x === d.id ? reemplazo.id : x; });
+      }
+    }
+  } else {
+    // Nace este mes (o es de un solo pago): se edita en su sitio.
+    d.modo = cambios.modo; d.valor = cambios.valor; d.motivo = cambios.motivo;
+    d.vigencia = cambios.vigencia; d.durMeses = cambios.durMeses; d.soloPago = !!cambios.soloPago;
+    if (vigAnt === 'unPago' && cambios.vigencia !== 'unPago' && desdeAnt < mes) d.desde = mes; // sin retroactividad
+    if (info.cobro) {
+      var ap1 = d.aplicaciones.find(function (a) { return a.mes === mes && a.cobroHid === info.cobro.id; });
+      if (ap1) ap1.valor = valorNuevoMes;
+    }
+    var ultimoMes = d.aplicaciones.reduce(function (m, a) { return a.mes > m ? a.mes : m; }, '');
+    d.estado = (d.aplicaciones.length && !RN.descuentos.aplicaAFuturo(d, ultimoMes)) ? 'aplicado' : 'pendiente';
+    d.cobroHid = d.aplicaciones.length ? d.aplicaciones[d.aplicaciones.length - 1].cobroHid : null;
+  }
+
+  // Corrección del cobro de este mes (solo si se eligió 'corregir').
+  if (info.cobro && opcion === 'corregir') {
+    resCobro = RN.descuentos._calcularCobroCorregido(info.cobro, valorViejoMes, valorNuevoMes);
+    RN.descuentos._aplicarCorreccionACobro(info.cobro, resCobro, reemplazo ? reemplazo.id : d.id);
+  }
+
+  if (RN.auditoria && typeof RN.auditoria.logEvento === 'function') {
+    RN.auditoria.logEvento('descuento_editar', {
+      id: d.id, nuevoId: reemplazo ? reemplazo.id : null, clienteId: d.clienteId, opcion: opcion,
+      antes: antes,
+      despues: { modo: cambios.modo, valor: cambios.valor, motivo: cambios.motivo, vigencia: cambios.vigencia, durMeses: cambios.durMeses },
+      cobroCorregido: !!resCobro, netoAntes: resCobro ? resCobro.netoViejo : undefined, netoDespues: resCobro ? resCobro.netoNuevo : undefined
+    });
+  }
+  return {
+    ok: true, opcion: opcion, reemplazo: reemplazo, cobro: resCobro,
+    delta: resCobro ? +(resCobro.netoNuevo - resCobro.netoViejo).toFixed(2) : 0
+  };
+};
+
+/* ---------------------- Interfaz de edición ---------------------- */
+
+
+/** Meses que le quedan a un descuento de N meses contando desde este mes (para precargar el formulario). */
+RN.descuentos._durRestante = function (d) {
+  var mes = RN.calc.mesActualStr();
+  var n = Math.max(1, parseInt(d.durMeses, 10) || 1);
+  if (RN.descuentos.vigenciaDe(d) !== 'meses' || RN.descuentos.desdeDe(d) >= mes) return n;
+  var vence = RN.descuentos.venceEnMes(d);
+  return vence ? Math.max(1, RN.calc.mesesEntre(mes, vence) + 1) : 1;
+};
+
+/** Lee el formulario de edición y devuelve {cambios} o {error}. */
+RN.descuentos._leerFormEdicion = function (d) {
+  var modo = document.getElementById('dc-modo').value;
+  var valor = parseFloat(document.getElementById('dc-valor').value) || 0;
+  var motivo = document.getElementById('dc-motivo').value.trim();
+  var esBonif = d.tipo === 'bonificacion' && RN.descuentos._modoPermiteDuracion(modo);
+  var vigencia = 'meses', durMeses = 1, soloPago = false;
+  if (esBonif) {
+    var dur = document.getElementById('dc-duracion').value;
+    if (dur === 'permanente') vigencia = 'permanente';
+    else if (dur === 'unPago') { vigencia = 'unPago'; soloPago = true; }
+    else if (dur === 'mesesN') {
+      durMeses = parseInt(document.getElementById('dc-durmeses').value, 10) || 0;
+      if (durMeses < 2) return { error: 'Para "Varios meses" indica al menos 2 meses (usa "Solo este mes" para 1)' };
+    }
+  } else {
+    var apl = document.getElementById('dc-aplicacion') ? document.getElementById('dc-aplicacion').value : 'mes';
+    if (apl === 'soloPago') { vigencia = 'unPago'; soloPago = true; }
+  }
+  return { cambios: { modo: modo, valor: valor, motivo: motivo, vigencia: vigencia, durMeses: durMeses, soloPago: soloPago } };
+};
+
+/** Abre el formulario para editar un descuento o bonificación. */
+RN.descuentos.abrirEditar = function (id) {
+  var d = RN.state.descuentos.find(function (x) { return x.id === id; });
+  if (!d) return;
+  if (!RN.descuentos.puedeEditar(d)) { RN.notifyUI.toast('Este descuento ya finalizó y no se puede editar', 'warn'); return; }
+  var c = RN.state.clients.find(function (x) { return x.id === d.clienteId; });
+  var mes = RN.calc.mesActualStr();
+  var vig = RN.descuentos.vigenciaDe(d);
+  var info = RN.descuentos.infoEdicion(d);
+  var html =
+    '<div class="modal-header"><h3>Editar descuento — ' + RN.render.esc(c ? c.nombre : '—') + '</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>' +
+    '<div class="modal-body">' +
+      '<div class="form-row cols-2">' +
+        '<div><label>Tipo</label><select id="dc-tipo" disabled><option value="' + d.tipo + '">' + RN.render.esc(RN.descuentos.TIPOS[d.tipo] || d.tipo) + '</option></select></div>' +
+        '<div><label>Modo de cálculo *</label><select id="dc-modo">' +
+          Object.keys(RN.descuentos.MODOS).map(function (k) { return '<option value="' + k + '"' + (k === d.modo ? ' selected' : '') + '>' + RN.descuentos.MODOS[k] + '</option>'; }).join('') +
+        '</select></div>' +
+      '</div>' +
+      '<div class="form-row cols-2">' +
+        '<div><label id="dc-valor-label">Valor (CUP) *</label><input id="dc-valor" type="number" step="0.01" value="' + (+d.valor || 0) + '"></div>' +
+        '<div><label>Motivo *</label><input id="dc-motivo" value="' + RN.render.escAttr(d.motivo || '') + '" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>' +
+      '</div>' +
+      RN.descuentos._htmlDuracion(mes) +
+      '<p class="muted" id="dc-preview"></p>' +
+      '<p class="muted" style="font-size:12px">Los meses anteriores ya cobrados no se modifican. ' +
+        (info.cobro ? 'Este mes ya fue cobrado: al guardar te preguntaré cómo aplicar el cambio.' : 'El cambio rige desde este mes.') +
+        ' «N meses» cuenta desde que el cambio empieza a regir.</p>' +
+    '</div>' +
+    '<div class="modal-footer"><button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>' +
+      '<button class="btn primary" onclick="RN.descuentos.guardarEdicion(\'' + RN.render.escAttr(d.id) + '\')">Guardar cambios</button></div>';
+  RN.uiComponents.modal(html);
+
+  // Valores iniciales de duración/aplicación
+  var restantes = RN.descuentos._durRestante(d);
+  var durSel = document.getElementById('dc-duracion');
+  if (durSel) {
+    durSel.value = vig === 'permanente' ? 'permanente' : (vig === 'unPago' ? 'unPago' : (restantes > 1 ? 'mesesN' : 'meses1'));
+    document.getElementById('dc-durmeses').value = Math.max(2, restantes);
+  }
+  var aplSel = document.getElementById('dc-aplicacion');
+  if (aplSel) aplSel.value = vig === 'unPago' ? 'soloPago' : 'mes';
+
+  var modoSel = document.getElementById('dc-modo');
+  var actualizarLabel = function () {
+    var m = modoSel.value;
+    document.getElementById('dc-valor-label').textContent = m === 'fijo' ? 'Valor (CUP) *' : (m === 'porcentaje' ? 'Valor (%) *' : 'Días sin servicio *');
+    RN.descuentos._actualizarDuracionUI();
+    RN.descuentos._preview(d.clienteId);
+  };
+  modoSel.addEventListener('change', actualizarLabel);
+  document.getElementById('dc-valor').addEventListener('input', function () { RN.descuentos._preview(d.clienteId); });
+  if (durSel) durSel.addEventListener('change', function () { RN.descuentos._actualizarDuracionUI(); });
+  if (aplSel) aplSel.addEventListener('change', function () { RN.descuentos._actualizarDuracionUI(); });
+  actualizarLabel();
+};
+
+/** Guarda la edición; si el mes ya se cobró, pregunta cómo aplicarla. */
+RN.descuentos.guardarEdicion = function (id) {
+  var d = RN.state.descuentos.find(function (x) { return x.id === id; });
+  if (!d) return;
+  var lec = RN.descuentos._leerFormEdicion(d);
+  if (lec.error) { RN.notifyUI.toast(lec.error, 'error'); return; }
+  var cambios = lec.cambios;
+  var err = RN.descuentos._validarCambios(cambios);
+  if (err) { RN.notifyUI.toast(err, 'error'); return; }
+
+  var igual = cambios.modo === d.modo && +cambios.valor === +d.valor && cambios.motivo === d.motivo &&
+    cambios.vigencia === RN.descuentos.vigenciaDe(d) &&
+    (cambios.vigencia !== 'meses' || cambios.durMeses === RN.descuentos._durRestante(d));
+  if (igual) { RN.uiComponents.cerrarModal(); RN.notifyUI.toast('Sin cambios', 'info'); return; }
+
+  var info = RN.descuentos.infoEdicion(d);
+  if (!info.cobro) { RN.descuentos._confirmarEdicion(id, cambios, 'directo'); return; }
+  RN.descuentos._elegirAlcanceEdicion(d, cambios, info);
+};
+
+/** Pregunta cómo aplicar el cambio cuando el mes actual ya está cobrado. */
+RN.descuentos._elegirAlcanceEdicion = function (d, cambios, info) {
+  var c = RN.state.clients.find(function (x) { return x.id === d.clienteId; });
+  var mes = info.mes;
+  var valorViejo = (info.app && info.app.valor != null) ? +info.app.valor : (RN.calc.valorDescuento(d, d.clienteId, mes) || 0);
+  var valorNuevo = RN.calc.valorDescuento({ modo: cambios.modo, valor: cambios.valor }, d.clienteId, mes) || 0;
+  var r = RN.descuentos._calcularCobroCorregido(info.cobro, valorViejo, valorNuevo);
+  var etiquetaPago = { completo: 'completo', parcial: 'parcial (falta ' + RN.calc.formatCUP(r.falta) + ')', excedente: 'con vuelto de ' + RN.calc.formatCUP(r.excedente) };
+  var puedeProximo = info.ofreceProximo && cambios.vigencia !== 'unPago';
+  RN.descuentos._edicionPend = { id: d.id, cambios: cambios };
+  var html =
+    '<div class="modal-header"><h3>' + RN.render.esc(RN.calc.mesTexto(mes)) + ' ya fue cobrado</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>' +
+    '<div class="modal-body">' +
+      '<p><strong>' + RN.render.esc(c ? c.nombre : '—') + '</strong>: el cobro de este mes' + (info.cobro.reciboNum ? ' (recibo ' + RN.render.esc(info.cobro.reciboNum) + ')' : '') +
+        ' incluye este descuento por <strong>' + RN.calc.formatCUP(valorViejo) + '</strong>. Con el cambio sería <strong>' + RN.calc.formatCUP(valorNuevo) + '</strong>.</p>' +
+      '<p class="muted">Los meses anteriores no se modifican. ¿Cómo aplico el cambio?</p>' +
+      '<div style="display:flex;flex-direction:column;gap:10px;margin-top:12px">' +
+        '<button class="btn primary" onclick="RN.descuentos._confirmarEdicionPend(\'corregir\')">✏️ Corregir también el cobro de este mes</button>' +
+        '<span class="muted" style="font-size:12px">Se cobró por error. El neto del mes pasa de ' + RN.calc.formatCUP(r.netoViejo) + ' a ' + RN.calc.formatCUP(r.netoNuevo) +
+          ' y el cobro queda ' + etiquetaPago[r.tipoPago] + '.</span>' +
+        (puedeProximo
+          ? '<button class="btn" onclick="RN.descuentos._confirmarEdicionPend(\'proximo\')">📅 Solo desde ' + RN.render.esc(RN.calc.mesTexto(RN.calc.mesSiguiente(mes))) + '</button>' +
+            '<span class="muted" style="font-size:12px">Este mes queda como se cobró; el valor nuevo rige desde el mes siguiente.</span>'
+          : '<span class="muted" style="font-size:12px">Este descuento no continúa el mes próximo, por eso solo se puede corregir el cobro de este mes.</span>') +
+      '</div>' +
+    '</div>' +
+    '<div class="modal-footer"><button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Volver</button></div>';
+  RN.uiComponents.modal(html);
+};
+
+RN.descuentos._confirmarEdicionPend = function (opcion) {
+  var p = RN.descuentos._edicionPend;
+  if (!p) return;
+  RN.descuentos._confirmarEdicion(p.id, p.cambios, opcion);
+};
+
+/** Ejecuta la edición, guarda, cierra los modales y refresca las vistas. */
+RN.descuentos._confirmarEdicion = function (id, cambios, opcion) {
+  var res = RN.descuentos.aplicarEdicion(id, cambios, opcion);
+  if (!res.ok) { RN.notifyUI.toast(res.error, 'error'); return; }
+  RN.descuentos._edicionPend = null;
+  RN.storageLocal.guardar();
+  // Cierra el selector de alcance y el formulario (modales apilados)
+  var guard = 0;
+  while (RN.uiComponents._modalStack && RN.uiComponents._modalStack.length && guard++ < 5) RN.uiComponents.cerrarModal();
+  RN.uiComponents.cerrarModal();
+  RN.render.todo();
+  var msg;
+  if (opcion === 'corregir') {
+    msg = 'Descuento editado y cobro de este mes corregido (' + (res.delta >= 0 ? '+' : '−') + RN.calc.formatCUP(Math.abs(res.delta)) + ' al neto)';
+  } else if (opcion === 'proximo') {
+    msg = 'Descuento editado: rige desde ' + RN.calc.mesTexto(RN.calc.mesSiguiente(RN.calc.mesActualStr()));
+  } else {
+    msg = 'Descuento editado: rige desde este mes';
+  }
   RN.notifyUI.toast(msg, 'success');
 };

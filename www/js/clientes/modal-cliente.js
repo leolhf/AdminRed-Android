@@ -216,7 +216,16 @@ RN.modalCliente.recalcPersonalizado = function () {
 
   const megas = parseFloat((document.getElementById('cl-megas') || {}).value) || 0;
   const precioMega = parseFloat((document.getElementById('cl-precio-mega') || {}).value) || 0;
-  const precio = +(megas * precioMega).toFixed(2);
+  // v5.48.0: precio por mega en USD -> el CUP se deriva de la tasa vigente (redondeo hacia arriba a 100)
+  const esUSD = ((document.getElementById('cl-moneda-precio') || {}).value === 'USD');
+  const tasa = RN.state.config.tasaUsd || 0;
+  const totalUSD = +(megas * precioMega).toFixed(2);
+  const precio = esUSD
+    ? (tasa > 0 ? RN.calc.redondearCobroCUP(totalUSD * tasa) : 0)
+    : +(megas * precioMega).toFixed(2);
+
+  const lbl = document.getElementById('cl-lbl-precio-mega');
+  if (lbl) lbl.textContent = esUSD ? 'Precio por mega (USD/Mbps) \u2014 lo que cobras' : 'Precio por mega (CUP/Mbps) \u2014 lo que cobras';
 
   // Volcar el cálculo en el campo precio (oculto o visible) para que guardar() lo use
   const precioInput = document.getElementById('cl-precio');
@@ -225,7 +234,12 @@ RN.modalCliente.recalcPersonalizado = function () {
   // Desglose visible
   const desglose = document.getElementById('cl-desglose-personalizado');
   if (desglose) {
-    if (megas > 0 && precioMega > 0) {
+    if (esUSD && megas > 0 && precioMega > 0) {
+      desglose.style.display = '';
+      desglose.innerHTML = tasa > 0
+        ? '<strong>' + megas + ' Megas \u00d7 ' + precioMega + ' USD/Mega = ' + totalUSD.toFixed(2) + ' USD \u2248 ' + RN.calc.formatCUP(precio) + '</strong><br><span class="muted" style="font-size:12px">Con la tasa de hoy (1 USD = ' + tasa + ' CUP). El monto en CUP cambia cada mes seg\u00fan la tasa; el precio fijo es el de USD.</span>'
+        : '<strong>' + totalUSD.toFixed(2) + ' USD/mes</strong><br><span style="color:var(--danger);font-size:12px">\u26a0 Configura la tasa USD en Ajustes para calcular el monto en CUP.</span>';
+    } else if (megas > 0 && precioMega > 0) {
       desglose.style.display = '';
       desglose.innerHTML = '<strong>' + megas + ' Megas \u00d7 ' + precioMega + ' CUP/Mega = ' + RN.calc.formatCUP(precio) + '</strong>';
     } else {
@@ -233,6 +247,77 @@ RN.modalCliente.recalcPersonalizado = function () {
       desglose.innerHTML = '<span class="muted">Ingresa megas y precio por mega para calcular el costo mensual</span>';
     }
   }
+};
+
+/**
+ * v5.50.0: al marcar "Administrador (no paga)" se ocultan los campos de cobro
+ * (día de pago, mes de inicio, descuento, deuda de equipo) y el precio se fija en 0.
+ */
+RN.modalCliente.toggleAdmin = function () {
+  var chk = document.getElementById('cl-admin');
+  var esAdmin = !!(chk && chk.checked);
+  ['cl-bloque-pago', 'cl-bloque-equipo'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) el.style.display = esAdmin ? 'none' : '';
+  });
+  var precio = document.getElementById('cl-precio');
+  if (precio) {
+    if (esAdmin) { precio.value = 0; precio.disabled = true; }
+    else { precio.disabled = false; }
+  }
+  var grupo = document.getElementById('cl-moneda-precio');
+  if (grupo) grupo.disabled = esAdmin;
+  var pm = document.getElementById('cl-precio-mega');
+  if (pm) pm.disabled = esAdmin;
+  if (!esAdmin) RN.modalCliente.recalcPersonalizado();
+  else {
+    var desglose = document.getElementById('cl-desglose-personalizado');
+    if (desglose) desglose.innerHTML = '<span class="muted">Administrador: no paga. Elige un plan o escribe los megas solo para saber cu\u00e1nta red consume.</span>';
+  }
+};
+
+/** v5.50.0: arma un cliente temporal con lo que hay en el formulario (para calcular la cola). */
+RN.modalCliente._clienteDesdeForm = function () {
+  var val = function (id) { var el = document.getElementById(id); return el ? el.value : ''; };
+  var planId = val('cl-plan') || null;
+  var esAdmin = !!(document.getElementById('cl-admin') || {}).checked;
+  return {
+    nombre: (val('cl-nombre') || '').trim(),
+    ip: (val('cl-ip') || '').replace(/[^0-9.]/g, '').trim(),
+    planId: planId,
+    megas: planId ? 0 : (parseFloat(val('cl-megas')) || 0),
+    esAdmin: esAdmin,
+    limitAtManual: RN.cola.parseVelocidad(val('cl-limitat'))
+  };
+};
+
+/** Muestra Max Limit, Limit At y prioridad calculados para el cliente del formulario. */
+RN.modalCliente.actualizarCola = function () {
+  var box = document.getElementById('cl-cola-info');
+  if (!box) return;
+  var c = RN.modalCliente._clienteDesdeForm();
+  var lbl = document.getElementById('cl-lbl-limitat');
+  if (lbl) lbl.innerHTML = (c.esAdmin ? 'Limit At manual * ' : 'Limit At manual ') + '<span class="muted" style="font-size:11px">' + (c.esAdmin ? '(obligatorio · ej: 2M, 3M)' : '(opcional · ej: 2M, 1400k)') + '</span>';
+  if (!RN.cola.tieneCola(c)) {
+    box.innerHTML = '<span class="muted">Define el plan o los megas para calcular la cola.</span>';
+    return;
+  }
+  var d = RN.cola.datos(c);
+  var partes = [];
+  if (c.esAdmin) partes.push('Max Limit: <strong>no se toca</strong> (lo cambian los schedulers)');
+  else partes.push('Max Limit: <strong>' + RN.cola.formatoVel(d.maxLimitKbps) + '</strong>');
+  partes.push('Limit At: <strong>' + (d.limitAtKbps > 0 ? RN.cola.formatoVel(d.limitAtKbps) : '\u2014') + '</strong>' + (d.manual ? ' <span class="muted">(manual)</span>' : ''));
+  partes.push('Prioridad: <strong>' + d.prioridad + '</strong>');
+  var extra = '<br><span class="muted" style="font-size:12px">Nombre en el router: ' + RN.render.esc(RN.cola.nombreSeguro(c.nombre)) + (RN.cola.ipValida(c.ip) ? ' \u00b7 ' + RN.render.esc(c.ip) + '/32' : ' \u00b7 falta IP v\u00e1lida') + '</span>';
+  box.innerHTML = partes.join(' \u00b7 ') + extra;
+};
+
+/** Copia el comando de la cola del cliente del formulario. */
+RN.modalCliente.copiarComando = function () {
+  var c = RN.modalCliente._clienteDesdeForm();
+  var r = RN.cola.comando(c);
+  if (!r.ok) { RN.notifyUI.toast(r.error, 'error'); return; }
+  RN.cola.copiar(r.comando);
 };
 
 RN.modalCliente.abrir = function (id) {
@@ -244,6 +329,8 @@ RN.modalCliente.abrir = function (id) {
     <div class="modal-header"><h3>${c ? 'Editar cliente' : 'Nuevo cliente'}</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">\u00d7</button></div>
     <div class="modal-body">
       <div class="form-row"><div><label>Nombre *</label><input id="cl-nombre" value="${RN.render.esc(c ? c.nombre : '')}" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>
+      <div class="form-row"><label><input type="checkbox" id="cl-admin" ${c && c.esAdmin === true ? 'checked' : ''} onchange="RN.modalCliente.toggleAdmin()"> Administrador (no paga)</label>
+        <small class="muted" style="display:block;margin-top:4px">Usa la red pero no cuenta como cliente que paga: no sale en cobros, alertas ni notificaciones. Sus megas se muestran aparte.</small></div>
       <div class="form-row cols-2">
         <div><label>Tel\u00e9fono</label>
           <div style="display:flex;gap:6px;align-items:flex-end">
@@ -263,10 +350,26 @@ RN.modalCliente.abrir = function (id) {
 
       <div id="cl-grupo-personalizado" class="form-row cols-2" style="${c && c.planId ? 'display:none' : ''}">
         <div><label>Megas asignados (Mbps)</label><input id="cl-megas" type="number" step="1" min="0" value="${c ? (c.megas || 0) : 0}" placeholder="Ej: 30" oninput="RN.modalCliente.recalcPersonalizado()"></div>
-        <div><label>Precio por mega (CUP/Mbps) \u2014 lo que cobras</label><input id="cl-precio-mega" type="number" step="0.01" min="0" value="${c ? (c.precioMega || 0) : 0}" placeholder="Ej: 40" oninput="RN.modalCliente.recalcPersonalizado()"></div>
+        <div><label id="cl-lbl-precio-mega">Precio por mega (${c && c.precioMoneda === 'USD' ? 'USD' : 'CUP'}/Mbps) \u2014 lo que cobras</label><input id="cl-precio-mega" type="number" step="0.01" min="0" value="${c ? (c.precioMega || 0) : 0}" placeholder="Ej: 40" oninput="RN.modalCliente.recalcPersonalizado()"></div>
+        <div style="grid-column:1 / -1"><label>Moneda del precio por mega</label>
+          <select id="cl-moneda-precio" onchange="RN.modalCliente.recalcPersonalizado()">
+            <option value="CUP" ${c && c.precioMoneda === 'USD' ? '' : 'selected'}>CUP (pesos) \u2014 precio fijo en CUP</option>
+            <option value="USD" ${c && c.precioMoneda === 'USD' ? 'selected' : ''}>USD (d\u00f3lares) \u2014 se convierte a CUP con la tasa</option>
+          </select>
+        </div>
       </div>
       <div id="cl-desglose-personalizado" class="cobro-desglose" style="background:var(--bg-alt);padding:10px 12px;border-radius:8px;margin-bottom:12px"></div>
 
+      <div class="divider"></div>
+      <h3 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Cola MikroTik</h3>
+      <div class="form-row cols-2">
+        <div><label id="cl-lbl-limitat">Limit At manual <span class="muted" style="font-size:11px">(opcional · ej: 2M, 1400k)</span></label>
+          <input id="cl-limitat" value="${c && c.limitAtManual > 0 ? RN.cola.formatoVel(c.limitAtManual) : ''}" placeholder="Autom\u00e1tico seg\u00fan el plan" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
+      </div>
+      <div id="cl-cola-info" class="cobro-desglose" style="background:var(--bg-alt);padding:10px 12px;border-radius:8px;margin-bottom:8px"></div>
+      <div class="form-row"><button type="button" class="btn sm" onclick="RN.modalCliente.copiarComando()">\ud83d\udccb Copiar comando</button></div>
+
+      <div id="cl-bloque-pago">
       <div class="form-row cols-2">
         <div><label>D\u00eda de pago (corte) *</label><select id="cl-dia">${
           (function () {
@@ -305,12 +408,15 @@ RN.modalCliente.abrir = function (id) {
           <small class="muted" style="display:block;margin-top:4px">A partir de este mes se le empieza a esperar pago. Por defecto, el mes actual.</small>
         </div>
       </div>
+      </div>
+      <div id="cl-bloque-equipo">
       <div class="divider"></div>
       <h3 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Equipo vendido a plazos (opcional)</h3>
       <div class="form-row cols-3">
         <div><label>Deuda equipo (CUP)</label><input id="cl-deuda-eq" type="number" step="0.01" value="${c ? (c.deudaEquipo || 0) : 0}"></div>
         <div><label>Deuda original</label><input id="cl-deuda-orig" type="number" step="0.01" value="${c ? (c.deudaEquipoOriginal || c.deudaEquipo || 0) : 0}"></div>
         <div><label>Cuota mensual equipo</label><input id="cl-cuota-eq" type="number" step="0.01" value="${c ? (c.cuotaEquipo || 0) : 0}"></div>
+      </div>
       </div>
       <div class="form-row"><label><input type="checkbox" id="cl-activo" ${(!c || c.activo !== false) ? 'checked' : ''}> Cliente activo</label></div>
     </div>
@@ -335,6 +441,14 @@ RN.modalCliente.abrir = function (id) {
 
   // Cálculo inicial del desglose
   RN.modalCliente.recalcPersonalizado();
+  // v5.50.0: aplicar estado de administrador (si el cliente ya lo es)
+  RN.modalCliente.toggleAdmin();
+  // v5.50.0: mantener la seccion "Cola MikroTik" al dia con el formulario
+  ['cl-nombre', 'cl-ip', 'cl-plan', 'cl-megas', 'cl-admin', 'cl-limitat'].forEach(function (eid) {
+    var el = document.getElementById(eid);
+    if (el) { el.addEventListener('input', RN.modalCliente.actualizarCola); el.addEventListener('change', RN.modalCliente.actualizarCola); }
+  });
+  RN.modalCliente.actualizarCola();
 };
 
 RN.modalCliente.editar = RN.modalCliente.abrir;
@@ -344,7 +458,9 @@ RN.modalCliente.guardar = function () {
   const nombre = document.getElementById('cl-nombre').value.trim();
   if (!nombre) { RN.notifyUI.toast('El nombre es obligatorio', 'error'); return; }
   const planId = document.getElementById('cl-plan').value || null;
-  const precio = parseFloat(document.getElementById('cl-precio').value) || 0;
+  // v5.50.0: administrador (no paga). El precio 0 solo se acepta con esta casilla marcada.
+  const esAdmin = !!(document.getElementById('cl-admin') || {}).checked;
+  const precio = esAdmin ? 0 : (parseFloat(document.getElementById('cl-precio').value) || 0);
   const diaRaw = parseInt(document.getElementById('cl-dia').value, 10) || 5;
   // v5.13.10 (DUP-1): validar contra la fuente única de verdad.
   const CORTES_PAGO = RN.ciclos.cortesOficiales();
@@ -352,15 +468,42 @@ RN.modalCliente.guardar = function () {
 
   // Datos personalizados (solo relevantes si no hay plan)
   const megas = parseFloat((document.getElementById('cl-megas') || {}).value) || 0;
-  const precioMega = parseFloat((document.getElementById('cl-precio-mega') || {}).value) || 0;
+  const precioMega = esAdmin ? 0 : (parseFloat((document.getElementById('cl-precio-mega') || {}).value) || 0);
+  // v5.48.0: precio fijo en USD (solo personalizados con megas y precio por mega)
+  const precioMoneda = (!esAdmin && !planId && (document.getElementById('cl-moneda-precio') || {}).value === 'USD') ? 'USD' : 'CUP';
+  if (precioMoneda === 'USD') {
+    if (!(megas > 0 && precioMega > 0)) {
+      RN.notifyUI.toast('Con precio en USD define los megas y el precio por mega', 'error'); return;
+    }
+    if (!(RN.state.config.tasaUsd > 0)) {
+      RN.notifyUI.toast('Configura la tasa USD en Ajustes antes de usar precios en USD', 'error'); return;
+    }
+  }
 
   // Validación: si es personalizado, debe tener precio > 0 (venga de megas×precio o escrito directo)
-  if (!planId && precio <= 0) {
+  if (!esAdmin && !planId && precio <= 0) {
     RN.notifyUI.toast('En personalizado define megas y precio por mega (o un precio manual)', 'error');
     return;
   }
-  if (precio <= 0 && planId) {
+  if (!esAdmin && precio <= 0 && planId) {
     RN.notifyUI.toast('El plan no tiene precio definido', 'error'); return;
+  }
+
+  // v5.50.0: cola MikroTik. Con cola (administrador o con megas) la IP es obligatoria y valida
+  // (se usa como /32), y el administrador necesita Limit At manual.
+  const limitAtTxt = (document.getElementById('cl-limitat') || {}).value || '';
+  const limitAtManual = RN.cola.parseVelocidad(limitAtTxt);
+  if (limitAtTxt.trim() && !limitAtManual) {
+    RN.notifyUI.toast('Limit At no v\u00e1lido. Usa por ejemplo 2M o 1400k', 'error'); return;
+  }
+  const clienteCola = RN.modalCliente._clienteDesdeForm();
+  if (RN.cola.tieneCola(clienteCola)) {
+    if (!RN.cola.ipValida(clienteCola.ip)) {
+      RN.notifyUI.toast('Este cliente lleva cola en el MikroTik: la IP es obligatoria y debe ser v\u00e1lida (ej: 192.168.20.24)', 'error'); return;
+    }
+    if (esAdmin && !limitAtManual) {
+      RN.notifyUI.toast('El administrador necesita un Limit At manual (ej: 2M)', 'error'); return;
+    }
   }
 
   // v5.11.2: normalizar telefono y validar IP (avisos no bloqueantes)
@@ -380,7 +523,7 @@ RN.modalCliente.guardar = function () {
     planId,
     precio,
     diaPago: dia,
-    descuentoRecurrente: parseFloat(document.getElementById('cl-desc-rec').value) || 0,
+    descuentoRecurrente: esAdmin ? 0 : (parseFloat(document.getElementById('cl-desc-rec').value) || 0),
     mesInicio: (function () {
       // v5.13.7 (LOG-3): solo sobrescribir mesInicio si el campo existe y tiene valor.
       // Si el campo no esta en el DOM, devolver undefined para que Object.assign no lo toque.
@@ -388,9 +531,9 @@ RN.modalCliente.guardar = function () {
       return el && el.value ? el.value : undefined;
     })(),
 
-    deudaEquipo: parseFloat(document.getElementById('cl-deuda-eq').value) || 0,
-    deudaEquipoOriginal: parseFloat(document.getElementById('cl-deuda-orig').value) || 0,
-    cuotaEquipo: parseFloat(document.getElementById('cl-cuota-eq').value) || 0,
+    deudaEquipo: esAdmin ? 0 : (parseFloat(document.getElementById('cl-deuda-eq').value) || 0),
+    deudaEquipoOriginal: esAdmin ? 0 : (parseFloat(document.getElementById('cl-deuda-orig').value) || 0),
+    cuotaEquipo: esAdmin ? 0 : (parseFloat(document.getElementById('cl-cuota-eq').value) || 0),
     activo: document.getElementById('cl-activo').checked
   };
 
@@ -403,17 +546,36 @@ RN.modalCliente.guardar = function () {
     data.megas = megas;
     data.precioMega = precioMega;
   }
+  // v5.48.0: 'USD' = precio fijo en dólares; 'CUP' = comportamiento de siempre. `precio` queda
+  // como referencia en CUP con la tasa de hoy (el cobro real usa RN.calc.getPrecioBase).
+  data.precioMoneda = precioMoneda;
+  // v5.50.0: esAdmin solo existe cuando es true (ausente = falso, clientes existentes no cambian).
+  if (esAdmin) data.esAdmin = true;
+  // v5.50.0: Limit At manual (kbps); ausente = se calcula por las reglas
+  if (limitAtManual > 0) data.limitAtManual = limitAtManual;
 
   if (id) {
     const c = RN.state.clients.find(x => x.id === id);
     Object.assign(c, data);
+    if (!esAdmin) delete c.esAdmin;
+    if (!(limitAtManual > 0)) delete c.limitAtManual;
   } else {
     data.id = RN.calc.uid('cli');
     data.createdAt = new Date().toISOString();
     RN.state.clients.push(data);
   }
   RN.storageLocal.guardar();
+  var cidGuardado = id || data.id;
   RN.uiComponents.cerrarModal();
   RN.render.todo();
   RN.notifyUI.toast(id ? 'Cliente actualizado' : 'Cliente creado', 'success');
+  // v5.53.5: comando MikroTik para pegar en el RouterBoard
+  try {
+    if (RN.cola && RN.cola.mostrarComandoCliente && cidGuardado) {
+      var cGuardado = RN.state.clients.find(function (x) { return x.id === cidGuardado; });
+      if (cGuardado && RN.cola.tieneCola(cGuardado)) {
+        setTimeout(function () { RN.cola.mostrarComandoCliente(cidGuardado); }, 250);
+      }
+    }
+  } catch (e) {}
 };

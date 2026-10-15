@@ -4,12 +4,12 @@
  *
  * Modelo:
  *   Cada corte = un día de pago (diaPago) distinto entre los clientes activos.
- *   Inicio del ciclo (cuándo se empieza a mandar recordatorios) =
- *       max(1, diaPago - graciaDias)   (graciaDias default 5).
- *   Ejemplo con gracia=5:
- *     Corte 5  -> inicio día 1   (recordatorios del 1 al 5)
- *     Corte 15 -> inicio día 10  (recordatorios del 10 al 15)
- *     Corte 25 -> inicio día 20  (recordatorios del 20 al 25)
+ *   Ventanas de cobro oficiales (días hábiles para pagar):
+ *     Corte 5  -> del 1 al 5
+ *     Corte 15 -> del 11 al 15
+ *     Corte 25 -> del 21 al 25
+ *   Otros diaPago: del max(1, diaPago-4) al diaPago.
+ *   RN.ciclos.ventanaCobro(diaPago) devuelve {inicio, fin, texto, textoLargo}.
  *
  * Para el día D del mes actual:
  *   - Corte vigente  = corte con inicioCiclo <= D <= diaPago  (ciclo activo, no vencido).
@@ -49,11 +49,26 @@ RN.ciclos.cortesOficiales = function () {
   return arr;
 };
 
-/** Día de inicio del ciclo de un corte (mínimo 1, no retrocede al mes anterior). */
+/**
+ * v5.52.7 — Ventana de cobro (días hábiles) de un corte.
+ * Oficiales: 5→1-5, 15→11-15, 25→21-25. Otros: max(1, diaPago-4) … diaPago.
+ * @returns {{inicio:number, fin:number, texto:string, textoLargo:string}}
+ */
+RN.ciclos.ventanaCobro = function (diaPago) {
+  var fin = +(diaPago || 1);
+  var oficiales = { 5: 1, 15: 11, 25: 21 };
+  var inicio = (oficiales[fin] != null) ? oficiales[fin] : Math.max(1, fin - 4);
+  return {
+    inicio: inicio,
+    fin: fin,
+    texto: 'del ' + inicio + ' al ' + fin,
+    textoLargo: 'del ' + inicio + ' al ' + fin + ' de cada mes'
+  };
+};
+
+/** Día de inicio del ciclo de un corte (= ventanaCobro.inicio). */
 RN.ciclos.inicioCiclo = function (diaPago) {
-  var d = diaPago || 1;
-  var ini = d - RN.ciclos.gracia();
-  return ini < 1 ? 1 : ini;
+  return RN.ciclos.ventanaCobro(diaPago).inicio;
 };
 
 /** Número de día del mes actual (1..31). */
@@ -184,3 +199,50 @@ RN.ciclos.totalMorosos = function () {
     return s + g.clientes.length;
   }, 0);
 };
+
+/**
+ * v5.52.8 — Clasifica pendientes del mes para recordatorios / filtros de Cobros.
+ * @returns {{ hoy: object[], enCiclo: object[], vencidos: object[], notificados: object[], totalPendientes: number }}
+ *   - hoy: diaPago === hoy y no pagado
+ *   - enCiclo: dentro de ventana (inicio..diaPago) y no es el día de pago y no pagado
+ *   - vencidos: diaPago < hoy este mes y no pagado (o con mora)
+ *   - notificados: pendientes con WhatsApp abierto en este ciclo
+ */
+RN.ciclos.resumenRecordatorios = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  var hoy = RN.ciclos.diaHoyNum();
+  var hoyList = [], enCiclo = [], vencidos = [], notificados = [];
+  var cobrables = (RN.calc.clientesCobrables || RN.calc.clientesActivos)();
+  cobrables.forEach(function (c) {
+    if (c.esAdmin) return;
+    if (RN.calc.mesInicioCliente(c) > mes) return;
+    var st = RN.calc.getStatus(c);
+    if (st === 'paid' || st === 'admin') return;
+    var dp = c.diaPago || 1;
+    var ven = RN.ciclos.ventanaCobro(dp);
+    var enVentana = hoy >= ven.inicio && hoy <= ven.fin;
+    if (dp === hoy) {
+      hoyList.push(c);
+    } else if (enVentana && hoy < dp) {
+      enCiclo.push(c);
+    } else if (dp < hoy || (RN.calc.getMora(c) > 0)) {
+      // ya pasó su día de pago este mes, o arrastra mora
+      vencidos.push(c);
+    } else {
+      // futuro (próximo corte): no entra en urgentes
+    }
+    try {
+      if (RN.notifyState && RN.notifyState.notificadoWaCiclo && RN.notifyState.notificadoWaCiclo(c.id, dp)) {
+        notificados.push(c);
+      }
+    } catch (e) {}
+  });
+  return {
+    hoy: hoyList,
+    enCiclo: enCiclo,
+    vencidos: vencidos,
+    notificados: notificados,
+    totalPendientes: hoyList.length + enCiclo.length + vencidos.length
+  };
+};
+

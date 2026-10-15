@@ -384,8 +384,9 @@ RN.notify.revisarRecordatorios = async function () {
       if (RN.notify._yaNotificado(ch.id, 'hoy') && RN.notify._sigueViva(idHoy)) continue;
       if (RN.notifyState && RN.notifyState.estaResuelto(ch.id, ch.diaPago)) continue;
       await RN.notify.local(
-        'Pago de hoy',
-        ch.nombre + ' debe pagar hoy (' + RN.calc.formatCUP(RN.calc.getPrecioNeto(ch, mes)) + ')',
+        'Pago de hoy · cierra ciclo',
+        ch.nombre + ' debe ' + RN.calc.formatCUP(RN.calc.getPrecioNeto(ch, mes)) +
+          ' · ciclo ' + (RN.ciclos.ventanaCobro ? RN.ciclos.ventanaCobro(ch.diaPago || hoy).texto : ('día ' + hoy)),
         {
           id: RN.notify._idCliente(ch.id, 'hoy'),
           canal: RN.notify.CANAL_RECORDATORIOS,
@@ -404,8 +405,9 @@ RN.notify.revisarRecordatorios = async function () {
       if (RN.notifyState && RN.notifyState.estaResuelto(vm.id, vm.diaPago)) continue;
       var diaCorte = Math.min(vm.diaPago || 1, diasMes);
       await RN.notify.local(
-        'Vence mañana: día ' + diaCorte,
-        vm.nombre + ' debe ' + RN.calc.formatCUP(RN.calc.getPrecioNeto(vm, mes)) + '. Puedes cobrarle desde hoy.',
+        'Cierra mañana: ciclo día ' + diaCorte,
+        vm.nombre + ' debe ' + RN.calc.formatCUP(RN.calc.getPrecioNeto(vm, mes)) +
+          ' · ciclo ' + (RN.ciclos.ventanaCobro ? RN.ciclos.ventanaCobro(vm.diaPago || diaCorte).texto : ('día ' + diaCorte)),
         {
           id: RN.notify._idCliente(vm.id, 'manana'),
           canal: RN.notify.CANAL_RECORDATORIOS,
@@ -422,10 +424,10 @@ RN.notify.revisarRecordatorios = async function () {
       var idCiclo = RN.notify._idCliente(ec.id, 'ciclo');
       if (RN.notify._yaNotificado(ec.id, 'ciclo') && RN.notify._sigueViva(idCiclo)) continue;
       await RN.notify.local(
-        'Inicia tu corte (día ' + cv.diaPago + ')',
-        ec.nombre + ': tu ciclo de pago está abierto. Debes ' +
-          RN.calc.formatCUP(RN.calc.getPrecioNeto(ec, mes)) +
-          ' antes del día ' + cv.diaPago + '.',
+        'Ciclo abierto · ' + (RN.ciclos.ventanaCobro ? RN.ciclos.ventanaCobro(cv.diaPago).texto : ('día ' + cv.diaPago)),
+        ec.nombre + ': ventana de cobro ' +
+          (RN.ciclos.ventanaCobro ? RN.ciclos.ventanaCobro(cv.diaPago).textoLargo : ('hasta el día ' + cv.diaPago)) +
+          '. Debe ' + RN.calc.formatCUP(RN.calc.getPrecioNeto(ec, mes)) + '.',
         {
           id: RN.notify._idCliente(ec.id, 'ciclo'),
           canal: RN.notify.CANAL_RECORDATORIOS,

@@ -20,7 +20,9 @@ RN.tabs._vistaAGrupo = {
   descuentos:  'finanzas',
   reportes:    'analisis',
   salud:       'analisis',
-  ajustes:     'analisis'
+  margen:      'analisis',
+  morosos:     'analisis',
+  incidencias:'analisis'
 };
 
 /* ============================================================
@@ -81,6 +83,8 @@ RN.tabs.alTocarGrupo = function (grupo) {
 
 /** Navega a una vista concreta y actualiza la UI de tabs/subtabs. */
 RN.tabs.ir = function (view) {
+  // v5.52.0: Ajustes ya no es una pestaña, es un modal (⚡ Acciones rápidas → ⚙️ Ajustes).
+  if (view === 'ajustes') { if (RN.ajustes) RN.ajustes.abrir(); return; }
   RN.tabs.actual = view;
   var grupo = RN.tabs._vistaAGrupo[view] || 'operacion';
   RN.tabs.grupoActivo = grupo;

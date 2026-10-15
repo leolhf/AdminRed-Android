@@ -57,6 +57,18 @@ RN.notifyState.marcar = function (clienteId, diaPago, estado) {
   RN.notifyState._escribir(reg);
 };
 
+
+/**
+ * v5.52.7 — ¿Se abrió WhatsApp para este cliente en ESTE ciclo de cobro?
+ * Sirve para la marca visual en Cobros (borde + 💬) durante todo el ciclo,
+ * no solo el día del envío. 'pagado' también cuenta como gestionado.
+ */
+RN.notifyState.notificadoWaCiclo = function (clienteId, diaPago) {
+  var e = RN.notifyState.get(clienteId, diaPago);
+  if (!e) return false;
+  return e.estado === 'wa' || e.estado === 'pagado' || e.estado === 'visto';
+};
+
 /** Quita la marca (p. ej. si se deshace una acción). */
 RN.notifyState.limpiar = function (clienteId, diaPago) {
   var reg = RN.notifyState._leer();

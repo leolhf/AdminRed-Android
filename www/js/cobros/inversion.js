@@ -790,6 +790,8 @@ RN.inversion._cardInversion = function (inv, opts) {
   opts = opts || {};
   var esDeuda = !!opts.esDeuda;
   var esConcluida = !!opts.esConcluida;
+  // v5.52.5: capital propio recuperado (paralelo a deudas concluidas)
+  var esRecuperada = !!opts.esRecuperada || (!esDeuda && !!inv.inversionRecuperada);
 
   var fechaC = RN.investment.fechaCompra(inv);
   var fechaTxt = fechaC ? new Date(fechaC).toLocaleDateString('es-CU') : '—';
@@ -799,19 +801,31 @@ RN.inversion._cardInversion = function (inv, opts) {
   var totalDevuelto = RN.investment.totalDevuelto(inv);
   var saldoDevolver = RN.investment.saldoADevolver(inv);
   var recuperadoReal = RN.investment.recuperadoRealInv(inv);
-  var pctRecuperacion = inv.monto ? Math.round(recuperadoReal / inv.monto * 100) : 0;
+  // v5.52.6: % de recuperación de capital topeado a 100; el resto es ganancia extra
+  var pctRecuperacionBruto = inv.monto ? Math.round(recuperadoReal / inv.monto * 100) : 0;
+  var pctRecuperacion = Math.min(100, pctRecuperacionBruto);
+  var gananciaExtraInv = inv.monto && recuperadoReal > inv.monto
+    ? +(recuperadoReal - inv.monto).toFixed(2)
+    : 0;
   var pctDevuelto = inv.monto ? Math.round(totalDevuelto / inv.monto * 100) : 0;
   var cardId = esDeuda ? ('acc-deuda-' + inv.id) : ('acc-inv-' + inv.id);
   var toggleFn = 'RN.render.toggleCard';
 
-  // --- Variables específicas de deuda ---
-  var dotCls, estadoTxt, fechaConclusionTxt;
+  // --- Variables específicas de deuda / capital propio ---
+  var dotCls, estadoTxt, fechaConclusionTxt, fechaRecuperacionTxt;
+  fechaConclusionTxt = '';
+  fechaRecuperacionTxt = '';
   if (esDeuda) {
     dotCls = esConcluida ? 'ok' : 'warn';
     estadoTxt = esConcluida ? '✅ Concluida' : '💨 Activa';
-    fechaConclusionTxt = '';
     if (esConcluida && inv.fechaConclusion) {
       fechaConclusionTxt = new Date(inv.fechaConclusion).toLocaleDateString('es-CU');
+    }
+  } else if (esRecuperada) {
+    dotCls = 'ok';
+    estadoTxt = '✓ Recuperada';
+    if (inv.fechaRecuperacion) {
+      fechaRecuperacionTxt = new Date(inv.fechaRecuperacion).toLocaleDateString('es-CU');
     }
   } else {
     dotCls = 'blue';
@@ -827,7 +841,7 @@ RN.inversion._cardInversion = function (inv, opts) {
     barraColor = esConcluida ? 'var(--green)' : 'var(--warn)';
   } else {
     barraPct = Math.min(100, Math.max(0, pctRecuperacion));
-    barraColor = 'var(--blue)';
+    barraColor = esRecuperada ? 'var(--green)' : 'var(--blue)';
   }
   var barraHtml = '<div class="progress-bar" style="margin:6px 0">'
     + '<div class="progress-fill" style="width:' + barraPct + '%;background:' + barraColor + '"></div>'
@@ -839,8 +853,15 @@ RN.inversion._cardInversion = function (inv, opts) {
   var subTxt;
   if (esDeuda) {
     subTxt = estadoTxt + ' · debe ' + RN.calc.formatCUP(saldoDevolver) + ' · generado ' + RN.calc.formatCUP(recuperadoReal) + ' · ' + pctDevuelto + '% devuelto' + (fechaC ? ' · ' + dias + ' días' : '');
+  } else if (esRecuperada) {
+    subTxt = estadoTxt + ' · capital cubierto · ' + pctRecuperacion + '%' +
+      (gananciaExtraInv > 0 ? ' · extra ' + RN.calc.formatCUP(gananciaExtraInv) : '') +
+      (fechaRecuperacionTxt ? ' · el ' + fechaRecuperacionTxt : '') +
+      (fechaC ? ' · ' + dias + ' días' : '');
   } else {
-    subTxt = estadoTxt + ' · recuperado ' + RN.calc.formatCUP(recuperadoReal) + ' · ' + pctRecuperacion + '%' + (fechaC ? ' · ' + dias + ' días' : '');
+    subTxt = estadoTxt + ' · recuperado ' + RN.calc.formatCUP(Math.min(recuperadoReal, inv.monto || recuperadoReal)) + ' · ' + pctRecuperacion + '%' +
+      (gananciaExtraInv > 0 ? ' · extra ' + RN.calc.formatCUP(gananciaExtraInv) : '') +
+      (fechaC ? ' · ' + dias + ' días' : '');
   }
 
   // --- Monto total en el summary ---
@@ -890,6 +911,8 @@ RN.inversion._cardInversion = function (inv, opts) {
       + '<div class="acc-row"><span class="acc-label">Días transcurridos</span><span class="acc-value">' + (fechaC ? dias + ' días' : '—') + '</span></div>'
       + '<div class="acc-row"><span class="acc-label">Monto invertido</span><span class="acc-value">' + RN.calc.formatCUP(inv.monto) + '</span></div>'
       + '<div class="acc-row"><span class="acc-label">% recuperación</span><span class="acc-value">' + pctRecuperacion + '%</span></div>'
+      + (esRecuperada && fechaRecuperacionTxt ? '<div class="acc-row"><span class="acc-label">Fecha de recuperación</span><span class="acc-value"><strong style="color:var(--green)">' + fechaRecuperacionTxt + '</strong></span></div>' : '')
+      + (esRecuperada ? '<div class="acc-row"><span class="acc-label">Estado</span><span class="acc-value"><span class="badge ok">✓ Recuperada — el margen posterior es ganancia</span></span></div>' : '')
       + barraHtml;
   }
 

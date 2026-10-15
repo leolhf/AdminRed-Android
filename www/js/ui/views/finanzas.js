@@ -89,35 +89,65 @@ RN.render.inversion = function () {
           textoProceso: 'En proceso de devolución',
           avisoCosto: false
         }
-      );
+      ) + (RN.investment.htmlMetaDevolucion ? RN.investment.htmlMetaDevolucion() : "");
     } else {
       recupDeudasCard.style.display = 'none';
     }
   }
 
+  // v5.52.5: marcar capital propio que ya alcanzó el 100 % de recuperación
+  var _recienRecuperadas = RN.investment.verificarRecuperaciones
+    ? RN.investment.verificarRecuperaciones()
+    : [];
+  if (_recienRecuperadas.length) {
+    try { RN.storageLocal.guardar(); } catch (e) {}
+    var _nombres = _recienRecuperadas.map(function (i) { return i.concepto || 'Inversión'; }).join(', ');
+    if (RN.notifyUI && RN.notifyUI.toast) {
+      RN.notifyUI.toast('🎉 Inversión recuperada: ' + _nombres + '. El margen de aquí en adelante es ganancia.', 'success');
+    }
+  }
+
   const cont = document.getElementById('lista-inversion');
   if (!cont) return;
-  if (!RN.state.investments.length) {
-    cont.innerHTML = '<div class="acc-empty"><div class="icon">📈</div>No hay inversiones registradas.</div>';
-    return;
-  }
-  // v5.13.3 (fix duplicación): el bloque "Inversiones" solo muestra capital propio.
-  // Los préstamos externos (prestado_externo) se muestran en el bloque "Deudas personales activas"
-  // con toda su información de recuperación integrada, para evitar duplicados.
-  var _inversionesPropias = RN.state.investments.filter(function (inv) {
-    return RN.investment.origenCapital(inv) !== 'prestado_externo';
-  });
-  if (!_inversionesPropias.length) {
+
+  var _invActivas = RN.investment.inversionesActivas
+    ? RN.investment.inversionesActivas()
+    : (RN.state.investments || []).filter(function (inv) {
+        return RN.investment.origenCapital(inv) !== 'prestado_externo' && !inv.inversionRecuperada;
+      });
+  var _invRecuperadas = RN.investment.inversionesRecuperadas
+    ? RN.investment.inversionesRecuperadas()
+    : (RN.state.investments || []).filter(function (inv) {
+        return RN.investment.origenCapital(inv) !== 'prestado_externo' && !!inv.inversionRecuperada;
+      });
+
+  if (!_invActivas.length && !_invRecuperadas.length) {
     cont.innerHTML = '<div class="acc-empty"><div class="icon">📈</div>No hay inversiones con capital propio registradas.</div>';
+  } else if (!_invActivas.length) {
+    cont.innerHTML = '<div class="acc-empty"><div class="icon">✓</div>Todas las inversiones de capital propio están recuperadas. El margen actual es ganancia.</div>';
   } else {
-  // v5.13.16 (DUP-2): Se reemplaza el card inline (~80 lineas) por la funcion
-  // unificada RN.inversion._cardInversion(inv, {esDeuda: false}), que comparte
-  // la misma estructura HTML con las cards de deuda. Los campos adicionales
-  // (ingreso bruto, margen neto, aporte extra, etc.) se migraron a
-  // _htmlDetalleRecuperacion con renderizado condicional.
-  cont.innerHTML = _inversionesPropias.map(inv => {
-    return RN.inversion._cardInversion(inv, { esDeuda: false });
-  }).join('');
+    cont.innerHTML = _invActivas.map(function (inv) {
+      return RN.inversion._cardInversion(inv, { esDeuda: false, esRecuperada: false });
+    }).join('');
+  }
+
+  var contRec = document.getElementById('lista-inversiones-recuperadas');
+  var cardRec = document.getElementById('card-inversiones-recuperadas');
+  if (contRec && cardRec) {
+    if (!_invRecuperadas.length) {
+      cardRec.style.display = 'none';
+      contRec.innerHTML = '';
+    } else {
+      cardRec.style.display = '';
+      var ordenadas = _invRecuperadas.slice().sort(function (a, b) {
+        var fa = a.fechaRecuperacion || a.fechaCompra || '';
+        var fb = b.fechaRecuperacion || b.fechaCompra || '';
+        return fa < fb ? 1 : (fa > fb ? -1 : 0);
+      });
+      contRec.innerHTML = ordenadas.map(function (inv) {
+        return RN.inversion._cardInversion(inv, { esDeuda: false, esRecuperada: true });
+      }).join('');
+    }
   }
 
   // v5.12.6: disparar la animación de la barra de recuperación tras pintarla.

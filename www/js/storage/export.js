@@ -230,12 +230,12 @@ RN.export.importarBackup = function () {
 
 /** Exporta clientes a CSV. */
 RN.export.exportCSVClientes = function () {
-  const rows = [['id', 'nombre', 'telefono', 'direccion', 'diaPago', 'planId', 'precio', 'estado', 'deudaEquipo', 'descuentoRecurrente']];
+  const rows = [['id', 'nombre', 'telefono', 'direccion', 'diaPago', 'planId', 'precio', 'estado', 'deudaEquipo', 'descuentoRecurrente', 'esAdmin']];
   RN.state.clients.forEach(c => {
     rows.push([
       c.id, c.nombre || '', c.telefono || '', c.direccion || '', c.diaPago || '',
       c.planId || '', c.precio || 0, RN.calc.getStatus(c),
-      RN.investment.getDeudaEquipoCliente(c), c.descuentoRecurrente || 0
+      RN.investment.getDeudaEquipoCliente(c), c.descuentoRecurrente || 0, c.esAdmin === true ? 'si' : ''
     ]);
   });
   // v5.14.2 (DUP-2): escape CSV centralizado en RN.export.toCSV.

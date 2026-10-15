@@ -103,6 +103,10 @@ RN.recibo._html = function (h) {
       <span><strong>✓ Pago completo</strong></span>
       <span><strong style="color:#2e7d32">${RN.calc.formatCUP(aPagar)}</strong></span>
     </div>`;
+    // v5.49.0: ajuste por redondeo del resto en CUP (pagos mixtos)
+    if (h.ajusteRedondeo) {
+      seccionPago += `<div class="row muted" style="font-size:12px"><span>${h.ajusteRedondeo > 0 ? 'Redondeo a favor del cliente' : 'Redondeo'}</span><span>${h.ajusteRedondeo > 0 ? '−' : '+'}${RN.calc.formatCUP(Math.abs(h.ajusteRedondeo))}</span></div>`;
+    }
   }
 
   return `<div class="recibo">

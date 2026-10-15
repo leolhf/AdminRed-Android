@@ -49,6 +49,7 @@ RN.state = {
   eventos: [],
   /** Snapshots inmutables de KPIs por mes cerrado */
   snapshots: [],
+  incidencias: [],
   /** Configuración del sistema */
   config: {
     tasaUsd: 0,
@@ -67,6 +68,8 @@ RN.state = {
     // v5.43.0: incluir en Cobranza/Morosos a los clientes inactivos que aún deben mora (default: no, como antes)
     incluirInactivosConDeuda: false,
     tasaAuto: false,
+    // v5.49.0: redondeo del resto en CUP de pagos mixtos USD+CUP: 'cliente' | 'negocio' | 'exacto'
+    redondeoPagoMixto: 'cliente',
     nombreNegocio: 'AdminRed',
     telefonoNegocio: '',
     direccionNegocio: '',
@@ -80,7 +83,24 @@ RN.state = {
     /** Precio por mega (CUP) del paquete del proveedor (v5.8.6) */
     proveedorPrecioMega: 0,
     /** Megas de sobreventa permitidos sobre el paquete del proveedor (v5.8.7, default 5) */
-    sobreventaMegas: 5,
+    sobreventaMegas: 5, // legacy; preferir plusMegas
+    plusMegas: 0, // megas de cortesía del proveedor (sin costo)
+    /**
+     * v5.50.0 — Colas MikroTik y capacidad por Limit At. La capacidad ya no se mide con
+     * megas vendidos + sobreventa, sino con la suma de Limit At contra (paquete - reserva).
+     * Ver js/red/cola-mikrotik.js.
+     */
+    reservaMegas: 1,
+    colaPadre: 'LEO',
+    colaPadreMaxLimit: 44,
+    colaAdminPrioridad: 1,
+    colaReglas: [
+      { minMegas: 8, pct: 45, prioridad: 3 },
+      { minMegas: 5, pct: 35, prioridad: 4 },
+      { minMegas: 4, pct: 35, prioridad: 6 },
+      { minMegas: 3, pct: 35, prioridad: 7 },
+      { minMegas: 0, pct: 35, prioridad: 8 }
+    ],
     /**
      * v5.11.3 — Porcentaje (0-100) del margen neto que se retiene como ganancia
      * personal y NO computa como recuperación de inversión. Global para todas
