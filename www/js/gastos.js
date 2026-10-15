@@ -14,7 +14,7 @@ RN.gastos.abrirNuevo = function () {
   const html = `
     <div class="modal-header"><h3>Nuevo gasto</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">\u00d7</button></div>
     <div class="modal-body">
-      <div class="form-row"><div><label>Concepto *</label><input id="g-concepto" placeholder="Ej: Pago mensual a proveedor" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>
+      <div class="form-row"><div><label>Concepto *</label><input id="g-concepto" placeholder="Ej: Pago mensual a proveedor" lang="es" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>
       <div class="form-row cols-2">
         <div><label>Categor\u00eda</label><select id="g-cat">${RN.gastos.CATEGORIAS.map(c => `<option>${c}</option>`).join('')}</select></div>
         <div><label>Fecha</label><input id="g-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>

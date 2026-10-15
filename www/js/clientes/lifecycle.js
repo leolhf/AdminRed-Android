@@ -23,7 +23,7 @@ RN.lifecycle.abrirBaja = function (clienteId) {
     '<div class="modal-body">' +
     '<p class="muted">El cliente quedará inactivo. La deuda pendiente se conserva.</p>' +
     '<div class="form-row"><div><label>Motivo</label><select id="baja-motivo">' + opts + '</select></div></div>' +
-    '<div class="form-row"><div><label>Notas (opcional)</label><textarea id="baja-notas" rows="2"></textarea></div></div>' +
+    '<div class="form-row"><div><label>Notas (opcional)</label><textarea id="baja-notas" rows="2" lang="es" spellcheck="true" autocorrect="on" autocapitalize="sentences"></textarea></div></div>' +
     '</div><div class="modal-footer">' +
     '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>' +
     '<button class="btn danger" onclick="RN.lifecycle.confirmarBaja(\'' + RN.render.escAttr(c.id) + '\')">Confirmar baja</button></div>';

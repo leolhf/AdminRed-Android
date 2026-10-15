@@ -77,7 +77,7 @@ RN.render.clientes = function () {
           (esAdm ? '' : '<button class="btn sm primary" onclick="RN.modalCobro.abrir(\'' + RN.render.escAttr(c.id) + '\')">Cobrar</button>') +
           (esAdm ? '' : '<button class="btn sm" onclick="RN.clientHistory.abrir(\'' + c.id + '\')">Historial</button>' +
           '<button class="btn sm" onclick="RN.whatsapp.enviarRecordatorio(\'' + c.id + '\')">WhatsApp</button>') +
-          (RN.cola.tieneCola(c) ? '<button class="btn sm" onclick="RN.cola.copiarDeCliente(\'' + c.id + '\')" title="Copia el comando de la cola para pegarlo en Winbox">Cola</button>' : '') +
+          (RN.cola.tieneCola(c) ? '<button class="btn sm" onclick="RN.cola.mostrarComandoCliente(\'' + c.id + '\')" title="Comando MikroTik para el RouterBoard">📡 MikroTik</button>' : '') +
           '<button class="btn sm" onclick="RN.equiposRed.abrir(\'' + c.id + '\')">Equipos</button>' +
           '<button class="btn sm" onclick="RN.modalCliente.editar(\'' + c.id + '\')">Editar</button>' +
           '<button class="btn sm danger" onclick="RN.confirmDelete.cliente(\'' + c.id + '\')">🗑</button>' +

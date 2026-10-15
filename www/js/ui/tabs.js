@@ -14,6 +14,7 @@ RN.tabs._vistaAGrupo = {
   cobros:      'operacion',
   calendario:  'operacion',
   realizados:  'operacion',
+  red:         'operacion',
   inversion:   'finanzas',
   inventario:  'finanzas',
   gastos:      'finanzas',

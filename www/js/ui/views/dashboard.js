@@ -60,21 +60,60 @@ RN.render.dashboard = function () {
   const gananciaProyAnt = esperadoAnt - costoPaquete;
   const gananciaBrutaAnt = ingresosAnt - costoPaquete;
   const delta = (RN.panelWidgets && RN.panelWidgets.deltaHTML) ? RN.panelWidgets.deltaHTML : function () { return ''; };
-  const kpis = [
-    { label: 'Ingresos del mes', value: RN.calc.formatCUP(ingresos), sub: RN.render.subUSD(ingresos, 'Toca para ver el resumen') + delta(ingresos, ingresosAnt), cls: 'green', click: 'RN.ingresosMes.abrir()' },
-    { label: 'Costo del paquete', value: RN.calc.formatCUP(costoPaquete), sub: costoPaquete > 0 ? RN.render.subUSD(costoPaquete, RN.render.descPaquete()) : 'Sin paquete configurado', cls: 'amber', click: 'RN.paqueteProveedor.abrir()' },
-    { label: 'Ganancia proyectada del mes', value: RN.calc.formatCUP(gananciaProyectada), sub: RN.render.subUSD(gananciaProyectada, 'Ingreso esperado − Costo del paquete') + delta(gananciaProyectada, gananciaProyAnt), cls: gananciaProyectada >= 0 ? 'green' : 'red', click: 'RN.gananciaCortes.abrirProyectada()' },
-    { label: 'Ganancia del mes', value: RN.calc.formatCUP(gananciaBruta), sub: RN.render.subUSD(gananciaBruta, 'Cobrado − Costo del paquete') + delta(gananciaBruta, gananciaBrutaAnt), cls: gananciaBruta >= 0 ? 'blue' : 'red', click: 'RN.gananciaCortes.abrirReal()' },
-    { label: 'Utilidad neta', value: RN.calc.formatCUP(utilidad), sub: RN.render.subUSD(utilidad, 'Ingresos − Gastos — toca para ver el detalle') + delta(utilidad, utilidadAnt), cls: utilidad >= 0 ? 'blue' : 'red', click: 'RN.utilidadMes.abrir()' },
-    { label: 'Cobranza', value: cob.pagaron + '/' + cob.total, sub: 'Faltan ' + cob.faltan + ' clientes' + (parciales ? ' · ' + parciales + ' parcial' : '') + ' — toca para ver corte vigente', cls: 'blue', click: 'RN.cobranza.abrir()' },
-    { label: 'Tasa de cobro', value: tasaCob + '%', sub: 'Servicio cobrado sobre lo esperado', cls: tasaCob >= 70 ? 'green' : (tasaCob >= 40 ? 'amber' : 'red') },
-    { label: 'Clientes morosos', value: morosos, sub: morosos ? 'Atrasados — toca para ver detalles' : 'Ninguno atrasado', cls: morosos ? 'red' : 'green', click: 'RN.mora.abrir()' },
-    { label: 'Fondo de caja', value: RN.calc.formatCUP(fondoCaja), sub: RN.render.subUSD(fondoCaja, 'Dos bolsillos (reserva + libre) — toca para retirar'), cls: fondoCaja > 0 ? 'green' : (fondoCaja < 0 ? 'red' : 'muted'), click: 'RN.caja.extraer()' }
+  // v5.54.0 Fase A: acción del día + 4 KPIs prioritarios; el resto en "Más indicadores"
+  var resRec = null;
+  try {
+    if (RN.ciclos && RN.ciclos.resumenRecordatorios) resRec = RN.ciclos.resumenRecordatorios();
+  } catch (e) { resRec = null; }
+  var nHoy = resRec && resRec.hoy ? resRec.hoy.length : 0;
+  var nCiclo = resRec && resRec.enCiclo ? resRec.enCiclo.length : 0;
+  var nVenc = resRec && resRec.vencidos ? resRec.vencidos.length : 0;
+  var nNotif = resRec && resRec.notificados ? resRec.notificados.length : 0;
+  var lineasAccion = [];
+  if (nHoy) lineasAccion.push('<li><span class="estado-pill hoy">Hoy</span> <strong>' + nHoy + '</strong> cobran hoy</li>');
+  if (nCiclo) lineasAccion.push('<li><span class="estado-pill ciclo">Ciclo</span> <strong>' + nCiclo + '</strong> en ventana de cobro</li>');
+  if (nVenc) lineasAccion.push('<li><span class="estado-pill vencido">Vencido</span> <strong>' + nVenc + '</strong> con ciclo vencido / mora</li>');
+  if (nNotif) lineasAccion.push('<li><span class="estado-pill notificado">💬 Notificado</span> <strong>' + nNotif + '</strong> avisados este ciclo</li>');
+  if (!lineasAccion.length) {
+    lineasAccion.push('<li><span class="estado-pill pagado">Al día</span> No hay pendientes urgentes de cobro</li>');
+  }
+  var htmlAccion =
+    '<div class="dash-accion">' +
+      '<h3>📋 Acción del día</h3>' +
+      '<ul class="dash-accion-lineas">' + lineasAccion.join('') + '</ul>' +
+      '<div class="dash-accion-btns">' +
+        '<button type="button" class="btn primary sm" onclick="RN.cobranza.abrir()">Ir a Cobranza</button>' +
+        '<button type="button" class="btn sm" onclick="RN.tabs.ir(\'cobros\')">Ver Cobros</button>' +
+        (nHoy + nCiclo + nVenc > 0
+          ? '<button type="button" class="btn sm" onclick="RN.whatsapp.enviarMasivo()">WhatsApp masivo</button>'
+          : '') +
+      '</div>' +
+    '</div>';
+
+  const kpisPri = [
+    { label: 'Cobranza', value: cob.pagaron + '/' + cob.total, sub: 'Faltan ' + cob.faltan + (parciales ? ' · ' + parciales + ' parcial' : ''), cls: cob.faltan ? 'amber' : 'green', click: 'RN.cobranza.abrir()' },
+    { label: 'Fondo de caja', value: RN.calc.formatCUP(fondoCaja), sub: RN.render.subUSD(fondoCaja, 'Reserva + libre'), cls: fondoCaja > 0 ? 'green' : (fondoCaja < 0 ? 'red' : 'muted'), click: 'RN.caja.extraer()' },
+    { label: 'Costo del paquete', value: RN.calc.formatCUP(costoPaquete), sub: costoPaquete > 0 ? RN.render.descPaquete() : 'Sin configurar', cls: 'amber', click: 'RN.paqueteProveedor.abrir()' },
+    { label: 'Clientes morosos', value: String(morosos), sub: morosos ? 'Toca para ver' : 'Ninguno', cls: morosos ? 'red' : 'green', click: 'RN.mora.abrir()' }
   ];
-  cont.innerHTML = kpis.map(k => {
-    const attr = k.click ? ` role="button" tabindex="0" onclick="${k.click}" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();${k.click}}" class="kpi ${k.cls} kpi-click"` : ` class="kpi ${k.cls}"`;
-    return `<div${attr}><div class="label">${k.label}</div><div class="value">${k.value}</div><div class="sub">${k.sub}</div></div>`;
-  }).join('');
+  const kpisMas = [
+    { label: 'Ingresos del mes', value: RN.calc.formatCUP(ingresos), sub: RN.render.subUSD(ingresos, '') + delta(ingresos, ingresosAnt), cls: 'green', click: 'RN.ingresosMes.abrir()' },
+    { label: 'Ganancia proyectada', value: RN.calc.formatCUP(gananciaProyectada), sub: 'Esperado − paquete' + delta(gananciaProyectada, gananciaProyAnt), cls: gananciaProyectada >= 0 ? 'green' : 'red', click: 'RN.gananciaCortes.abrirProyectada()' },
+    { label: 'Ganancia del mes', value: RN.calc.formatCUP(gananciaBruta), sub: 'Cobrado − paquete' + delta(gananciaBruta, gananciaBrutaAnt), cls: gananciaBruta >= 0 ? 'blue' : 'red', click: 'RN.gananciaCortes.abrirReal()' },
+    { label: 'Utilidad neta', value: RN.calc.formatCUP(utilidad), sub: 'Ingresos − gastos' + delta(utilidad, utilidadAnt), cls: utilidad >= 0 ? 'blue' : 'red', click: 'RN.utilidadMes.abrir()' },
+    { label: 'Tasa de cobro', value: tasaCob + '%', sub: 'Servicio vs esperado', cls: tasaCob >= 70 ? 'green' : (tasaCob >= 40 ? 'amber' : 'red') }
+  ];
+  function kpiHtml(k) {
+    const attr = k.click
+      ? ' role="button" tabindex="0" onclick="' + k.click + '" onkeydown="if(event.key===\'Enter\'||event.key===\' \'){event.preventDefault();' + k.click + '}" class="kpi ' + k.cls + ' kpi-click"'
+      : ' class="kpi ' + k.cls + '"';
+    return '<div' + attr + '><div class="label">' + k.label + '</div><div class="value">' + k.value + '</div><div class="sub">' + k.sub + '</div></div>';
+  }
+  cont.innerHTML = htmlAccion +
+    '<div class="dash-kpis-pri">' + kpisPri.map(kpiHtml).join('') + '</div>' +
+    '<details class="dash-mas-det"><summary>Más indicadores del mes</summary>' +
+    '<div class="dash-kpis-pri">' + kpisMas.map(kpiHtml).join('') + '</div></details>';
+
   // v5.13.6 (DUP-3): cachear funciones de inversión una sola vez.
   // Antes totalInvertido() se llamaba 4x, totalRecuperado() 3x y
   // porcentajeRecuperacion() 2x (cada una recalcula internamente).

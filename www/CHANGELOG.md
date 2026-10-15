@@ -2,6 +2,35 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.54.2 — Fase C: Red, menús y onboarding
+
+- **Operación → Red**: capacidad Limit At, scripts export/upsert, comando cola padre, clientes sin IP
+- **Onboarding** (primera vez): paquete, tasa USD, cola padre
+- Contraste mejorado en tema claro
+- Mapa de menús: Red dentro de Operación
+
+## v5.54.1 — Fase B: buscador, cobros y MikroTik
+
+- **Buscador global** en el header (nombre, IP, teléfono) → abre ficha del cliente
+- Filas de **Cobros**: nombre más grande; plan · precio · IP · tel en subtítulo
+- Lista **Clientes**: botón **📡 MikroTik** abre el modal de comando
+- Modal cliente: copiar comando MikroTik más visible
+
+## v5.54.0 — Fase A: escritura, estados y dashboard
+
+### Ortografía (Android)
+- Nombre: autocapitalize words + lang=es
+- Notas / incidencias / baja / cobro / gastos: corrección ON
+- IP y teléfono sin autocorrección
+
+### Estados unificados
+- Pills Hoy · Ciclo · Notificado · Mora en Cobros
+- Clases cobro-hoy, en-ciclo, notificado-wa
+
+### Dashboard
+- Bloque Acción del día
+- 4 KPIs prioritarios; resto en Más indicadores
+
 ## v5.53.7 — Fix botones tema / guardar / versión
 
 - Corregido error de sintaxis en `cola-mikrotik.js` (comillas en botones de script) que impedía cargar el módulo y hacía fallar el arranque al pintar el dashboard.

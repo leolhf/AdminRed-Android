@@ -33,6 +33,12 @@
   <header class="app-header no-print">
     <div class="logo"><span class="dot"></span> AdminRed <span class="muted sub">RedNet</span></div>
     <div class="spacer"></div>
+    <div class="busqueda-global-wrap" id="busqueda-global-wrap">
+      <input type="search" id="busqueda-global" class="busqueda-global-input" placeholder="Buscar cliente, IP, tel…"
+        inputmode="search" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off"
+        title="Nombre, teléfono o IP">
+      <div id="busqueda-global-resultados" class="busqueda-global-resultados" hidden></div>
+    </div>
     <span class="ver" id="btn-version" title="Buscar actualizaciones de la app">v<span id="app-version">—</span></span>
     <span class="clock" id="reloj"></span>
     <div class="header-actions">
@@ -54,6 +60,7 @@
         <div class="subtab" data-view="cobros">Cobros</div>
         <div class="subtab" data-view="realizados">Realizados</div>
         <div class="subtab" data-view="calendario">Calendario</div>
+        <div class="subtab" data-view="red">Red</div>
       </div>
     </div>
     <div class="tab-group" data-group="finanzas">
@@ -132,6 +139,11 @@
     </section>
 
     <!-- CLIENTES -->
+    <section class="view" id="view-red">
+      <div class="view-header"><h2>Red / MikroTik</h2></div>
+      <div id="red-out"></div>
+    </section>
+
     <section class="view" id="view-clientes">
       <div class="view-header"><h2>Clientes</h2><div class="spacer"></div>
         <button class="btn" onclick="RN.modalPaquete.abrir()">🧩 Planes</button>
@@ -529,6 +541,8 @@
 
   <!-- 3. UI -->
   <script src="js/ui/theme.js"></script>
+  <script src="js/ui/busqueda-global.js"></script>
+  <script src="js/ui/onboarding.js"></script>
   <script src="js/ui/notify-ui.js"></script>
   <script src="js/ui/reloj.js"></script>
   <script src="js/ui/tabs.js"></script>
@@ -591,6 +605,7 @@
   <!-- 8. OTROS -->
   <script src="js/red/equipos-red.js"></script>
   <script src="js/red/cola-mikrotik.js"></script>
+  <script src="js/red/red-view.js"></script>
   <script src="js/paquete/modal-paquete.js"></script>
   <script src="js/paquete/modal-paquete-proveedor.js"></script>
   <script src="js/gastos.js"></script>
