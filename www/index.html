@@ -33,12 +33,6 @@
   <header class="app-header no-print">
     <div class="logo"><span class="dot"></span> AdminRed <span class="muted sub">RedNet</span></div>
     <div class="spacer"></div>
-    <div class="busqueda-global-wrap" id="busqueda-global-wrap">
-      <input type="search" id="busqueda-global" class="busqueda-global-input" placeholder="Buscar cliente, IP, tel…"
-        inputmode="search" autocomplete="off" spellcheck="false" autocorrect="off" autocapitalize="off"
-        title="Nombre, teléfono o IP">
-      <div id="busqueda-global-resultados" class="busqueda-global-resultados" hidden></div>
-    </div>
     <span class="ver" id="btn-version" title="Buscar actualizaciones de la app">v<span id="app-version">—</span></span>
     <span class="clock" id="reloj"></span>
     <div class="header-actions">
@@ -50,26 +44,37 @@
     </div>
   </header>
 
-  <!-- TABS — 3 grupos principales con sub-navegación -->
+  <!-- TABS — Estructura v5.54: Inicio · Operación · Dinero · Red · Análisis
+       Principio: operación diaria arriba; Red separada de cobros; Análisis solo consulta. -->
   <nav class="tabs no-print" id="tabs">
-    <div class="tab-group" data-group="operacion">
-      <div class="tab active" data-view="dashboard">🏠 Operación</div>
+    <div class="tab-group" data-group="inicio">
+      <div class="tab active" data-view="dashboard">🏠 Inicio</div>
       <div class="subtabs">
         <div class="subtab active" data-view="dashboard">Panel</div>
+      </div>
+    </div>
+    <div class="tab-group" data-group="operacion">
+      <div class="tab" data-view="clientes">⚡ Operación</div>
+      <div class="subtabs">
         <div class="subtab" data-view="clientes">Clientes</div>
         <div class="subtab" data-view="cobros">Cobros</div>
         <div class="subtab" data-view="realizados">Realizados</div>
         <div class="subtab" data-view="calendario">Calendario</div>
-        <div class="subtab" data-view="red">Red</div>
       </div>
     </div>
-    <div class="tab-group" data-group="finanzas">
-      <div class="tab" data-view="inversion">💰 Finanzas</div>
+    <div class="tab-group" data-group="dinero">
+      <div class="tab" data-view="inversion">💰 Dinero</div>
       <div class="subtabs">
-        <div class="subtab active" data-view="inversion">Inversiones y deudas</div>
-        <div class="subtab" data-view="inventario">Inventario</div>
+        <div class="subtab" data-view="inversion">Inversiones y deudas</div>
         <div class="subtab" data-view="gastos">Gastos</div>
+        <div class="subtab" data-view="inventario">Inventario</div>
         <div class="subtab" data-view="descuentos">Descuentos</div>
+      </div>
+    </div>
+    <div class="tab-group" data-group="red">
+      <div class="tab" data-view="red">📡 Red</div>
+      <div class="subtabs">
+        <div class="subtab" data-view="red">Capacidad y MikroTik</div>
       </div>
     </div>
     <div class="tab-group" data-group="analisis">
@@ -83,7 +88,7 @@
       </div>
     </div>
   </nav>
-  <!-- v5.44.0: indicador de ubicación "Operación → Cobros" -->
+  <!-- Breadcrumb: "Grupo → Vista" -->
   <div class="breadcrumb no-print" id="breadcrumb" aria-live="polite"></div>
 
   <main>
@@ -139,11 +144,6 @@
     </section>
 
     <!-- CLIENTES -->
-    <section class="view" id="view-red">
-      <div class="view-header"><h2>Red / MikroTik</h2></div>
-      <div id="red-out"></div>
-    </section>
-
     <section class="view" id="view-clientes">
       <div class="view-header"><h2>Clientes</h2><div class="spacer"></div>
         <button class="btn" onclick="RN.modalPaquete.abrir()">🧩 Planes</button>
@@ -346,6 +346,33 @@
       <div id="incidencias-out"></div>
     </section>
 
+    <!-- RED — Capacidad Limit At + comandos MikroTik (v5.54 estructura) -->
+    <section class="view" id="view-red">
+      <div class="view-header">
+        <h2>📡 Red · Capacidad y MikroTik</h2>
+        <div class="spacer"></div>
+        <button class="btn" onclick="RN.cola.abrirAjustes()">⚙️ Reglas Limit At</button>
+        <button class="btn primary" onclick="RN.cola.abrirResumen()">📊 Resumen</button>
+      </div>
+      <p class="muted mb-16">La app no se conecta al router: calcula capacidad (Limit At) y genera comandos para pegar en Winbox / terminal.</p>
+      <div class="card mt-16" id="card-red-capacidad">
+        <h3>Capacidad de red</h3>
+        <div id="panel-red-capacidad"></div>
+      </div>
+      <div class="card mt-16">
+        <h3>Acciones rápidas</h3>
+        <div class="flex wrap" style="gap:10px">
+          <button class="btn primary" onclick="RN.cola.abrirResumen()">📊 Resumen de capacidad</button>
+          <button class="btn" onclick="RN.cola.abrirAjustes()">⚙️ Reglas de Limit At</button>
+          <button class="btn" onclick="if(RN.cola.scriptCompleto){ var s=RN.cola.scriptCompleto(); if(s){ navigator.clipboard&&navigator.clipboard.writeText(s).then(function(){RN.notify&&RN.notify.ok('Script copiado');}); }}">📋 Copiar script completo</button>
+        </div>
+      </div>
+      <div class="card mt-16" id="card-red-equipos" style="display:none">
+        <h3>Equipos de red</h3>
+        <div id="panel-red-equipos"></div>
+      </div>
+    </section>
+
 </main>
 
   <!-- Print area para recibos -->
@@ -541,8 +568,6 @@
 
   <!-- 3. UI -->
   <script src="js/ui/theme.js"></script>
-  <script src="js/ui/busqueda-global.js"></script>
-  <script src="js/ui/onboarding.js"></script>
   <script src="js/ui/notify-ui.js"></script>
   <script src="js/ui/reloj.js"></script>
   <script src="js/ui/tabs.js"></script>
@@ -605,7 +630,6 @@
   <!-- 8. OTROS -->
   <script src="js/red/equipos-red.js"></script>
   <script src="js/red/cola-mikrotik.js"></script>
-  <script src="js/red/red-view.js"></script>
   <script src="js/paquete/modal-paquete.js"></script>
   <script src="js/paquete/modal-paquete-proveedor.js"></script>
   <script src="js/gastos.js"></script>

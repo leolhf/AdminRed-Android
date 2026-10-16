@@ -1,0 +1,28 @@
+AdminRed v5.55.1 — Estructura de navegación
+==========================================
+
+Cambios respecto a 5.53.7:
+
+  • Versión de app: 5.55.1 (versionCode 5551)
+  • Barra de pestañas en 5 grupos:
+      🏠 Inicio      → Panel
+      ⚡ Operación   → Clientes · Cobros · Realizados · Calendario
+      💰 Dinero      → Inversiones y deudas · Gastos · Inventario · Descuentos
+      📡 Red         → Capacidad y MikroTik
+      📊 Análisis    → Reportes · Salud · Margen · Morosos · Incidencias
+  • Nueva vista #view-red con resumen de capacidad Limit At
+  • Ajustes sigue siendo modal
+
+Archivos tocados
+----------------
+  www/js/version.js
+  version.json
+  package.json
+  package-lock.json
+  android/app/build.gradle
+  www/CHANGELOG.md
+  www/index.html
+  www/styles.css
+  www/js/ui/tabs.js
+  www/js/ui/render.js
+  tools/test-tabs-menu.js

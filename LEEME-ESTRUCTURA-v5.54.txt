@@ -1,0 +1,28 @@
+AdminRed — Parche estructura de navegación v5.54
+================================================
+
+Archivos modificados (sustituyen a los del proyecto base 5.53.7):
+
+  www/index.html          → 5 grupos de tabs + vista #view-red
+  www/styles.css          → tipografía compacta para 5 grupos en móvil
+  www/js/ui/tabs.js       → mapeo Inicio / Operación / Dinero / Red / Análisis
+  www/js/ui/render.js     → RN.render.red() (capacidad Limit At)
+  tools/test-tabs-menu.js → tests actualizados a los nuevos grupos
+
+  PLAN_TRABAJO_UI_ESTRUCTURA.md → E1 y E3 marcados como Hecho
+
+Cómo aplicar
+------------
+1. Descomprime este zip sobre la carpeta raíz de AdminRed-Android
+   (donde está la carpeta www/).
+2. O copia manualmente cada archivo a su ruta.
+
+Estructura resultante de la barra de pestañas
+---------------------------------------------
+  🏠 Inicio      → Panel (Dashboard)
+  ⚡ Operación   → Clientes · Cobros · Realizados · Calendario
+  💰 Dinero      → Inversiones y deudas · Gastos · Inventario · Descuentos
+  📡 Red         → Capacidad y MikroTik
+  📊 Análisis    → Reportes · Salud · Margen · Morosos · Incidencias
+
+Ajustes sigue siendo modal (no pestaña).

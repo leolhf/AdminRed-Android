@@ -11,7 +11,6 @@ RN.init.arrancar = async function () {
 
   // 1. Tema
   RN.theme.init();
-  if (RN.busquedaGlobal && RN.busquedaGlobal.init) RN.busquedaGlobal.init();
 
   // 2. Versión en header
   const verEl = document.getElementById('app-version');
@@ -119,10 +118,6 @@ RN.init.arrancar = async function () {
   setTimeout(function () {
     try { if (RN.avisosInicio) RN.avisosInicio.comprobarAlIniciar(); } catch (e) {}
   }, 1500);
-  // v5.54.2 Fase C: onboarding (después de avisos del día)
-  setTimeout(function () {
-    try { if (RN.onboarding) RN.onboarding.mostrarSiCorresponde(); } catch (e) {}
-  }, 2800);
 
   // 11b. v5.10.3: Refrescar el estado del archivo vinculado DESPUÉS de renderizar.
   // restaurarHandle() corre en el paso 6, cuando #archivo-status aún no existía,

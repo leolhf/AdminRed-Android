@@ -1,50 +1,18 @@
-## v5.54.4 — Fix scroll y Cobranza móvil
-
-- Restaurado scroll vertical (se quitó overflow-x de body/html que bloqueaba el scroll en Android WebView).
-- Modal Cobranza: tabla convertida a tarjetas responsive en móvil (ya no se ve el texto en vertical).
-- Botones Cobrar / WhatsApp visibles y usables en pantalla estrecha.
-- Modal Cobranza sin forzar ancho lg en móvil.
-
-## v5.54.3 — Ajustes interfaz móvil
-
-- Sin scroll horizontal: overflow-x hidden en body/main.
-- Modal Capacidad de red (Limit At) legible en pantallas pequeñas (textos con saltos de línea, botones que se apilan).
-- Modal full-width en móvil; pie de modal con botones que envuelven.
-- KPIs del panel más compactos; resultados del buscador global no se salen del viewport.
-- Version bump 5.54.2 → 5.54.3.
-
 # Changelog — AdminRed (RedNet)
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
-## v5.54.2 — Fase C: Red, menús y onboarding
+## v5.55.1 — Estructura de navegación
 
-- **Operación → Red**: capacidad Limit At, scripts export/upsert, comando cola padre, clientes sin IP
-- **Onboarding** (primera vez): paquete, tasa USD, cola padre
-- Contraste mejorado en tema claro
-- Mapa de menús: Red dentro de Operación
-
-## v5.54.1 — Fase B: buscador, cobros y MikroTik
-
-- **Buscador global** en el header (nombre, IP, teléfono) → abre ficha del cliente
-- Filas de **Cobros**: nombre más grande; plan · precio · IP · tel en subtítulo
-- Lista **Clientes**: botón **📡 MikroTik** abre el modal de comando
-- Modal cliente: copiar comando MikroTik más visible
-
-## v5.54.0 — Fase A: escritura, estados y dashboard
-
-### Ortografía (Android)
-- Nombre: autocapitalize words + lang=es
-- Notas / incidencias / baja / cobro / gastos: corrección ON
-- IP y teléfono sin autocorrección
-
-### Estados unificados
-- Pills Hoy · Ciclo · Notificado · Mora en Cobros
-- Clases cobro-hoy, en-ciclo, notificado-wa
-
-### Dashboard
-- Bloque Acción del día
-- 4 KPIs prioritarios; resto en Más indicadores
+- **Nueva barra de pestañas (5 grupos):** Inicio · Operación · Dinero · Red · Análisis.
+- **Inicio** = Panel (dashboard) como entrada principal.
+- **Operación** = Clientes, Cobros, Realizados, Calendario (trabajo del día).
+- **Dinero** = Inversiones y deudas, Gastos, Inventario, Descuentos.
+- **Red** (nuevo) = capacidad Limit At y accesos a comandos MikroTik, separado de cobros.
+- **Análisis** = Reportes, Salud, Margen, Morosos/bajas, Incidencias (solo consulta).
+- Ajustes sigue siendo modal (no pestaña).
+- Tipografía de tabs un poco más compacta en móvil para que quepan los 5 grupos.
+- Tests del submenú plegable actualizados a los nuevos nombres de grupo.
 
 ## v5.53.7 — Fix botones tema / guardar / versión
 

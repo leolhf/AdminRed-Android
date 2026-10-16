@@ -64,8 +64,6 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
-  /* No poner overflow-x en body/html: en Android WebView puede bloquear el scroll vertical
-     de modales y del contenido. El ancho se controla en main y contenedores concretos. */
 }
 
 /* ---------- Header ---------- */
@@ -187,14 +185,15 @@ html, body {
 .subtab.active { color: var(--primary); border-bottom-color: var(--primary); }
 .subtab:active { background: var(--surface-2); }
 
-/* Mobile: subtabs scroll horizontal más compacto */
+/* Mobile: subtabs scroll horizontal más compacto; 5 grupos (Inicio/Operación/Dinero/Red/Análisis) */
 @media (max-width: 600px) {
-  .tab-group .tab { font-size: 12px; }
+  .tab-group .tab { font-size: 11px; padding: 0 3px; gap: 2px; }
+  .tab-group .tab::after { font-size: 9px; }
   .subtab { font-size: 12px; padding: 9px 14px; }
 }
 
 @media (max-width: 380px) {
-  .tab-group .tab { font-size: 11px; }
+  .tab-group .tab { font-size: 10px; padding: 0 2px; }
   .subtab { font-size: 11px; padding: 8px 12px; }
 }
 
@@ -204,9 +203,6 @@ main {
   max-width: 1100px;
   margin: 0 auto;
   padding-bottom: calc(80px + var(--safe-bottom));
-  width: 100%;
-  box-sizing: border-box;
-  overflow-x: hidden;
 }
 .view { display: none; }
 .view.active { display: block; animation: viewFade .2s ease; }
@@ -416,7 +412,6 @@ td .actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .table-wrap.responsive td {
     display: flex; justify-content: space-between; align-items: center;
     border-bottom: 1px solid var(--border); padding: 10px 14px; text-align: right;
-    gap: 8px; min-width: 0;
   }
   .table-wrap.responsive td:last-child { border-bottom: none; }
   .table-wrap.responsive td::before {
@@ -425,12 +420,6 @@ td .actions { display: flex; gap: 6px; flex-wrap: wrap; }
     text-align: left; margin-right: 12px; flex-shrink: 0;
   }
   .table-wrap.responsive td .actions { justify-content: flex-end; }
-  /* Botones de acciones en filas responsive: no forzar nowrap extremo */
-  .table-wrap.responsive td[data-label="Acciones"] {
-    white-space: normal;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
 }
 
 /* Badges / status */
@@ -474,7 +463,6 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
   box-shadow: var(--shadow-lg); width: 100%; max-width: 520px;
   max-height: 92vh; overflow: hidden; display: flex; flex-direction: column;
   animation: sheetUp .25s cubic-bezier(.32,.72,0,1);
-  box-sizing: border-box;
 }
 @keyframes sheetUp { from { transform: translateY(100%); } to { transform: translateY(0); } }
 .modal.lg { max-width: 760px; }
@@ -483,33 +471,24 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
   padding: 14px 16px; border-bottom: 1px solid var(--border);
   display: flex; align-items: center; flex-shrink: 0;
   position: relative;
-  gap: 8px;
 }
 .modal-header::before {
   content: ''; position: absolute; top: 6px; left: 50%; transform: translateX(-50%);
   width: 36px; height: 4px; border-radius: 4px; background: var(--border);
 }
-.modal-header h3 {
-  font-size: 17px; flex: 1; min-width: 0; padding-top: 6px;
-  overflow-wrap: break-word; word-break: break-word;
-}
+.modal-header h3 { font-size: 17px; flex: 1; padding-top: 6px; }
 .modal-header .close {
   cursor: pointer; font-size: 24px; color: var(--text-muted);
   background: none; border: none; padding: 4px 8px; flex-shrink: 0;
   -webkit-tap-highlight-color: transparent;
 }
-.modal-body {
-  padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1;
-  overflow-wrap: break-word; word-break: break-word;
-  min-width: 0;
-}
+.modal-body { padding: 16px; overflow-y: auto; -webkit-overflow-scrolling: touch; flex: 1; }
 .modal-footer {
   padding: 12px 16px; padding-bottom: calc(12px + var(--safe-bottom));
-  border-top: 1px solid var(--border); display: flex; gap: 8px; justify-content: flex-end;
+  border-top: 1px solid var(--border); display: flex; gap: 10px; justify-content: flex-end;
   flex-shrink: 0; background: var(--surface);
-  flex-wrap: wrap;
 }
-.modal-footer .btn { flex: 1 1 auto; justify-content: center; min-width: 0; }
+.modal-footer .btn { flex: 1; justify-content: center; }
 
 /* Desktop modal: centered dialog */
 @media (min-width: 640px) {
@@ -864,7 +843,7 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 /* ---------- Mobile-specific tweaks ---------- */
 @media (max-width: 600px) {
   html, body { font-size: 14px; }
-  main { padding: 10px; max-width: 100%; }
+  main { padding: 10px; }
   .view-header h2 { font-size: 17px; width: 100%; }
   .view-header { gap: 6px; }
   .view-header .btn { font-size: 13px; padding: 8px 12px; }
@@ -880,41 +859,12 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
   .toolbar .search { flex: 1 1 100%; min-width: 0; }
   .toolbar select { flex: 1 1 40%; max-width: none; }
   .toolbar .btn { flex: 1 1 100%; }
-
-  /* Modal full-bleed en móvil: nunca más ancho que la pantalla */
-  .modal,
-  .modal.lg {
-    max-width: 100%;
-    width: 100%;
-    border-radius: 16px 16px 0 0;
-  }
-  .modal-footer {
-    gap: 8px;
-  }
-  .modal-footer .btn {
-    flex: 1 1 calc(50% - 8px);
-    font-size: 13px;
-    padding: 10px 8px;
-  }
-  /* KPIs del panel: en pantallas estrechas preferir 2 columnas o 1 */
-  .dash-kpis-pri {
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 8px;
-  }
-  .dash-accion { padding: 12px; }
 }
 
 @media (max-width: 380px) {
   .kpi-grid { grid-template-columns: 1fr; }
   .kpi .value { font-size: 20px; }
   .icon-btn { width: 32px; height: 32px; font-size: 15px; }
-  .dash-kpis-pri {
-    grid-template-columns: 1fr;
-  }
-  .modal-footer .btn {
-    flex: 1 1 100%;
-  }
-  .modal-header h3 { font-size: 15px; }
 }
 
 /* Print */
@@ -950,10 +900,7 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 
 /* === v5.8.7: Barra de capacidad de red (widget dashboard) === */
 .prov-cap { margin-top: 12px; padding-top: 10px; border-top: 1px dashed var(--border); }
-.prov-cap-label {
-  display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px; margin-bottom:6px;
-  overflow-wrap: break-word; word-break: break-word; min-width: 0;
-}
+.prov-cap-label { display:flex; align-items:center; gap:6px; flex-wrap:wrap; font-size:12px; margin-bottom:6px; }
 .prov-cap-bar {
   width:100%; height:10px; background: var(--surface-2); border-radius:6px; overflow:hidden;
 }
@@ -961,7 +908,7 @@ select { background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.o
 .bar-green { background: linear-gradient(90deg, #2e7d32, #43a047); }
 .bar-amber { background: linear-gradient(90deg, #e6a700, #fbc02d); }
 .bar-red   { background: linear-gradient(90deg, #c62828, #e53935); }
-.prov-cap-sub { font-size:11px; margin-top:4px; overflow-wrap: break-word; }
+.prov-cap-sub { font-size:11px; margin-top:4px; }
 
 /* === v5.8.7: Aviso de capacidad en la card de Ajustes === */
 .prov-cap-aviso {
@@ -1473,214 +1420,3 @@ tr.cobranza-notificado-wa td:first-child {
 /* v5.53.2 — Avisos al abrir */
 .aviso-inicio-lista { margin: 8px 0 0; padding-left: 1.2em; }
 .aviso-inicio-lista li { margin: 4px 0; }
-
-
-/* ============================================================
- * v5.54.0 Fase A — Estados unificados (Cobros / Cobranza / avisos)
- * ============================================================ */
-.estado-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 999px;
-  line-height: 1.4;
-  white-space: nowrap;
-}
-.estado-pill.hoy {
-  background: rgba(59, 130, 246, 0.18);
-  color: #60a5fa;
-  border: 1px solid rgba(59, 130, 246, 0.35);
-}
-.estado-pill.ciclo {
-  background: rgba(245, 158, 11, 0.18);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-}
-.estado-pill.notificado {
-  background: rgba(37, 211, 102, 0.18);
-  color: #25D366;
-  border: 1px solid rgba(37, 211, 102, 0.4);
-}
-.estado-pill.mora,
-.estado-pill.vencido {
-  background: rgba(239, 68, 68, 0.18);
-  color: #f87171;
-  border: 1px solid rgba(239, 68, 68, 0.35);
-}
-.estado-pill.pagado {
-  background: rgba(34, 197, 94, 0.15);
-  color: var(--success, #22c55e);
-  border: 1px solid rgba(34, 197, 94, 0.3);
-}
-[data-theme="light"] .estado-pill.hoy { color: #1d4ed8; background: rgba(59,130,246,0.12); }
-[data-theme="light"] .estado-pill.ciclo { color: #b45309; background: rgba(245,158,11,0.12); }
-[data-theme="light"] .estado-pill.notificado { color: #15803d; }
-[data-theme="light"] .estado-pill.mora,
-[data-theme="light"] .estado-pill.vencido { color: #b91c1c; }
-
-/* Fila / tarjeta: ciclo abierto (ámbar suave) */
-.acc-card.en-ciclo {
-  border-left: 3px solid var(--warn, #f59e0b);
-  background: rgba(245, 158, 11, 0.06);
-}
-.acc-card.cobro-hoy {
-  border-left: 3px solid #3b82f6;
-  background: rgba(59, 130, 246, 0.07);
-}
-/* notificado-wa ya existía; alinear con pill */
-.acc-card.notificado-wa {
-  border-left: 3px solid #25D366;
-  background: rgba(37, 211, 102, 0.08);
-}
-
-/* Dashboard: acción del día */
-.dash-accion {
-  border-radius: 12px;
-  padding: 14px 16px;
-  margin-bottom: 14px;
-  border: 1px solid var(--border);
-  background: var(--card, rgba(255,255,255,0.04));
-}
-.dash-accion h3 {
-  margin: 0 0 8px;
-  font-size: 15px;
-}
-.dash-accion .dash-accion-lineas {
-  margin: 0 0 12px;
-  padding-left: 1.1em;
-  font-size: 13px;
-}
-.dash-accion .dash-accion-btns {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.dash-kpis-pri {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
-  gap: 10px;
-  margin-bottom: 10px;
-}
-.dash-mas-det {
-  margin-top: 8px;
-}
-.dash-mas-det summary {
-  cursor: pointer;
-  font-size: 13px;
-  color: var(--text-muted);
-  padding: 6px 0;
-}
-.dash-mas-det[open] summary { margin-bottom: 8px; }
-
-
-/* v5.54.1 Fase B — buscador global + filas cobros */
-.busqueda-global-wrap {
-  position: relative;
-  flex: 1 1 120px;
-  max-width: 220px;
-  min-width: 100px;
-  margin: 0 8px;
-}
-.busqueda-global-input {
-  width: 100%;
-  font-size: 13px;
-  padding: 6px 10px;
-  border-radius: 8px;
-  border: 1px solid var(--border);
-  background: var(--bg-alt, rgba(0,0,0,0.2));
-  color: var(--text);
-}
-.busqueda-global-resultados {
-  position: absolute;
-  top: calc(100% + 4px);
-  left: 0;
-  right: 0;
-  min-width: 0;
-  width: max(100%, min(280px, 90vw));
-  max-width: 90vw;
-  max-height: 320px;
-  overflow-y: auto;
-  overflow-x: hidden;
-  z-index: 200;
-  background: var(--card, #1a1f2e);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0,0,0,0.35));
-  padding: 4px;
-  box-sizing: border-box;
-}
-.bg-item {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  width: 100%;
-  text-align: left;
-  padding: 8px 10px;
-  border: none;
-  background: transparent;
-  color: inherit;
-  border-radius: 8px;
-  cursor: pointer;
-  font: inherit;
-}
-.bg-item:hover, .bg-item:focus {
-  background: rgba(59, 130, 246, 0.15);
-}
-.bg-name { font-weight: 600; font-size: 13px; }
-.bg-sub { font-size: 11px; margin-top: 2px; }
-.bg-empty { padding: 12px; font-size: 13px; }
-
-/* Filas cobros más legibles */
-#lista-cobros .acc-summary-name {
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 1.25;
-}
-#lista-cobros .acc-summary-sub {
-  font-size: 12px;
-  color: var(--text-muted);
-  margin-top: 2px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 10px;
-  align-items: center;
-}
-#lista-cobros .acc-ip {
-  font-family: ui-monospace, monospace;
-  font-size: 11px;
-  opacity: 0.9;
-}
-#lista-cobros .acc-summary-total .amt {
-  font-size: 15px;
-  font-weight: 800;
-}
-#lista-cobros .acc-summary-total .lbl {
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.02em;
-  opacity: 0.7;
-}
-@media (max-width: 480px) {
-  .busqueda-global-wrap { max-width: 140px; }
-  .clock { display: none; }
-}
-
-
-/* v5.54.2 Fase C — tema claro y sección red */
-[data-theme="light"] .badge.warn,
-[data-theme="light"] .badge.due {
-  font-weight: 700;
-}
-[data-theme="light"] .muted {
-  color: #5c6578;
-}
-[data-theme="light"] .kpi .sub {
-  color: #5c6578;
-}
-[data-theme="light"] .estado-pill.hoy { color: #1e40af; }
-[data-theme="light"] .estado-pill.ciclo { color: #92400e; }
-.view { padding-bottom: 24px; }
-.card + .card { margin-top: 4px; }

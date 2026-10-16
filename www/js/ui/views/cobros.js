@@ -129,11 +129,10 @@ RN.render.cobros = function () {
     const total = r.totalMes;
     const deuda = r.deuda;
     const mora = r.mora;
-    const ipHtml = c.ip ? '<span class="acc-ip" title="IP">' + RN.render.esc(c.ip) + '</span>' : '';
-    const planSub = '<span class="acc-plan">' + RN.render.esc(RN.render.nombrePlan(c)) + '</span> · ' + RN.calc.formatCUP(RN.calc.getPrecioBase(c));
+    const ipHtml = c.ip ? '<span class="acc-ip">' + RN.render.esc(c.ip) + '</span>' : '';
+    const planSub = RN.render.nombrePlan(c) + ' · ' + RN.calc.formatCUP(RN.calc.getPrecioBase(c));
     const subParts = [planSub];
     if (ipHtml) subParts.push(ipHtml);
-    if (c.telefono) subParts.push('<span class="acc-tel">' + RN.render.esc(c.telefono) + '</span>');
 
     var accBtn;
     if (estado === 'paid') {
@@ -164,7 +163,7 @@ RN.render.cobros = function () {
       descRowsHtml = '<span class="muted">Ninguna este mes</span>';
     }
 
-    // v5.52.7 / v5.54.0: marca visual ciclo + WhatsApp + hoy
+    // v5.52.7: marca visual si ya se abrió WhatsApp en este ciclo
     var notificadoWa = false;
     try {
       notificadoWa = !!(RN.notifyState && RN.notifyState.notificadoWaCiclo
@@ -173,26 +172,16 @@ RN.render.cobros = function () {
     } catch (e) { notificadoWa = false; }
     var ven = (RN.ciclos && RN.ciclos.ventanaCobro)
       ? RN.ciclos.ventanaCobro(c.diaPago || 1)
-      : { inicio: c.diaPago || 1, fin: c.diaPago || 1, texto: 'día ' + (c.diaPago || 1) };
-    var diaHoy = RN.ciclos && RN.ciclos.diaHoyNum ? RN.ciclos.diaHoyNum() : new Date().getDate();
-    var esHoy = estado !== 'paid' && (c.diaPago || 1) === diaHoy;
-    var enCiclo = estado !== 'paid' && !esHoy && diaHoy >= (ven.inicio || 1) && diaHoy <= (ven.fin || 31);
+      : { texto: 'día ' + (c.diaPago || 1) };
     var waBtn = (estado !== 'paid' && c.telefono)
       ? '<button class="btn sm" onclick="event.stopPropagation(); RN.whatsapp.enviarRecordatorio(\'' + RN.render.escAttr(c.id) + '\')">💬 WhatsApp</button>'
       : '';
     var nombreExtra = '';
-    if (esHoy) nombreExtra += ' <span class="estado-pill hoy">Hoy</span>';
-    else if (enCiclo) nombreExtra += ' <span class="estado-pill ciclo">Ciclo</span>';
-    if (notificadoWa) nombreExtra += ' <span class="estado-pill notificado" title="Notificado por WhatsApp en este ciclo">💬 Notificado</span>';
-    if (mora > 0) nombreExtra += ' <span class="estado-pill mora">Mora ' + mora + 'm</span>';
+    if (notificadoWa) nombreExtra += ' <span class="wa-notificado-ico" title="Notificado por WhatsApp en este ciclo">💬</span>';
+    if (mora > 0) nombreExtra += ' <span class="badge due" style="font-size:10px;vertical-align:middle">Mora: ' + mora + 'm</span>';
 
-    var clsCard = 'acc-card';
-    if (notificadoWa) clsCard += ' notificado-wa';
-    else if (esHoy) clsCard += ' cobro-hoy';
-    else if (enCiclo) clsCard += ' en-ciclo';
-    return '<div class="' + clsCard + '" id="acc-cob-' + RN.render.escAttr(c.id) + '"' +
+    return '<div class="acc-card' + (notificadoWa ? ' notificado-wa' : '') + '" id="acc-cob-' + RN.render.escAttr(c.id) + '"' +
       (notificadoWa ? ' data-notificado="wa"' : '') + '>' +
-
       '<div class="acc-summary" onclick="RN.render.toggleCard(\'acc-cob-' + RN.render.escAttr(c.id) + '\')">' +
         '<span class="acc-dot ' + estado + '"></span>' +
         '<div class="acc-summary-main">' +

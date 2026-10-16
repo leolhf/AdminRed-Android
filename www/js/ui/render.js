@@ -106,7 +106,7 @@ RN.render.compararClientePorIP = function (a, b) {
 
 /** Render completo: refresca todas las vistas. */
 RN.render.todo = function () {
-  ['dashboard', 'clientes', 'cobros', 'realizados', 'red', 'inversion', 'inventario', 'gastos', 'reportes', 'calendario', 'descuentos', 'salud', 'margen', 'morosos', 'incidencias'].forEach(v => {
+  ['dashboard', 'clientes', 'cobros', 'realizados', 'inversion', 'inventario', 'gastos', 'reportes', 'calendario', 'descuentos', 'salud', 'margen', 'morosos', 'incidencias'].forEach(v => {
     RN.render.vista(v);
   });
   RN.config.rellenarForm();
@@ -132,7 +132,43 @@ RN.render.vista = function (view) {
     case 'margen': RN.margenClientes && RN.margenClientes.render(); break;
     case 'morosos': RN.lifecycle && RN.lifecycle.renderPanel(); break;
     case 'incidencias': RN.incidencias && RN.incidencias.render(); break;
-    case 'red': RN.redView && RN.redView.render(); break;
+    case 'red': RN.render.red && RN.render.red(); break;
+  }
+};
+
+/** Vista Red: capacidad Limit At + accesos a comandos MikroTik (v5.54). */
+RN.render.red = function () {
+  var el = document.getElementById('panel-red-capacidad');
+  if (!el) return;
+  if (!RN.calc || !RN.calc.estadoCapacidad || !RN.cola) {
+    el.innerHTML = '<p class="muted">Módulo de capacidad no disponible. Configura el paquete en Ajustes.</p>';
+    return;
+  }
+  try {
+    var cap = RN.calc.estadoCapacidad();
+    if (!cap || !(cap.tope > 0 || cap.paquete > 0)) {
+      el.innerHTML = '<p class="muted">Configura el paquete del proveedor y la cola padre (LEO) en Ajustes → Cola MikroTik.</p>';
+      return;
+    }
+    var cls = cap.excedido ? 'bar-red' : (cap.aviso ? 'bar-amber' : 'bar-green');
+    var estadoTxt = cap.excedido
+      ? '<span style="color:var(--danger)">⚠ Excedido</span>'
+      : (cap.aviso ? '<span style="color:var(--warn)">Cerca del tope</span>' : '<span style="color:var(--success)">✓ Capacidad ok</span>');
+    var txtM = RN.cola.txtM || function (v) { return v; };
+    var html = '';
+    html += '<div class="prov-cap-label"><span class="muted">Capacidad de red</span> <strong>' +
+      txtM(cap.comprometido) + ' comprometidos / ' + txtM(cap.tope) + '</strong> (' + (cap.pctReal || 0) + '%) ' + estadoTxt + '</div>';
+    html += '<div class="prov-cap-bar mt-8"><div class="prov-cap-fill ' + cls + '" style="width:' + Math.min(100, cap.pct || 1) + '%"></div></div>';
+    html += '<div class="prov-cap-sub muted mt-8">' + (cap.paquete || 0) + 'M paquete − ' + (cap.reserva || 0) + 'M reserva = ' +
+      txtM(cap.tope) + ' tope · margen ' + txtM(cap.margen) + '</div>';
+    if (cap.vendidos != null) {
+      html += '<div class="prov-cap-sub muted">Informativo: ' + txtM(cap.vendidos) + ' vendidos' +
+        (cap.relacionVenta > 0 ? ' (' + cap.relacionVenta + ' a 1)' : '') +
+        (cap.megasAdmin > 0 ? ' · ' + txtM(cap.megasAdmin) + ' de administración' : '') + '</div>';
+    }
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<p class="muted">No se pudo calcular la capacidad.</p>';
   }
 };
 

@@ -1,36 +1,45 @@
 /**
- * ui/tabs.js — Navegación por pestañas agrupadas en 3 categorías.
- * Estructura: 3 grupos (Operación, Finanzas, Análisis) con subtabs.
+ * ui/tabs.js — Navegación por pestañas agrupadas (v5.54 estructura).
+ * Grupos: Inicio · Operación · Dinero · Red · Análisis
+ * Principio: operación diaria arriba; Red separada de cobros; Análisis = consulta.
  */
 RN.tabs = RN.tabs || {};
 
 RN.tabs.actual = 'dashboard';
-RN.tabs.grupoActivo = 'operacion';
+RN.tabs.grupoActivo = 'inicio';
 
 /** Mapeo de vistas a su grupo. */
 RN.tabs._vistaAGrupo = {
-  dashboard:   'operacion',
+  dashboard:   'inicio',
   clientes:    'operacion',
   cobros:      'operacion',
   calendario:  'operacion',
   realizados:  'operacion',
-  red:         'operacion',
-  inversion:   'finanzas',
-  inventario:  'finanzas',
-  gastos:      'finanzas',
-  descuentos:  'finanzas',
+  inversion:   'dinero',
+  inventario:  'dinero',
+  gastos:      'dinero',
+  descuentos:  'dinero',
+  red:         'red',
   reportes:    'analisis',
   salud:       'analisis',
   margen:      'analisis',
   morosos:     'analisis',
-  incidencias:'analisis'
+  incidencias: 'analisis'
+};
+
+/** Nombres legibles de grupo (breadcrumb). */
+RN.tabs._nombreGrupo = {
+  inicio:    'Inicio',
+  operacion: 'Operación',
+  dinero:    'Dinero',
+  red:       'Red',
+  analisis:  'Análisis'
 };
 
 /* ============================================================
  * v5.46.0 — Submenú plegable con cierre automático.
- * Al tocar 🏠 Operación / 💰 Finanzas / 📊 Análisis se despliega el menú de ese
- * grupo; se pliega solo tras RN.tabs.MENU_MS (3 s) sin actividad en la barra de
- * pestañas (toques, desplazamiento del submenú, teclado), al tocar fuera o con Esc.
+ * Al tocar un grupo se despliega su menú; se pliega tras RN.tabs.MENU_MS (3 s)
+ * sin actividad en la barra, al tocar fuera o con Esc.
  * ============================================================ */
 RN.tabs.MENU_MS = 3000;
 RN.tabs._menuTimer = null;
@@ -70,7 +79,7 @@ RN.tabs.abrirMenu = function (grupo) {
   RN.tabs.reiniciarTemporizadorMenu();
 };
 
-/** Toque en 🏠 / 💰 / 📊: abre (y navega si cambia de grupo) o pliega si ya estaba abierto. */
+/** Toque en un grupo (Inicio / Operación / Dinero / Red / Análisis): abre menú o pliega. */
 RN.tabs.alTocarGrupo = function (grupo) {
   if (RN.tabs.grupoActivo !== grupo) {
     RN.tabs.irGrupo(grupo);
@@ -110,10 +119,10 @@ RN.tabs.ir = function (view) {
     v.classList.toggle('active', v.id === 'view-' + view);
   });
 
-  // v5.44.0: breadcrumb "Grupo → Vista"
+  // Breadcrumb "Grupo → Vista"
   var bc = document.getElementById('breadcrumb');
   if (bc) {
-    var gNom = { operacion: 'Operación', finanzas: 'Finanzas', analisis: 'Análisis' }[grupo] || '';
+    var gNom = (RN.tabs._nombreGrupo && RN.tabs._nombreGrupo[grupo]) || grupo || '';
     var sel = document.querySelector('.subtab[data-view="' + view + '"]');
     bc.textContent = 'Estás en: ' + gNom + ' \u2192 ' + (sel ? sel.textContent : view);
   }
@@ -128,9 +137,11 @@ RN.tabs.ir = function (view) {
 /** Al hacer clic en un grupo, mostrar su primera vista. */
 RN.tabs.irGrupo = function (grupo) {
   var primeraVista = {
-    operacion: 'dashboard',
-    finanzas: 'inversion',
-    analisis: 'reportes'
+    inicio:    'dashboard',
+    operacion: 'clientes',
+    dinero:    'inversion',
+    red:       'red',
+    analisis:  'reportes'
   };
   // Si ya estamos en ese grupo, no hacer nada (o mantener la vista actual)
   if (RN.tabs.grupoActivo === grupo) return;

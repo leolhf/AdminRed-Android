@@ -22,7 +22,7 @@ RN.incidencias.abrirNueva = function (clienteId) {
     '<div class="form-row"><div><label>Tipo</label><select id="inc-tipo">' +
     '<option>Sin internet</option><option>Lento</option><option>Cambiar plan</option>' +
     '<option>Facturación</option><option>Instalación</option><option>Otro</option></select></div></div>' +
-    '<div class="form-row"><div><label>Descripción</label><textarea id="inc-desc" rows="3" lang="es" spellcheck="true" autocorrect="on" autocapitalize="sentences"></textarea></div></div>' +
+    '<div class="form-row"><div><label>Descripción</label><textarea id="inc-desc" rows="3"></textarea></div></div>' +
     '</div><div class="modal-footer">' +
     '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>' +
     '<button class="btn primary" onclick="RN.incidencias.guardarNueva()">Guardar</button></div>';

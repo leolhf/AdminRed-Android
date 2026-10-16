@@ -328,7 +328,7 @@ RN.modalCliente.abrir = function (id) {
   const html = `
     <div class="modal-header"><h3>${c ? 'Editar cliente' : 'Nuevo cliente'}</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">\u00d7</button></div>
     <div class="modal-body">
-      <div class="form-row"><div><label>Nombre *</label><input id="cl-nombre" value="${RN.render.esc(c ? c.nombre : '')}" lang="es" spellcheck="true" autocorrect="on" autocapitalize="words" autocomplete="name"></div></div>
+      <div class="form-row"><div><label>Nombre *</label><input id="cl-nombre" value="${RN.render.esc(c ? c.nombre : '')}" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>
       <div class="form-row"><label><input type="checkbox" id="cl-admin" ${c && c.esAdmin === true ? 'checked' : ''} onchange="RN.modalCliente.toggleAdmin()"> Administrador (no paga)</label>
         <small class="muted" style="display:block;margin-top:4px">Usa la red pero no cuenta como cliente que paga: no sale en cobros, alertas ni notificaciones. Sus megas se muestran aparte.</small></div>
       <div class="form-row cols-2">
@@ -338,7 +338,7 @@ RN.modalCliente.abrir = function (id) {
             ${RN.modalCliente.soportaContactos() ? '<button type="button" class="btn" style="white-space:nowrap;padding:8px 10px" onclick="RN.modalCliente.importarDeContactos()" title="Importar desde contactos del tel\u00e9fono">\ud83d\udccd Contactos</button>' : ''}
           </div>
         </div>
-        <div><label>Direcci\u00f3n</label><input id="cl-dir" value="${RN.render.esc(c ? c.direccion : '')}" lang="es" spellcheck="true" autocorrect="on" autocapitalize="sentences" autocomplete="street-address"></div>
+        <div><label>Direcci\u00f3n</label><input id="cl-dir" value="${RN.render.esc(c ? c.direccion : '')}" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>
         <div><label>IP / Direcci\u00f3n de red <span class="muted" style="font-size:11px">(ej: 192.168.1.10)</span></label><input id="cl-ip" inputmode="decimal" pattern="[0-9.]*" maxlength="15" value="${RN.render.esc(c ? c.ip : '')}" placeholder="Ej: 192.168.1.10" oninput="this.value=this.value.replace(/[^0-9.]/g,'')" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
       </div>
       <div class="form-row cols-2">
@@ -361,16 +361,13 @@ RN.modalCliente.abrir = function (id) {
       <div id="cl-desglose-personalizado" class="cobro-desglose" style="background:var(--bg-alt);padding:10px 12px;border-radius:8px;margin-bottom:12px"></div>
 
       <div class="divider"></div>
-      <h3 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Cola MikroTik</h3><p class="muted" style="font-size:12px;margin:0 0 8px">IP arriba + plan definen el comando para pegar en el RouterBoard.</p>
+      <h3 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Cola MikroTik</h3>
       <div class="form-row cols-2">
         <div><label id="cl-lbl-limitat">Limit At manual <span class="muted" style="font-size:11px">(opcional · ej: 2M, 1400k)</span></label>
           <input id="cl-limitat" value="${c && c.limitAtManual > 0 ? RN.cola.formatoVel(c.limitAtManual) : ''}" placeholder="Autom\u00e1tico seg\u00fan el plan" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
       </div>
       <div id="cl-cola-info" class="cobro-desglose" style="background:var(--bg-alt);padding:10px 12px;border-radius:8px;margin-bottom:8px"></div>
-      <div class="form-row" style="gap:8px;flex-wrap:wrap">
-        <button type="button" class="btn sm primary" onclick="RN.modalCliente.copiarComando()">📋 Copiar comando MikroTik</button>
-        <button type="button" class="btn sm" onclick="var id=RN.modalCliente._editId; if(id&&RN.cola.mostrarComandoCliente) RN.cola.mostrarComandoCliente(id);">Ver upsert / ADD</button>
-      </div>
+      <div class="form-row"><button type="button" class="btn sm" onclick="RN.modalCliente.copiarComando()">\ud83d\udccb Copiar comando</button></div>
 
       <div id="cl-bloque-pago">
       <div class="form-row cols-2">

@@ -50,41 +50,41 @@ const evt = (el, tipo) => el.dispatchEvent(new w.Event(tipo, { bubbles: true }))
 const visible = (g) => w.getComputedStyle(grupo(g).querySelector('.subtabs')).visibility;
 
 chk(abierto() === null, 'al iniciar no hay menú abierto');
-chk(tab('operacion').getAttribute('aria-expanded') === 'false', 'aria-expanded=false al iniciar');
-chk(tab('operacion').getAttribute('role') === 'button', 'los grupos son role=button');
-chk(visible('operacion') === 'hidden', 'CSS: submenú oculto por defecto aunque el grupo esté activo');
+chk(tab('inicio').getAttribute('aria-expanded') === 'false', 'aria-expanded=false al iniciar');
+chk(tab('inicio').getAttribute('role') === 'button', 'los grupos son role=button');
+chk(visible('inicio') === 'hidden', 'CSS: submenú oculto por defecto aunque el grupo esté activo');
 
-click(tab('finanzas'));
-chk(w.eval('RN.tabs.actual') === 'inversion', 'tocar Finanzas navega a su primera vista');
-chk(abierto() === 'finanzas', 'tocar Finanzas abre su menú');
-chk(tab('finanzas').getAttribute('aria-expanded') === 'true', 'aria-expanded=true al abrir');
-chk(visible('finanzas') === 'visible', 'CSS: submenú visible con .active.abierto');
-chk(visible('operacion') === 'hidden', 'CSS: el menú de otro grupo sigue oculto');
+click(tab('dinero'));
+chk(w.eval('RN.tabs.actual') === 'inversion', 'tocar Dinero navega a su primera vista');
+chk(abierto() === 'dinero', 'tocar Dinero abre su menú');
+chk(tab('dinero').getAttribute('aria-expanded') === 'true', 'aria-expanded=true al abrir');
+chk(visible('dinero') === 'visible', 'CSS: submenú visible con .active.abierto');
+chk(visible('inicio') === 'hidden', 'CSS: el menú de otro grupo sigue oculto');
 
-avanzar(2999); chk(abierto() === 'finanzas', 'a los 2999 ms sigue abierto');
+avanzar(2999); chk(abierto() === 'dinero', 'a los 2999 ms sigue abierto');
 avanzar(1);    chk(abierto() === null, 'a los 3000 ms se pliega solo');
-chk(visible('finanzas') === 'hidden', 'CSS: oculto tras plegarse');
+chk(visible('dinero') === 'hidden', 'CSS: oculto tras plegarse');
 
 // Reinicio por actividad
-click(tab('finanzas')); // mismo grupo, estaba cerrado → abre
-chk(abierto() === 'finanzas', 'tocar el grupo activo cerrado lo abre (sin navegar)');
-avanzar(2000); evt(grupo('finanzas').querySelector('.subtabs'), 'pointerdown');
-avanzar(2999); chk(abierto() === 'finanzas', 'la actividad reinicia los 3 s');
+click(tab('dinero')); // mismo grupo, estaba cerrado → abre
+chk(abierto() === 'dinero', 'tocar el grupo activo cerrado lo abre (sin navegar)');
+avanzar(2000); evt(grupo('dinero').querySelector('.subtabs'), 'pointerdown');
+avanzar(2999); chk(abierto() === 'dinero', 'la actividad reinicia los 3 s');
 avanzar(1);    chk(abierto() === null, 'tras 3 s sin actividad se pliega');
 
 // Scroll horizontal del submenú también cuenta como actividad
-click(tab('finanzas')); avanzar(2500);
-evt(grupo('finanzas').querySelector('.subtabs'), 'scroll');
-avanzar(2999); chk(abierto() === 'finanzas', 'el scroll del submenú reinicia los 3 s');
+click(tab('dinero')); avanzar(2500);
+evt(grupo('dinero').querySelector('.subtabs'), 'scroll');
+avanzar(2999); chk(abierto() === 'dinero', 'el scroll del submenú reinicia los 3 s');
 avanzar(1);    chk(abierto() === null, 'se pliega tras el último scroll + 3 s');
 
 // Toggle: tocar el grupo abierto lo pliega
-click(tab('finanzas')); chk(abierto() === 'finanzas', 'abre');
-click(tab('finanzas')); chk(abierto() === null, 'tocar el grupo abierto lo pliega');
+click(tab('dinero')); chk(abierto() === 'dinero', 'abre');
+click(tab('dinero')); chk(abierto() === null, 'tocar el grupo abierto lo pliega');
 
 // Elegir un subtab navega y mantiene el menú
 click(tab('operacion'));
-chk(abierto() === 'operacion' && w.eval('RN.tabs.actual') === 'dashboard', 'Operación abre y navega al Panel');
+chk(abierto() === 'operacion' && w.eval('RN.tabs.actual') === 'clientes', 'Operación abre y navega a Clientes');
 avanzar(2500);
 click(doc.querySelector('.subtab[data-view="cobros"]'));
 chk(w.eval('RN.tabs.actual') === 'cobros', 'elegir un subtab navega');
@@ -111,6 +111,11 @@ w.eval('RN.tabs.cerrarMenu()');
 w.eval("RN.tabs.ir('reportes')");
 chk(abierto() === null, 'RN.tabs.ir() desde código no despliega el menú');
 avanzar(10000); chk(pend.size === 0, 'no quedan temporizadores pendientes');
+
+// Red group exists and navigates
+click(tab('red'));
+chk(w.eval('RN.tabs.actual') === 'red', 'tocar Red navega a la vista Red');
+chk(abierto() === 'red', 'tocar Red abre su menú');
 
 console.log('Submenú plegable: ' + ok + '/' + (ok + mal) + ' OK' + (mal ? ' — ' + mal + ' FALLARON' : ''));
 process.exit(mal ? 1 : 0);
