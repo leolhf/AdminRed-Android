@@ -480,23 +480,26 @@ RN.cola.abrirResumen = function () {
   h += '<p style="margin:8px 0;color:' + color + '">' + (cap.excedido
     ? '\u26a0 Te pasas del tope por <strong>' + RN.cola.txtM(-cap.margen) + '</strong>'
     : 'Margen libre: <strong>' + RN.cola.txtM(cap.margen) + '</strong>') + '</p>';
-  h += '<p class="muted" style="font-size:12px;margin-bottom:12px">Tope = paquete ' + RN.cola.txtM(cap.paquete) + ' \u2212 reserva ' + RN.cola.txtM(cap.reserva) + '. Se suma el Limit At de los clientes activos, administradores incluidos.</p>';
-  h += '<p class="muted" style="font-size:13px">Informativo: ' + RN.cola.txtM(cap.vendidos) + ' vendidos' + (cap.relacionVenta > 0 ? ' (relaci\u00f3n ' + cap.relacionVenta + ' a 1)' : '') + (cap.megasAdmin > 0 ? ' \u00b7 ' + RN.cola.txtM(cap.megasAdmin) + ' de administraci\u00f3n' : '') + '</p>';
+  h += '<p class="muted" style="font-size:12px;margin-bottom:10px;line-height:1.45">Tope = paquete ' + RN.cola.txtM(cap.paquete) + ' \u2212 reserva ' + RN.cola.txtM(cap.reserva) + '.<br>Se suma el Limit At de los clientes activos (administradores incluidos).</p>';
+  h += '<p class="muted" style="font-size:13px;line-height:1.45">Informativo: ' + RN.cola.txtM(cap.vendidos) + ' vendidos' + (cap.relacionVenta > 0 ? ' (relaci\u00f3n ' + cap.relacionVenta + ' a 1)' : '') + (cap.megasAdmin > 0 ? '<br>' + RN.cola.txtM(cap.megasAdmin) + ' de administraci\u00f3n' : '') + '</p>';
   if (cap.sinLimitAt.length) {
-    h += '<p style="color:var(--warn);font-size:13px">\u26a0 Sin Limit At (no suman): ' + cap.sinLimitAt.map(esc).join(', ') + '</p>';
+    h += '<p style="color:var(--warn);font-size:13px;line-height:1.4">\u26a0 Sin Limit At (no suman): ' + cap.sinLimitAt.map(esc).join(', ') + '</p>';
   }
   var caben = RN.cola.cuantosCaben(cap.excedido ? 0 : cap.margenKbps);
   if (caben.length) {
-    h += '<h4 style="margin:12px 0 6px">\u00bfCu\u00e1ntos caben?</h4><div style="font-size:13px">';
-    h += caben.map(function (x) { return '<div>' + esc(x.nombre) + ' \u00b7 ' + x.megas + 'M (Limit At ' + RN.cola.formatoVel(x.limitAtKbps) + '): <strong>' + x.caben + '</strong> m\u00e1s</div>'; }).join('');
+    h += '<h4 style="margin:12px 0 6px">\u00bfCu\u00e1ntos caben?</h4><div style="font-size:13px;line-height:1.5">';
+    h += caben.map(function (x) { return '<div style="margin-bottom:4px">' + esc(x.nombre) + ' \u00b7 ' + x.megas + 'M (Limit At ' + RN.cola.formatoVel(x.limitAtKbps) + '): <strong>' + x.caben + '</strong> m\u00e1s</div>'; }).join('');
     h += '</div>';
   }
   h += '<div id="cola-script-box" style="display:none;margin-top:12px"></div>';
   h += '</div><div class="modal-footer">' +
     '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cerrar</button>' +
     '<button class="btn" onclick="RN.cola.abrirAjustes()">\u2699 Reglas</button>' +
-    '<button class="btn primary" onclick="RN.cola.mostrarScript(\'simple\')">Script estilo export</button> <button class="btn" onclick="RN.cola.mostrarScript(\'upsert\')">Script upsert</button></div>';
-  RN.uiComponents.modal(h, { lg: true });
+    '<button class="btn primary" onclick="RN.cola.mostrarScript(\'simple\')">Script export</button>' +
+    '<button class="btn" onclick="RN.cola.mostrarScript(\'upsert\')">Script upsert</button></div>';
+  /* En móvil no usamos lg para evitar cualquier restricción de ancho; el CSS ya fuerza 100% */
+  var esMovil = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 600px)').matches;
+  RN.uiComponents.modal(h, { lg: !esMovil });
 };
 
 /** Genera y muestra el script de todos los clientes activos con cola. */

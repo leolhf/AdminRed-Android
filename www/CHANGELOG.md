@@ -1,3 +1,11 @@
+## v5.54.3 — Ajustes interfaz móvil
+
+- Sin scroll horizontal: overflow-x hidden en body/main.
+- Modal Capacidad de red (Limit At) legible en pantallas pequeñas (textos con saltos de línea, botones que se apilan).
+- Modal full-width en móvil; pie de modal con botones que envuelven.
+- KPIs del panel más compactos; resultados del buscador global no se salen del viewport.
+- Version bump 5.54.2 → 5.54.3.
+
 # Changelog — AdminRed (RedNet)
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
