@@ -109,6 +109,16 @@ RN.tabs.ir = function (view) {
     t.classList.toggle('active', t.parentElement.dataset.group === grupo);
   });
 
+  // Centrar el grupo activo en la barra desplazable (pantallas pequeñas)
+  var grupoEl = document.querySelector('.tab-group[data-group="' + grupo + '"]');
+  if (grupoEl && grupoEl.scrollIntoView) {
+    try {
+      grupoEl.scrollIntoView({ behavior: 'smooth', inline: 'center', block: 'nearest' });
+    } catch (e) {
+      grupoEl.scrollIntoView(false);
+    }
+  }
+
   // Activar subtab correspondiente
   document.querySelectorAll('.subtab').forEach(function (s) {
     s.classList.toggle('active', s.dataset.view === view);

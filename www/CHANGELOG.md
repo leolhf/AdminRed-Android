@@ -2,6 +2,22 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.3 — Menú de grupos desplazable
+
+- La barra **Inicio · Operación · Dinero · Red · Análisis** se desplaza en horizontal (igual que los submenús).
+- En pantallas pequeñas los grupos ya no se comprimen: se deslizan con el dedo.
+- Al cambiar de sección, el grupo activo se centra en la barra.
+- Los submenús siguen a **ancho completo** de pantalla (no quedan recortados).
+
+## v5.55.2 — Escritura y corrección ortográfica en Android
+
+- Política de campos para el teclado del sistema (Gboard / Samsung):
+  - **Texto libre (ES):** `lang="es"` + `spellcheck="true"` + `autocorrect="on"` en notas, incidencias, motivo de baja, conceptos y plantillas WhatsApp.
+  - **Nombres:** `autocapitalize="words"` (cliente y plan).
+  - **IP, teléfono, montos, PIN, búsquedas:** corrección OFF + `inputmode` adecuado (`tel`, `decimal`, `numeric`, `search`).
+- Completados campos que faltaban: descripción de incidencia, notas de baja, prompt genérico.
+- `html lang="es"` ya presente; formularios alineados con la política 4.2 del plan de trabajo.
+
 ## v5.55.1 — Estructura de navegación
 
 - **Nueva barra de pestañas (5 grupos):** Inicio · Operación · Dinero · Red · Análisis.

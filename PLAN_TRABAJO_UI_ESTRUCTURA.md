@@ -135,14 +135,14 @@ En Android, si los `<input>` / `<textarea>` no declaran bien idioma y autocrecci
 
 | ID | Tarea | Prioridad | Esfuerzo | Estado |
 |----|--------|-----------|----------|--------|
-| O1 | Auditoría de todos los `input`/`textarea` del `www/` y aplicar la política 4.2 | Alta | Medio | Pendiente |
-| O2 | Asegurar `lang="es"` en `<html>` (ya suele estar) y en formularios largos | Alta | Bajo | Revisar |
-| O3 | Nombres de cliente: `autocapitalize="words"` + `spellcheck="true"` | Alta | Bajo | Parcial |
-| O4 | Notas, incidencias, motivo baja, conceptos de gasto: corrección ON | Alta | Bajo | Pendiente |
-| O5 | IP, teléfono, montos, tasa: corrección OFF + `inputmode` correcto | Alta | Bajo | Parcial |
+| O1 | Auditoría de todos los `input`/`textarea` del `www/` y aplicar la política 4.2 | Alta | Medio | Hecho (v5.55.2) |
+| O2 | Asegurar `lang="es"` en `<html>` (ya suele estar) y en formularios largos | Alta | Bajo | Hecho (v5.55.2) |
+| O3 | Nombres de cliente: `autocapitalize="words"` + `spellcheck="true"` | Alta | Bajo | Hecho (v5.55.2) |
+| O4 | Notas, incidencias, motivo baja, conceptos de gasto: corrección ON | Alta | Bajo | Hecho (v5.55.2) |
+| O5 | IP, teléfono, montos, tasa: corrección OFF + `inputmode` correcto | Alta | Bajo | Hecho (v5.55.2) |
 | O6 | Probar en WebView Android real (Gboard / teclado Samsung): sugerencias en español | Alta | Bajo | Pendiente |
 | O7 | (Opcional) Ajuste Capacitor: no bloquear autocorrect del sistema en `capacitor.config` / estilos que fuerzan `user-select` raro | Media | Bajo | Pendiente |
-| O8 | Plantillas WhatsApp: si el usuario edita el texto, campo con spellcheck en español | Media | Bajo | Pendiente |
+| O8 | Plantillas WhatsApp: si el usuario edita el texto, campo con spellcheck en español | Media | Bajo | Hecho (v5.55.2) |
 
 ### 4.5 Nota importante
 La **corrección ortográfica la hace el teclado del sistema** (Gboard, etc.), no la app. AdminRed debe:

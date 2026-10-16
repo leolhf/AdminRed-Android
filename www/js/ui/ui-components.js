@@ -191,10 +191,15 @@ RN.uiComponents.confirm = function (titulo, mensaje, onConfirm, opts) {
  */
 RN.uiComponents.prompt = function (titulo, label, defaultValue, onOk, opts) {
   opts = opts || {};
+  // v5.55.1: atributos de escritura Android — números sin corrección; texto libre en español.
+  var tipo = opts.type || 'text';
+  var attrsEscritura = (tipo === 'number')
+    ? ' spellcheck="false" autocorrect="off" autocapitalize="off" inputmode="decimal"'
+    : ' lang="es" spellcheck="true" autocorrect="on" autocapitalize="sentences"';
   const html = `
     <div class="modal-header"><h3>${RN.render.esc(titulo)}</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>
     <div class="modal-body"><label>${RN.render.esc(label)}</label>
-      <input id="prompt-input" type="${opts.type || 'text'}" value="${RN.render.esc(defaultValue || '')}" ${opts.step ? 'step="' + opts.step + '"' : ''}>
+      <input id="prompt-input" type="${tipo}" value="${RN.render.esc(defaultValue || '')}" ${opts.step ? 'step="' + opts.step + '"' : ''}${attrsEscritura}>
     </div>
     <div class="modal-footer">
       <button class="btn ghost" id="prompt-cancel">Cancelar</button>

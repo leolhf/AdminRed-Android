@@ -129,34 +129,49 @@ html, body {
 .icon-btn:hover { background: var(--primary-soft); border-color: var(--primary); }
 .icon-btn:active { transform: scale(.92); }
 
-/* ---------- Tabs — 3 grupos principales con subtabs ---------- */
+/* ---------- Tabs — grupos con scroll horizontal (como los submenús) ---------- */
 .tabs {
   display: flex; background: var(--surface);
   border-bottom: 1px solid var(--border); position: sticky;
   top: var(--header-h); z-index: 40;
   height: var(--tabs-h);
-  overflow: visible;
+  overflow-x: auto;
+  overflow-y: hidden;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  overscroll-behavior-x: contain;
 }
+.tabs::-webkit-scrollbar { display: none; }
+
+/* Cada grupo ocupa su contenido; si no caben, se desliza la barra */
 .tab-group {
-  flex: 1; display: flex; flex-direction: column; position: relative;
+  flex: 0 0 auto;
+  display: flex; flex-direction: column;
+  position: static; /* subtabs van fixed a ancho de pantalla */
 }
 .tab-group .tab {
-  flex: 1; display: flex; align-items: center; justify-content: center;
+  display: flex; align-items: center; justify-content: center;
   cursor: pointer; color: var(--text-muted); font-weight: 700; font-size: 13px;
   border-bottom: 3px solid transparent; transition: color .15s, border-color .15s;
   -webkit-tap-highlight-color: transparent; white-space: nowrap; gap: 5px;
-  padding: 0 6px;
+  padding: 0 14px;
+  height: var(--tabs-h);
+  box-sizing: border-box;
 }
 .tab-group .tab:hover { color: var(--primary); }
 .tab-group.active .tab { color: var(--primary); border-bottom-color: var(--primary); }
 .tab-group .tab:active { background: var(--surface-2); }
 
-/* Subtabs: fila horizontal debajo. v5.46.0: PLEGABLE — oculta por defecto; se muestra solo
-   cuando su grupo está activo Y abierto (clase .abierto, la pone tabs.js al tocar el grupo y
-   la quita tras 3 s de inactividad). */
+/* Subtabs: ancho completo bajo la barra de grupos (fixed para no recortarse
+   cuando el grupo es estrecho o la barra principal scrollea).
+   v5.46.0: PLEGABLE — oculta por defecto; visible solo con .abierto. */
 .subtabs {
-  display: flex; position: absolute; top: 100%; left: 0; right: 0;
-  opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(-6px);
+  display: flex;
+  position: fixed;
+  left: 0; right: 0;
+  top: calc(var(--header-h) + var(--tabs-h));
+  opacity: 0; visibility: hidden; pointer-events: none;
+  transform: translateY(-6px);
   transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
   background: var(--surface); border-bottom: 1px solid var(--border);
   box-shadow: var(--shadow); z-index: 35;
@@ -185,15 +200,15 @@ html, body {
 .subtab.active { color: var(--primary); border-bottom-color: var(--primary); }
 .subtab:active { background: var(--surface-2); }
 
-/* Mobile: subtabs scroll horizontal más compacto; 5 grupos (Inicio/Operación/Dinero/Red/Análisis) */
+/* Móvil: texto legible; el scroll evita apretar los 5 grupos */
 @media (max-width: 600px) {
-  .tab-group .tab { font-size: 11px; padding: 0 3px; gap: 2px; }
+  .tab-group .tab { font-size: 12px; padding: 0 12px; gap: 4px; }
   .tab-group .tab::after { font-size: 9px; }
   .subtab { font-size: 12px; padding: 9px 14px; }
 }
 
 @media (max-width: 380px) {
-  .tab-group .tab { font-size: 10px; padding: 0 2px; }
+  .tab-group .tab { font-size: 11px; padding: 0 10px; }
   .subtab { font-size: 11px; padding: 8px 12px; }
 }
 

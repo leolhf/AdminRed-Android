@@ -20,7 +20,7 @@
     <div class="lock-icon">🔒</div>
     <h2>Acceso a AdminRed</h2>
     <p class="muted" id="pin-label">Ingresa tu PIN</p>
-    <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="8" placeholder="••••">
+    <input type="password" id="pin-input" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="8" placeholder="••••" spellcheck="false" autocorrect="off" autocapitalize="off">
     <div class="flex" style="gap:10px">
       <button class="btn ghost" id="pin-setup-toggle" style="display:none">Configurar PIN</button>
     </div>
@@ -150,7 +150,7 @@
         <button class="btn primary" onclick="RN.modalCliente.abrir()">+ Nuevo cliente</button>
       </div>
       <div class="toolbar">
-        <input class="search" type="search" id="search-clientes" placeholder="Nombre, teléfono, plan o deuda>500..." inputmode="search" title="Puedes combinar: ana plan10 deuda>500">
+        <input class="search" type="search" id="search-clientes" placeholder="Nombre, teléfono, plan o deuda&gt;500..." inputmode="search" title="Puedes combinar: ana plan10 deuda&gt;500" spellcheck="false" autocorrect="off" autocapitalize="off">
         <select id="filter-estado"><option value="">Todos los estados</option><option value="ok">Al día</option><option value="warn">Por vencer</option><option value="due">Atrasado</option><option value="paid">Pagado</option><option value="parcial">Pago parcial</option><option value="por-iniciar">Por iniciar</option><option value="inactivo">Inactivo</option><option value="admin">Administrador</option></select>
       </div>
       <div class="accordion-list" id="lista-clientes"></div>
@@ -162,7 +162,7 @@
         <button class="btn danger" onclick="RN.monthReset.confirmar()">🔄 Cerrar mes</button>
       </div>
       <div class="toolbar">
-        <input class="search" type="search" id="search-cobros" placeholder="Cliente, teléfono, plan o deuda>500..." inputmode="search">
+        <input class="search" type="search" id="search-cobros" placeholder="Cliente, teléfono, plan o deuda&gt;500..." inputmode="search" spellcheck="false" autocorrect="off" autocapitalize="off">
       </div>
       <!-- v5.52.8 Fase 2: recordatorios / filtros de cobranza -->
       <div id="cobros-recordatorios" class="cobros-rec-bar" style="display:none"></div>
@@ -174,7 +174,7 @@
       <div class="view-header"><h2>Cobros realizados</h2><div class="spacer"></div></div>
       <div class="kpi-grid" id="kpi-realizados"></div>
       <div class="toolbar">
-        <input class="search" type="search" id="search-realizados" placeholder="Buscar por cliente, recibo, concepto o mes..." oninput="RN.render.realizados()">
+        <input class="search" type="search" id="search-realizados" placeholder="Buscar por cliente, recibo, concepto o mes..." oninput="RN.render.realizados()" spellcheck="false" autocorrect="off" autocapitalize="off">
         <select id="filtro-realizados-mes" onchange="RN.render.realizados()">
           <option value="">Todos los meses</option>
         </select>
@@ -261,7 +261,7 @@
       <div class="kpi-grid" id="kpi-reportes"></div>
       <div class="card"><h3>Historial de cobros</h3>
         <div class="flex mb-16" style="gap:8px;flex-wrap:wrap;align-items:center">
-          <input class="search" type="search" id="search-historial-rep" placeholder="Buscar por cliente, recibo, concepto o mes..." oninput="RN.render.reportes()">
+          <input class="search" type="search" id="search-historial-rep" placeholder="Buscar por cliente, recibo, concepto o mes..." oninput="RN.render.reportes()" spellcheck="false" autocorrect="off" autocapitalize="off">
           <select id="filtro-historial-rep-mes" onchange="RN.render.reportes()"></select>
           <button class="btn sm" onclick="RN.historial.exportCSV({ mes: (document.getElementById('filtro-historial-rep-mes')||{}).value||'', q: (document.getElementById('search-historial-rep')||{}).value||'' })">⬇️ Exportar CSV</button>
         </div>
@@ -314,7 +314,7 @@
       <!-- v5.47.0: chips de filtro rápido con contador (Activas por defecto) -->
       <div class="chips" id="desc-chips" style="margin-bottom:12px"></div>
       <div class="toolbar">
-        <input id="filter-desc-buscar" type="search" placeholder="🔍 Buscar cliente o motivo…" style="flex:1;min-width:160px">
+        <input id="filter-desc-buscar" type="search" placeholder="🔍 Buscar cliente o motivo…" style="flex:1;min-width:160px" spellcheck="false" autocorrect="off" autocapitalize="off">
         <select id="filter-desc-mes"><option value="">Todos los meses</option></select>
         <select id="filter-desc-tipo"><option value="">Todos los tipos</option><option value="afectacion">Afectación</option><option value="bonificacion">Bonificación</option><option value="ajuste">Ajuste</option></select>
         <select id="filter-desc-estado"><option value="">Todos</option><option value="aplicado">Aplicado</option><option value="pendiente">Pendiente</option><option value="anulado">Anulado</option></select>
@@ -425,13 +425,13 @@
       <div class="card">
         <h3>Configuración</h3>
         <div class="form-row cols-2">
-          <div><label>Tasa de cambio USD (CUP por 1 USD)</label><input type="number" id="cfg-tasa-usd" step="0.01">
+          <div><label>Tasa de cambio USD (CUP por 1 USD)</label><input type="number" id="cfg-tasa-usd" step="0.01" spellcheck="false" autocorrect="off" autocapitalize="off">
             <!-- v5.12.7: indicador visual de estado de la tasa (🟢🟡🔴) -->
             <div class="tasa-indicator" id="tasa-indicator"></div>
           </div>
-          <div><label>Días base del mes</label><input type="number" id="cfg-dias-base" value="30"></div>
+          <div><label>Días base del mes</label><input type="number" id="cfg-dias-base" value="30" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
           <!-- v5.13.5 (ISSUE #3): Días de gracia antes de mora, configurable -->
-          <div><label>Días de gracia (mora)</label><input type="number" id="cfg-gracia-dias" value="5" min="0" title="Días de tolerancia después del día de pago antes de cobrar mora"></div>
+          <div><label>Días de gracia (mora)</label><input type="number" id="cfg-gracia-dias" value="5" min="0" title="Días de tolerancia después del día de pago antes de cobrar mora" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
         </div>
         <div class="form-row cols-2">
           <div><label>Mencionar descuento recurrente en recibo</label>
@@ -453,19 +453,19 @@
           </div>
         </div>
         <div class="form-row">
-          <div><label>Saldo inicial de caja (CUP) — capital semilla (el fondo se calcula automáticamente)</label><input type="number" id="cfg-fondo-caja" step="0.01" value="0"></div>
+          <div><label>Saldo inicial de caja (CUP) — capital semilla (el fondo se calcula automáticamente)</label><input type="number" id="cfg-fondo-caja" step="0.01" value="0" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
         </div>
         <div class="form-row">
-          <div><label>% de ganancia personal (retiro mensual) — de cada mes, del margen neto que generen los clientes (ingreso − costo del mega), este porcentaje es lo que tú te retiras como ganancia; solo el resto recupera el capital invertido. Ej: 20% → de 20mil de margen, retiras 4mil/mes y 16mil recuperan la inversión.</label><input type="number" id="cfg-pct-personal" step="1" min="0" max="100" value="0" placeholder="Ej: 30"></div>
+          <div><label>% de ganancia personal (retiro mensual) — de cada mes, del margen neto que generen los clientes (ingreso − costo del mega), este porcentaje es lo que tú te retiras como ganancia; solo el resto recupera el capital invertido. Ej: 20% → de 20mil de margen, retiras 4mil/mes y 16mil recuperan la inversión.</label><input type="number" id="cfg-pct-personal" step="1" min="0" max="100" value="0" placeholder="Ej: 30" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
         </div>
         <div class="form-row">
-          <div><label>% de ganancia de inventario — al vender material, el precio de venta se calcula automáticamente como costo × (1 + este %), pero queda editable en cada venta.</label><input type="number" id="cfg-pct-ganancia-inv" step="1" min="0" max="500" value="20" placeholder="Ej: 20"></div>
+          <div><label>% de ganancia de inventario — al vender material, el precio de venta se calcula automáticamente como costo × (1 + este %), pero queda editable en cada venta.</label><input type="number" id="cfg-pct-ganancia-inv" step="1" min="0" max="500" value="20" placeholder="Ej: 20" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
         </div>
         <div class="form-row">
-          <div><label>% de ganancia del mes real para recuperación (préstamos externos) — cuando una inversión es capital prestado (externo), aparte de lo que cobras a los clientes, este % de la ganancia neta real del mes (ingresos − gastos) se suma como aporte extra a la recuperación de ese préstamo. Así recuperas más rápido reflejando la utilidad real del negocio. Ej: 10% → si el mes dejó 15mil de ganancia neta, se suman 1.5mil a la recuperación. Default 0 (solo cuenta lo cobrado a clientes).</label><input type="number" id="cfg-pct-ganancia-mes" step="1" min="0" max="100" value="0" placeholder="Ej: 10"></div>
+          <div><label>% de ganancia del mes real para recuperación (préstamos externos) — cuando una inversión es capital prestado (externo), aparte de lo que cobras a los clientes, este % de la ganancia neta real del mes (ingresos − gastos) se suma como aporte extra a la recuperación de ese préstamo. Así recuperas más rápido reflejando la utilidad real del negocio. Ej: 10% → si el mes dejó 15mil de ganancia neta, se suman 1.5mil a la recuperación. Default 0 (solo cuenta lo cobrado a clientes).</label><input type="number" id="cfg-pct-ganancia-mes" step="1" min="0" max="100" value="0" placeholder="Ej: 10" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
         </div>
         <div class="form-row">
-          <div><label>% de la ganancia del mes a reservar (modelo "dos bolsillos") — cada mes, de la ganancia del mes (ingresos − gastos), este porcentaje va al bolsillo RESERVA (intocable) y el resto al bolsillo LIBRE (retirable). Los retiros salen solo del bolsillo libre. Ej: 70% → si el mes deja 10mil de ganancia, se reservan 7mil y quedan 3mil libres. Default 70.</label><input type="number" id="cfg-pct-reserva-caja" step="1" min="0" max="100" value="70" placeholder="Ej: 70"></div>
+          <div><label>% de la ganancia del mes a reservar (modelo "dos bolsillos") — cada mes, de la ganancia del mes (ingresos − gastos), este porcentaje va al bolsillo RESERVA (intocable) y el resto al bolsillo LIBRE (retirable). Los retiros salen solo del bolsillo libre. Ej: 70% → si el mes deja 10mil de ganancia, se reservan 7mil y quedan 3mil libres. Default 70.</label><input type="number" id="cfg-pct-reserva-caja" step="1" min="0" max="100" value="70" placeholder="Ej: 70" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
         </div>
         <button class="btn primary" onclick="RN.config.guardar()">Guardar configuración</button>
       </div>

@@ -56,9 +56,9 @@ RN.waTemplates.abrir = function () {
     <div class="modal-header"><h3>Plantillas de WhatsApp</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>
     <div class="modal-body">
       <p class="muted mb-16">Marcadores: {nombre} {precioBase} {descuentoRecurrente} {descuentoLinea} {precioNeto} {precioUSD} {precioCUP} {tasa} {reciboNum} {mes} {diaPago} {cicloCobro} {mora} {negocio}</p>
-      <div class="form-row"><div><label>Recordatorio de pago</label><textarea id="wa-rec" rows="3" spellcheck="true" autocorrect="on" autocapitalize="sentences">${RN.render.esc(tpls.recordatorio)}</textarea></div></div>
-      <div class="form-row"><div><label>Comprobante de pago</label><textarea id="wa-comp" rows="4" spellcheck="true" autocorrect="on" autocapitalize="sentences">${RN.render.esc(tpls.comprobante)}</textarea></div></div>
-      <div class="form-row"><div><label>Aviso de mora</label><textarea id="wa-mora" rows="3" spellcheck="true" autocorrect="on" autocapitalize="sentences">${RN.render.esc(tpls.mora)}</textarea></div></div>
+      <div class="form-row"><div><label>Recordatorio de pago</label><textarea lang="es" id="wa-rec" rows="3" spellcheck="true" autocorrect="on" autocapitalize="sentences">${RN.render.esc(tpls.recordatorio)}</textarea></div></div>
+      <div class="form-row"><div><label>Comprobante de pago</label><textarea lang="es" id="wa-comp" rows="4" spellcheck="true" autocorrect="on" autocapitalize="sentences">${RN.render.esc(tpls.comprobante)}</textarea></div></div>
+      <div class="form-row"><div><label>Aviso de mora</label><textarea lang="es" id="wa-mora" rows="3" spellcheck="true" autocorrect="on" autocapitalize="sentences">${RN.render.esc(tpls.mora)}</textarea></div></div>
     </div>
     <div class="modal-footer"><button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>
       <button class="btn primary" onclick="RN.waTemplates.guardarForm()">Guardar</button></div>`;

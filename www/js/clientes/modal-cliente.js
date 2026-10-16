@@ -328,13 +328,13 @@ RN.modalCliente.abrir = function (id) {
   const html = `
     <div class="modal-header"><h3>${c ? 'Editar cliente' : 'Nuevo cliente'}</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">\u00d7</button></div>
     <div class="modal-body">
-      <div class="form-row"><div><label>Nombre *</label><input id="cl-nombre" value="${RN.render.esc(c ? c.nombre : '')}" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>
+      <div class="form-row"><div><label>Nombre *</label><input id="cl-nombre" value="${RN.render.esc(c ? c.nombre : '')}" lang="es" spellcheck="true" autocorrect="on" autocapitalize="words" autocomplete="name"></div></div>
       <div class="form-row"><label><input type="checkbox" id="cl-admin" ${c && c.esAdmin === true ? 'checked' : ''} onchange="RN.modalCliente.toggleAdmin()"> Administrador (no paga)</label>
         <small class="muted" style="display:block;margin-top:4px">Usa la red pero no cuenta como cliente que paga: no sale en cobros, alertas ni notificaciones. Sus megas se muestran aparte.</small></div>
       <div class="form-row cols-2">
         <div><label>Tel\u00e9fono</label>
           <div style="display:flex;gap:6px;align-items:flex-end">
-            <input id="cl-tel" value="${RN.render.esc(c ? c.telefono : '')}" placeholder="+53..." style="flex:1" spellcheck="false" autocorrect="off" autocapitalize="off">
+            <input id="cl-tel" value="${RN.render.esc(c ? c.telefono : '')}" placeholder="+53..." style="flex:1" inputmode="tel" spellcheck="false" autocorrect="off" autocapitalize="off" autocomplete="tel">
             ${RN.modalCliente.soportaContactos() ? '<button type="button" class="btn" style="white-space:nowrap;padding:8px 10px" onclick="RN.modalCliente.importarDeContactos()" title="Importar desde contactos del tel\u00e9fono">\ud83d\udccd Contactos</button>' : ''}
           </div>
         </div>
