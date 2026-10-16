@@ -1,3 +1,10 @@
+## v5.54.4 — Fix scroll y Cobranza móvil
+
+- Restaurado scroll vertical (se quitó overflow-x de body/html que bloqueaba el scroll en Android WebView).
+- Modal Cobranza: tabla convertida a tarjetas responsive en móvil (ya no se ve el texto en vertical).
+- Botones Cobrar / WhatsApp visibles y usables en pantalla estrecha.
+- Modal Cobranza sin forzar ancho lg en móvil.
+
 ## v5.54.3 — Ajustes interfaz móvil
 
 - Sin scroll horizontal: overflow-x hidden en body/main.

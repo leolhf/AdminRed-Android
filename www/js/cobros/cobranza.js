@@ -68,12 +68,12 @@ RN.cobranza.abrir = function (opts) {
       var trCls = notificadoWa ? ' class="cobranza-notificado-wa"' : '';
       var waBtnLabel = notificadoWa ? '💬 Otra vez' : 'WhatsApp';
       return '<tr' + trCls + '>' +
-        '<td><strong>' + RN.render.esc(c.nombre) + '</strong>' + waBadge +
+        '<td data-label="Cliente"><strong>' + RN.render.esc(c.nombre) + '</strong>' + waBadge +
           '<br><span class="muted" style="font-size:12px">' + planTxt + '</span></td>' +
-        '<td style="text-align:center">' + estadoBadge + '</td>' +
-        '<td>' + tel + '</td>' +
-        '<td style="text-align:right">' + totalTxt + '</td>' +
-        '<td style="text-align:center;white-space:nowrap">' +
+        '<td data-label="Estado" style="text-align:center">' + estadoBadge + '</td>' +
+        '<td data-label="Teléfono">' + tel + '</td>' +
+        '<td data-label="A cobrar" style="text-align:right">' + totalTxt + '</td>' +
+        '<td data-label="Acciones" style="text-align:center;white-space:nowrap">' +
           '<button class="btn sm primary" onclick="RN.cobranza._cobrar(\'' + cid + '\')">Cobrar</button> ' +
           '<button class="btn sm' + (notificadoWa ? ' ghost' : '') + '" onclick="RN.cobranza._recordar(\'' + cid + '\')">' + waBtnLabel + '</button>' +
         '</td>' +
@@ -104,7 +104,7 @@ RN.cobranza.abrir = function (opts) {
       '<h4 style="margin:4px 0 8px">' + titulo + badgeVigente + subGrupo +
       ' <span class="badge warn" style="margin-left:6px">' + g.clientes.length + ' pendiente' + (g.clientes.length > 1 ? 's' : '') + '</span>' +
       badgeNotif + '</h4>' +
-      '<div class="table-wrap"><table><thead><tr>' +
+      '<div class="table-wrap responsive"><table><thead><tr>' +
         '<th>Cliente</th><th>Estado</th><th>Teléfono</th>' +
         '<th style="text-align:right">A cobrar</th><th style="text-align:center">Acciones</th>' +
       '</tr></thead><tbody>' + filas + '</tbody></table></div>' +
@@ -141,7 +141,8 @@ RN.cobranza.abrir = function (opts) {
       '<button class="btn primary" onclick="RN.cobranza._recordarMasivo()">💬 Recordar a todos (WhatsApp)</button>' +
     '</div>';
 
-  RN.uiComponents.modal(html, { lg: true, replace: !!opts.replace });
+  var esMovil = typeof window !== 'undefined' && window.matchMedia && window.matchMedia('(max-width: 600px)').matches;
+  RN.uiComponents.modal(html, { lg: !esMovil, replace: !!opts.replace });
 };
 
 /** Abre el modal de cobro para un cliente (cierra esta ventana primero). */

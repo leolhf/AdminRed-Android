@@ -64,9 +64,8 @@ html, body {
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   overscroll-behavior-y: none;
-  /* Evitar scroll horizontal en móvil: el contenido debe caber en el ancho de la pantalla */
-  overflow-x: hidden;
-  max-width: 100vw;
+  /* No poner overflow-x en body/html: en Android WebView puede bloquear el scroll vertical
+     de modales y del contenido. El ancho se controla en main y contenedores concretos. */
 }
 
 /* ---------- Header ---------- */
@@ -417,6 +416,7 @@ td .actions { display: flex; gap: 6px; flex-wrap: wrap; }
   .table-wrap.responsive td {
     display: flex; justify-content: space-between; align-items: center;
     border-bottom: 1px solid var(--border); padding: 10px 14px; text-align: right;
+    gap: 8px; min-width: 0;
   }
   .table-wrap.responsive td:last-child { border-bottom: none; }
   .table-wrap.responsive td::before {
@@ -425,6 +425,12 @@ td .actions { display: flex; gap: 6px; flex-wrap: wrap; }
     text-align: left; margin-right: 12px; flex-shrink: 0;
   }
   .table-wrap.responsive td .actions { justify-content: flex-end; }
+  /* Botones de acciones en filas responsive: no forzar nowrap extremo */
+  .table-wrap.responsive td[data-label="Acciones"] {
+    white-space: normal;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
 }
 
 /* Badges / status */
