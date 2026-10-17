@@ -1543,3 +1543,64 @@ body.panel-modo-operacion .panel-analisis-only {
     flex-shrink: 0;
   }
 }
+
+
+/* ---------- Caja v5.55.13 ---------- */
+.caja-zone { margin-top: 16px; }
+.caja-zone-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.caja-alertas { margin-bottom: 8px; }
+.caja-alertas .caja-alerta {
+  display: block; padding: 8px 10px; border-radius: var(--radius-sm);
+  font-size: 13px; line-height: 1.35; margin-bottom: 6px;
+  border: 1px solid var(--border); background: var(--surface-2);
+}
+.caja-alertas .caja-alerta.warn { border-color: rgba(245,158,11,.45); }
+.caja-alertas .caja-alerta.bad { border-color: rgba(239,68,68,.45); }
+.caja-hero {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius); padding: 16px 14px; margin-bottom: 10px;
+}
+.caja-hero-label { font-size: 12px; color: var(--text-muted); font-weight: 600; }
+.caja-hero-value {
+  font-size: 28px; font-weight: 800; line-height: 1.15; margin: 4px 0 2px;
+  color: var(--success, #16a34a);
+}
+.caja-hero-value.is-zero { color: var(--danger, #dc2626); }
+.caja-hero-sub { font-size: 12px; color: var(--text-muted); }
+.caja-hero-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px;
+}
+.caja-hero-grid .caja-mini {
+  background: var(--bg, var(--surface-2)); border-radius: var(--radius-sm);
+  padding: 10px; border: 1px solid var(--border);
+}
+.caja-hero-grid .caja-mini .lbl { font-size: 11px; color: var(--text-muted); }
+.caja-hero-grid .caja-mini .val { font-size: 16px; font-weight: 700; margin-top: 2px; }
+.caja-hero-grid .caja-mini.reserva .val { color: var(--text-muted); }
+.caja-fisicos {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 10px 0;
+}
+.caja-fisicos .caja-mini { padding: 12px; }
+.caja-acciones {
+  display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px;
+}
+.caja-acciones .btn { flex: 1 1 auto; min-width: 100px; justify-content: center; }
+.caja-mov-row {
+  display: flex; flex-wrap: wrap; gap: 4px 10px; align-items: flex-start;
+  padding: 10px 0; border-bottom: 1px solid var(--border); font-size: 13px;
+}
+.caja-mov-row:last-child { border-bottom: none; }
+.caja-mov-row .mov-main { flex: 1 1 140px; min-width: 0; }
+.caja-mov-row .mov-amt { font-weight: 700; white-space: nowrap; }
+.caja-mov-row .mov-amt.in { color: var(--success); }
+.caja-mov-row .mov-amt.out { color: var(--danger); }
+.caja-mov-row .mov-meta { width: 100%; font-size: 11px; color: var(--text-muted); }
+.caja-cierre-hero { font-size: 22px; font-weight: 800; margin: 4px 0 6px; }
+@media (max-width: 600px) {
+  .caja-hero-value { font-size: 26px; }
+  .view-header .btn { font-size: 12px; padding: 8px 10px; min-height: 36px; }
+}

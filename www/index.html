@@ -254,28 +254,47 @@
 
     <!-- POR PAGAR (pasivos / préstamos externos) -->
     <!-- CAJA (Dinero) v5.55.11 -->
+    <!-- CAJA v5.55.13 — Ahora · Movimientos · Al cierre -->
     <section class="view" id="view-caja">
       <div class="view-header">
         <h2>Caja</h2>
         <div class="spacer"></div>
-        <button class="btn" onclick="RN.cuadre.abrir()">🧮 Cuadrar</button>
-        <button class="btn" onclick="RN.caja.extraer()">💵 Retirar</button>
-        <button class="btn primary" onclick="RN.modalCobro.abrirDesdeCobros()">+ Cobrar</button>
+        <button type="button" class="btn" onclick="RN.caja.depositar()">＋ Depositar</button>
+        <button type="button" class="btn" onclick="RN.caja.extraer()">💵 Retirar</button>
+        <button type="button" class="btn" onclick="RN.cuadre.abrir()">🧮 Cuadrar</button>
       </div>
-      <p class="muted" style="margin:0 0 12px;font-size:13px">Bolsillos (reserva / libre), proyección al cierre y saldos físicos. El Panel solo muestra el libre con acceso aquí.</p>
-      <div class="kpi-grid" id="kpi-caja"></div>
-      <div class="card mt-16">
-        <h3>Proyección y bolsillos</h3>
-        <div id="panel-caja"></div>
+
+      <div id="caja-alertas" class="caja-alertas"></div>
+
+      <div class="caja-zone">
+        <div class="caja-zone-label">Ahora</div>
+        <div id="caja-ahora"></div>
       </div>
-      <div class="card mt-16">
-        <h3>Saldos físicos y acciones</h3>
-        <div id="panel-caja-real"></div>
+
+      <div class="caja-zone">
+        <div class="caja-zone-label">Movimientos</div>
+        <div class="card">
+          <div id="caja-movimientos"></div>
+          <div class="flex wrap" style="gap:8px;margin-top:10px">
+            <button type="button" class="btn sm" onclick="RN.caja.listarDepositos && RN.caja.listarDepositos()">Depósitos</button>
+            <button type="button" class="btn sm" onclick="RN.caja.listar && RN.caja.listar()">Retiros</button>
+            <button type="button" class="btn sm" onclick="RN.cuadre.listar()">Cuadres</button>
+          </div>
+        </div>
       </div>
-      <div class="card mt-16">
-        <h3>Historial de cuadres</h3>
-        <button type="button" class="btn sm" onclick="RN.cuadre.listar()">Ver historial</button>
+
+      <div class="caja-zone">
+        <div class="caja-zone-label">Al cierre del mes</div>
+        <div class="card">
+          <div id="caja-cierre"></div>
+          <button type="button" class="btn sm" id="caja-btn-detalle-cierre" style="margin-top:10px" onclick="RN.caja.toggleDetalleCierre()">Ver detalle de proyección</button>
+          <div id="panel-caja" style="display:none;margin-top:12px"></div>
+        </div>
       </div>
+
+      <!-- Compat widgets antiguos -->
+      <div id="panel-caja-real" style="display:none" aria-hidden="true"></div>
+      <div id="kpi-caja" style="display:none" aria-hidden="true"></div>
     </section>
 
     <section class="view" id="view-deudas">

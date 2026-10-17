@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.13 — Caja profesional (Ahora · Movimientos · Cierre)
+
+- **Ahora:** hero “Puedes retirar” (libre), reserva, fondo, CUP/USD físicos, acciones Retirar / Depositar / Cuadrar / Cobrar.
+- **Movimientos:** feed unificado (depósitos, retiros, devoluciones, proveedor, aplicaciones de préstamo).
+- **Al cierre:** resumen compacto + detalle de proyección bajo demanda.
+- Alertas locales (libre bajo, proveedor pendiente, USD físico si hay deudas en USD).
+- Depositar al mismo nivel que Retirar.
+
 ## v5.55.12 — Flujo de préstamo → caja + destino
 
 - Al **crear un préstamo externo**: se registra **depósito en caja** (entrada del dinero).

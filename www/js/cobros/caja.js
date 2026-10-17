@@ -675,3 +675,83 @@ RN.caja.eliminar = function (id) {
 RN.caja.totalRetiros = function () {
   return RN.calc.totalRetiros();
 };
+
+
+/* ============================================================
+ * v5.55.13 — Vista Caja: movimientos unificados + detalle cierre
+ * ============================================================ */
+
+/** Lista unificada de movimientos de caja (más recientes primero). */
+RN.caja.movimientosUnificados = function (limite) {
+  limite = limite || 8;
+  var out = [];
+  (RN.state.depositos || []).forEach(function (d) {
+    out.push({
+      tipo: 'deposito',
+      fecha: d.fecha || '',
+      concepto: d.concepto || 'Depósito',
+      montoCUP: +d.monto || 0,
+      signo: 1,
+      moneda: d.moneda || 'CUP',
+      raw: d
+    });
+  });
+  (RN.state.retiros || []).forEach(function (r) {
+    out.push({
+      tipo: 'retiro',
+      fecha: r.fecha || '',
+      concepto: r.concepto || 'Retiro',
+      montoCUP: +r.monto || 0,
+      signo: -1,
+      moneda: r.moneda || 'CUP',
+      raw: r
+    });
+  });
+  (RN.state.gastos || []).forEach(function (g) {
+    if (g.esDevolucionInversion || g.esAplicacionPrestamo || g.esPagoProveedor) {
+      out.push({
+        tipo: g.esDevolucionInversion ? 'devolucion' : (g.esPagoProveedor ? 'proveedor' : 'aplicacion'),
+        fecha: g.fecha || '',
+        concepto: g.concepto || 'Gasto',
+        montoCUP: +g.monto || 0,
+        signo: -1,
+        moneda: g.moneda || 'CUP',
+        raw: g
+      });
+    }
+  });
+  out.sort(function (a, b) {
+    var fa = a.fecha || '';
+    var fb = b.fecha || '';
+    return fa < fb ? 1 : (fa > fb ? -1 : 0);
+  });
+  return out.slice(0, limite);
+};
+
+RN.caja.toggleDetalleCierre = function () {
+  var el = document.getElementById('panel-caja');
+  var btn = document.getElementById('caja-btn-detalle-cierre');
+  if (!el) return;
+  var open = el.style.display === 'none' || !el.style.display;
+  // if currently hidden, show
+  var visible = el.style.display !== 'none' && el.style.display !== '';
+  if (visible) {
+    el.style.display = 'none';
+    if (btn) btn.textContent = 'Ver detalle de proyección';
+  } else {
+    el.style.display = '';
+    if (btn) btn.textContent = 'Ocultar detalle';
+    if (RN.panelWidgets && RN.panelWidgets.renderCajaProyectada) {
+      RN.panelWidgets.renderCajaProyectada();
+    }
+  }
+};
+
+RN.caja._tipoMovLabel = function (tipo) {
+  if (tipo === 'deposito') return 'Depósito';
+  if (tipo === 'retiro') return 'Retiro';
+  if (tipo === 'devolucion') return 'Devolución préstamo';
+  if (tipo === 'proveedor') return 'Proveedor';
+  if (tipo === 'aplicacion') return 'Aplicación préstamo';
+  return tipo || 'Movimiento';
+};

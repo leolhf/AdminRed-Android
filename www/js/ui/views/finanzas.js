@@ -4,25 +4,126 @@
  * Depende de: ui/render.js (helpers), calculations.js.
  */
 
-/** v5.55.11 — Vista Dinero → Caja (detalle; el Panel solo enlaza aquí). */
+/** v5.55.13 — Vista Dinero → Caja: Ahora · Movimientos · Al cierre. */
 RN.render.caja = function () {
-  var kpi = document.getElementById('kpi-caja');
-  if (kpi && RN.calc.bolsillos) {
-    var b = RN.calc.bolsillos();
-    var libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
-    var kpis = [
-      { label: 'Libre (retirable)', value: RN.calc.formatCUP(libre), cls: libre > 0 ? 'green' : 'red' },
-      { label: 'Reserva', value: RN.calc.formatCUP(b.reserva || 0), cls: 'amber' },
-      { label: 'Fondo total', value: RN.calc.formatCUP(b.fondo != null ? b.fondo : RN.calc.fondoCaja()), cls: 'blue' },
-      { label: 'Por pagar proveedor', value: RN.calc.formatCUP(RN.calc.saldoProveedorMes ? RN.calc.saldoProveedorMes() : 0), cls: 'red' }
-    ];
-    kpi.innerHTML = kpis.map(function (k) {
-      return '<div class="kpi ' + k.cls + '"><div class="label">' + k.label + '</div><div class="value">' + k.value + '</div></div>';
+  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0, reserva: 0, fondo: 0 };
+  var libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  var reserva = +(b.reserva || 0);
+  var fondo = +(b.fondo != null ? b.fondo : (RN.calc.fondoCaja ? RN.calc.fondoCaja() : 0));
+  var saldos = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0, totalCUP: fondo };
+  var saldoProv = RN.calc.saldoProveedorMes ? RN.calc.saldoProveedorMes() : 0;
+
+  // --- Alertas locales ---
+  var alertas = document.getElementById('caja-alertas');
+  if (alertas) {
+    var items = [];
+    if (libre <= 0.01) {
+      items.push({ cls: 'bad', txt: 'No hay libre retirable. La reserva está protegida.' });
+    } else if (libre < fondo * 0.1 && fondo > 0) {
+      items.push({ cls: 'warn', txt: 'Libre bajo respecto al fondo total.' });
+    }
+    if (saldoProv > 0.01) {
+      items.push({
+        cls: 'warn',
+        txt: 'Paquete proveedor pendiente: ' + RN.calc.formatCUP(saldoProv) + '.',
+        accion: 'RN.paqueteProveedor.abrir()',
+        accionTxt: 'Pagar'
+      });
+    }
+    try {
+      if (RN.calc.usdEnCaja && RN.calc.usdEnCaja() < 0.01) {
+        var deudasUsd = (RN.investment.deudasActivas ? RN.investment.deudasActivas() : []).some(function (i) {
+          return RN.investment.monedaDeuda && RN.investment.monedaDeuda(i) === 'USD' && RN.investment.saldoADevolverMoneda(i) > 0;
+        });
+        if (deudasUsd) {
+          items.push({ cls: 'warn', txt: 'Hay deudas en USD y no hay dólares físicos en caja.' });
+        }
+      }
+    } catch (e) {}
+    alertas.innerHTML = items.map(function (a) {
+      return '<div class="caja-alerta ' + a.cls + '">' + RN.render.esc(a.txt)
+        + (a.accion ? ' <button type="button" class="btn sm" style="margin-left:6px" onclick="' + a.accion + '">' + RN.render.esc(a.accionTxt || 'Ver') + '</button>' : '')
+        + '</div>';
     }).join('');
   }
-  if (RN.panelWidgets) {
-    if (RN.panelWidgets.renderCajaProyectada) RN.panelWidgets.renderCajaProyectada();
-    if (RN.panelWidgets.renderCajaReal) RN.panelWidgets.renderCajaReal();
+
+  // --- Zona AHORA ---
+  var ahora = document.getElementById('caja-ahora');
+  if (ahora) {
+    ahora.innerHTML =
+      '<div class="caja-hero">' +
+        '<div class="caja-hero-label">Puedes retirar (bolsillo libre)</div>' +
+        '<div class="caja-hero-value' + (libre <= 0.01 ? ' is-zero' : '') + '">' + RN.calc.formatCUP(libre) + '</div>' +
+        '<div class="caja-hero-sub">' + (RN.render.subUSD ? RN.render.subUSD(libre, 'Disponible sin tocar la reserva') : 'Disponible sin tocar la reserva') + '</div>' +
+        '<div class="caja-hero-grid">' +
+          '<div class="caja-mini reserva"><div class="lbl">🔒 Reserva (intocable)</div><div class="val">' + RN.calc.formatCUP(reserva) + '</div></div>' +
+          '<div class="caja-mini"><div class="lbl">Fondo total</div><div class="val">' + RN.calc.formatCUP(fondo) + '</div></div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="caja-fisicos">' +
+        '<div class="caja-mini"><div class="lbl">CUP físico</div><div class="val">' + RN.calc.formatCUP(saldos.cup || 0) + '</div></div>' +
+        '<div class="caja-mini"><div class="lbl">USD físico</div><div class="val">$' + (+(saldos.usd || 0)).toFixed(2) + '</div></div>' +
+      '</div>' +
+      '<div class="caja-acciones">' +
+        '<button type="button" class="btn primary" onclick="RN.caja.extraer()">💵 Retirar</button>' +
+        '<button type="button" class="btn" onclick="RN.caja.depositar()">＋ Depositar</button>' +
+        '<button type="button" class="btn" onclick="RN.cuadre.abrir()">🧮 Cuadrar</button>' +
+        '<button type="button" class="btn" onclick="RN.modalCobro.abrirDesdeCobros()">+ Cobrar</button>' +
+      '</div>';
+  }
+
+  // --- Movimientos ---
+  var movBox = document.getElementById('caja-movimientos');
+  if (movBox && RN.caja.movimientosUnificados) {
+    var movs = RN.caja.movimientosUnificados(8);
+    if (!movs.length) {
+      movBox.innerHTML = '<div class="acc-empty" style="padding:12px"><div class="icon">📋</div>Sin movimientos de caja aún.</div>';
+    } else {
+      movBox.innerHTML = movs.map(function (m) {
+        var fecha = (m.fecha || '').slice(0, 10);
+        var amtCls = m.signo > 0 ? 'in' : 'out';
+        var sign = m.signo > 0 ? '+' : '−';
+        var amtTxt = sign + RN.calc.formatCUP(Math.abs(m.montoCUP));
+        try {
+          if (RN.caja._montoTxt && m.raw) amtTxt = (m.signo > 0 ? '+' : '−') + RN.caja._montoTxt(m.raw).replace(/<[^>]+>/g, '');
+        } catch (e) {}
+        return '<div class="caja-mov-row">' +
+          '<div class="mov-main"><strong>' + RN.render.esc(RN.caja._tipoMovLabel(m.tipo)) + '</strong> · ' + RN.render.esc(m.concepto) + '</div>' +
+          '<div class="mov-amt ' + amtCls + '">' + amtTxt + '</div>' +
+          '<div class="mov-meta">' + RN.render.esc(fecha) + (m.moneda && m.moneda !== 'CUP' ? ' · ' + m.moneda : '') + '</div>' +
+        '</div>';
+      }).join('');
+    }
+  }
+
+  // --- Al cierre (compacto) ---
+  var cierre = document.getElementById('caja-cierre');
+  if (cierre && RN.calc.cajaProyeccion) {
+    try {
+      var mes = RN.calc.mesActualStr();
+      var p = RN.calc.cajaProyeccion(mes);
+      var base = p.base || {};
+      var cierreVal = base.cierre != null ? base.cierre : (p.hoy || 0);
+      var estado = p.estado || 'ok';
+      var chip = estado === 'ok' ? 'Mes cubierto' : (estado === 'ajustada' ? 'Ajustado si no cobras todo' : 'Reserva en riesgo al cierre');
+      var color = estado === 'ok' ? 'var(--success)' : (estado === 'ajustada' ? 'var(--warn, #d97706)' : 'var(--danger)');
+      cierre.innerHTML =
+        '<div class="muted" style="font-size:12px">Si cobras lo pendiente y pagas lo que falta al proveedor</div>' +
+        '<div class="caja-cierre-hero" style="color:' + color + '">' + RN.calc.formatCUP(cierreVal) + '</div>' +
+        '<div class="muted" style="font-size:12px;margin-bottom:8px">' + RN.render.esc(chip) + '</div>' +
+        '<div class="acc-row"><span class="acc-label">Hoy en caja</span><span class="acc-value">' + RN.calc.formatCUP(p.hoy || fondo) + '</span></div>' +
+        '<div class="acc-row"><span class="acc-label">+ Por cobrar</span><span class="acc-value" style="color:var(--success)">' + RN.calc.formatCUP(p.pendiente || 0) + '</span></div>' +
+        '<div class="acc-row"><span class="acc-label">− Por pagar (proveedor)</span><span class="acc-value" style="color:var(--danger)">' + RN.calc.formatCUP(p.porPagar != null ? p.porPagar : saldoProv) + '</span></div>' +
+        '<div class="acc-row"><span class="acc-label">Reserva al cierre (est.)</span><span class="acc-value">' + RN.calc.formatCUP(base.reservaCierre != null ? base.reservaCierre : reserva) + '</span></div>';
+    } catch (e) {
+      cierre.innerHTML = '<div class="muted">No se pudo calcular la proyección.</div>';
+    }
+  }
+
+  // Si el detalle estaba abierto, refrescarlo
+  var det = document.getElementById('panel-caja');
+  if (det && det.style.display !== 'none' && det.style.display !== '' && RN.panelWidgets && RN.panelWidgets.renderCajaProyectada) {
+    RN.panelWidgets.renderCajaProyectada();
   }
 };
 
