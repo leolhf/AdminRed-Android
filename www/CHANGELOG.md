@@ -2,6 +2,12 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.4 — Fix submenú de la barra de grupos
+
+- El submenú no aparecía porque el `overflow-x` de la barra lo recortaba (limitación CSS).
+- Los paneles de submenú salen de la pista con scroll y se posicionan bajo toda la barra.
+- Al tocar **Operación / Dinero / Análisis** (etc.) el submenú vuelve a desplegarse a ancho completo.
+
 ## v5.55.3 — Menú de grupos desplazable
 
 - La barra **Inicio · Operación · Dinero · Red · Análisis** se desplaza en horizontal (igual que los submenús).

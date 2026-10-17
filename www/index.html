@@ -44,48 +44,50 @@
     </div>
   </header>
 
-  <!-- TABS — Estructura v5.54: Inicio · Operación · Dinero · Red · Análisis
-       Principio: operación diaria arriba; Red separada de cobros; Análisis solo consulta. -->
+  <!-- TABS — grupos en pista con scroll; submenús fuera del overflow (v5.55.4) -->
   <nav class="tabs no-print" id="tabs">
-    <div class="tab-group" data-group="inicio">
-      <div class="tab active" data-view="dashboard">🏠 Inicio</div>
-      <div class="subtabs">
-        <div class="subtab active" data-view="dashboard">Panel</div>
+    <div class="tabs-track" id="tabs-track">
+      <div class="tab-group" data-group="inicio">
+        <div class="tab active" data-view="dashboard">🏠 Inicio</div>
+      </div>
+      <div class="tab-group" data-group="operacion">
+        <div class="tab" data-view="clientes">⚡ Operación</div>
+      </div>
+      <div class="tab-group" data-group="dinero">
+        <div class="tab" data-view="inversion">💰 Dinero</div>
+      </div>
+      <div class="tab-group" data-group="red">
+        <div class="tab" data-view="red">📡 Red</div>
+      </div>
+      <div class="tab-group" data-group="analisis">
+        <div class="tab" data-view="reportes">📊 Análisis</div>
       </div>
     </div>
-    <div class="tab-group" data-group="operacion">
-      <div class="tab" data-view="clientes">⚡ Operación</div>
-      <div class="subtabs">
-        <div class="subtab" data-view="clientes">Clientes</div>
-        <div class="subtab" data-view="cobros">Cobros</div>
-        <div class="subtab" data-view="realizados">Realizados</div>
-        <div class="subtab" data-view="calendario">Calendario</div>
-      </div>
+    <!-- Submenús fuera de .tabs-track para no quedar recortados por overflow-x -->
+    <div class="subtabs" data-group="inicio">
+      <div class="subtab active" data-view="dashboard">Panel</div>
     </div>
-    <div class="tab-group" data-group="dinero">
-      <div class="tab" data-view="inversion">💰 Dinero</div>
-      <div class="subtabs">
-        <div class="subtab" data-view="inversion">Inversiones y deudas</div>
-        <div class="subtab" data-view="gastos">Gastos</div>
-        <div class="subtab" data-view="inventario">Inventario</div>
-        <div class="subtab" data-view="descuentos">Descuentos</div>
-      </div>
+    <div class="subtabs" data-group="operacion">
+      <div class="subtab" data-view="clientes">Clientes</div>
+      <div class="subtab" data-view="cobros">Cobros</div>
+      <div class="subtab" data-view="realizados">Realizados</div>
+      <div class="subtab" data-view="calendario">Calendario</div>
     </div>
-    <div class="tab-group" data-group="red">
-      <div class="tab" data-view="red">📡 Red</div>
-      <div class="subtabs">
-        <div class="subtab" data-view="red">Capacidad y MikroTik</div>
-      </div>
+    <div class="subtabs" data-group="dinero">
+      <div class="subtab" data-view="inversion">Inversiones y deudas</div>
+      <div class="subtab" data-view="gastos">Gastos</div>
+      <div class="subtab" data-view="inventario">Inventario</div>
+      <div class="subtab" data-view="descuentos">Descuentos</div>
     </div>
-    <div class="tab-group" data-group="analisis">
-      <div class="tab" data-view="reportes">📊 Análisis</div>
-      <div class="subtabs">
-        <div class="subtab" data-view="reportes">Reportes</div>
-        <div class="subtab" data-view="salud">Salud</div>
-        <div class="subtab" data-view="margen">Margen</div>
-        <div class="subtab" data-view="morosos">Morosos / bajas</div>
-        <div class="subtab" data-view="incidencias">Incidencias</div>
-      </div>
+    <div class="subtabs" data-group="red">
+      <div class="subtab" data-view="red">Capacidad y MikroTik</div>
+    </div>
+    <div class="subtabs" data-group="analisis">
+      <div class="subtab" data-view="reportes">Reportes</div>
+      <div class="subtab" data-view="salud">Salud</div>
+      <div class="subtab" data-view="margen">Margen</div>
+      <div class="subtab" data-view="morosos">Morosos / bajas</div>
+      <div class="subtab" data-view="incidencias">Incidencias</div>
     </div>
   </nav>
   <!-- Breadcrumb: "Grupo → Vista" -->

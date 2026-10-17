@@ -46,8 +46,8 @@ RN.tabs._menuTimer = null;
 
 /** ¿Hay un submenú desplegado? Devuelve el grupo abierto o null. */
 RN.tabs.menuAbierto = function () {
-  var g = document.querySelector('.tab-group.abierto');
-  return g ? g.dataset.group : null;
+  var s = document.querySelector('.subtabs.abierto');
+  return s ? s.dataset.group : null;
 };
 
 /** Pliega el submenú (y cancela el temporizador). */
@@ -58,6 +58,9 @@ RN.tabs.cerrarMenu = function () {
     g.classList.remove('abierto');
     var t = g.querySelector('.tab');
     if (t) t.setAttribute('aria-expanded', 'false');
+  });
+  document.querySelectorAll('.subtabs').forEach(function (s) {
+    s.classList.remove('abierto');
   });
 };
 
@@ -75,6 +78,10 @@ RN.tabs.abrirMenu = function (grupo) {
     g.classList.toggle('abierto', abre);
     var t = g.querySelector('.tab');
     if (t) t.setAttribute('aria-expanded', abre ? 'true' : 'false');
+  });
+  // Paneles de submenú viven fuera de .tabs-track (v5.55.4)
+  document.querySelectorAll('.subtabs').forEach(function (s) {
+    s.classList.toggle('abierto', s.dataset.group === grupo);
   });
   RN.tabs.reiniciarTemporizadorMenu();
 };
@@ -189,10 +196,12 @@ RN.tabs.init = function () {
     ['pointerdown', 'pointermove', 'touchmove', 'wheel', 'keydown', 'focusin'].forEach(function (ev) {
       barra.addEventListener(ev, RN.tabs.reiniciarTemporizadorMenu, { passive: true });
     });
-    // El desplazamiento horizontal del submenú no burbujea: escuchar `scroll` en cada uno.
+    // Scroll de submenús y de la pista de grupos
     barra.querySelectorAll('.subtabs').forEach(function (st) {
       st.addEventListener('scroll', RN.tabs.reiniciarTemporizadorMenu, { passive: true });
     });
+    var track = document.getElementById('tabs-track');
+    if (track) track.addEventListener('scroll', RN.tabs.reiniciarTemporizadorMenu, { passive: true });
   }
 
   // Tocar fuera de la barra, o Esc: plegar de inmediato.

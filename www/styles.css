@@ -129,11 +129,21 @@ html, body {
 .icon-btn:hover { background: var(--primary-soft); border-color: var(--primary); }
 .icon-btn:active { transform: scale(.92); }
 
-/* ---------- Tabs — grupos con scroll horizontal (como los submenús) ---------- */
+/* ---------- Tabs — pista con scroll; submenús fuera del overflow (v5.55.4) ---------- */
+/* Contenedor sticky: overflow visible para que el submenú no se recorte */
 .tabs {
-  display: flex; background: var(--surface);
-  border-bottom: 1px solid var(--border); position: sticky;
-  top: var(--header-h); z-index: 40;
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: var(--header-h);
+  z-index: 40;
+  height: var(--tabs-h);
+  overflow: visible;
+}
+
+/* Fila de grupos: aquí sí hay scroll horizontal */
+.tabs-track {
+  display: flex;
   height: var(--tabs-h);
   overflow-x: auto;
   overflow-y: hidden;
@@ -141,13 +151,12 @@ html, body {
   scrollbar-width: none;
   overscroll-behavior-x: contain;
 }
-.tabs::-webkit-scrollbar { display: none; }
+.tabs-track::-webkit-scrollbar { display: none; }
 
-/* Cada grupo ocupa su contenido; si no caben, se desliza la barra */
 .tab-group {
   flex: 0 0 auto;
-  display: flex; flex-direction: column;
-  position: static; /* subtabs van fixed a ancho de pantalla */
+  display: flex;
+  align-items: stretch;
 }
 .tab-group .tab {
   display: flex; align-items: center; justify-content: center;
@@ -162,28 +171,28 @@ html, body {
 .tab-group.active .tab { color: var(--primary); border-bottom-color: var(--primary); }
 .tab-group .tab:active { background: var(--surface-2); }
 
-/* Subtabs: ancho completo bajo la barra de grupos (fixed para no recortarse
-   cuando el grupo es estrecho o la barra principal scrollea).
-   v5.46.0: PLEGABLE — oculta por defecto; visible solo con .abierto. */
+/* Submenús: hermanos de .tabs-track, absolutos respecto a .tabs (ancho completo) */
 .subtabs {
   display: flex;
-  position: fixed;
+  position: absolute;
   left: 0; right: 0;
-  top: calc(var(--header-h) + var(--tabs-h));
+  top: var(--tabs-h);
   opacity: 0; visibility: hidden; pointer-events: none;
   transform: translateY(-6px);
   transition: opacity .18s ease, transform .18s ease, visibility 0s linear .18s;
   background: var(--surface); border-bottom: 1px solid var(--border);
-  box-shadow: var(--shadow); z-index: 35;
+  box-shadow: var(--shadow); z-index: 45;
   padding: 0; overflow-x: auto; -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
 }
 .subtabs::-webkit-scrollbar { display: none; }
-.tab-group.active.abierto .subtabs {
+/* Visible cuando el panel tiene .abierto (lo pone tabs.js) */
+.subtabs.abierto {
   opacity: 1; visibility: visible; pointer-events: auto; transform: none;
   transition: opacity .18s ease, transform .18s ease, visibility 0s;
 }
-/* Indicador ▾ de que el grupo despliega un menú (gira al abrirse) */
+
+/* Indicador ▾ en el grupo (gira al abrirse) */
 .tab-group .tab::after {
   content: '\25BE'; font-size: 10px; opacity: .7; transition: transform .18s ease;
 }
@@ -200,7 +209,6 @@ html, body {
 .subtab.active { color: var(--primary); border-bottom-color: var(--primary); }
 .subtab:active { background: var(--surface-2); }
 
-/* Móvil: texto legible; el scroll evita apretar los 5 grupos */
 @media (max-width: 600px) {
   .tab-group .tab { font-size: 12px; padding: 0 12px; gap: 4px; }
   .tab-group .tab::after { font-size: 9px; }
