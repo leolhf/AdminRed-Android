@@ -14,8 +14,8 @@ android {
         applicationId "com.rednet.adminred"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 5555
-        versionName "5.55.5"
+        versionCode 5556
+        versionName "5.55.6"
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

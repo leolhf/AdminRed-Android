@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.6 — Plan completo de pago de deudas
+
+- **Meta por deuda**: cuota mensual y/o fecha objetivo al crear/editar préstamo externo.
+- **Tiempo estimado** en ficha y modal (según meta o % del libre proyectado).
+- **Doble sugerido**: libre real de hoy vs libre si cobras toda la cartera.
+- Si el libre está justo: recomienda bajar al **10 %**; si hay meta y no alcanza, propone **reserva** solo con casilla de confirmación.
+- Modal **Pagar deuda** con botones: sugerido ahora, ideal post-cobros, meta cuota, liquidar.
+
 ## v5.55.5 — Pago de deudas (moneda + sugerido por caja libre)
 
 - El saldo de un **préstamo externo** se lleva en la **moneda del préstamo** (USD o CUP).

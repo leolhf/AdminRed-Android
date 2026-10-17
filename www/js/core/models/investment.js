@@ -566,6 +566,7 @@ RN.investment.fmtSaldoDeuda = function (inv) {
  * Monto sugerido a devolver en moneda de la deuda, según % del bolsillo libre.
  * = min(saldo, libre × pct/100 convertido a moneda de la deuda).
  */
+
 RN.investment.sugeridoDevolucion = function (inv) {
   var mon = RN.investment.monedaDeuda(inv);
   var saldo = RN.investment.saldoADevolverMoneda(inv);
@@ -578,6 +579,229 @@ RN.investment.sugeridoDevolucion = function (inv) {
   var enMoneda = mon === 'USD' ? (tasa > 0 ? cupSugerido / tasa : 0) : cupSugerido;
   if (!(enMoneda > 0)) enMoneda = 0;
   return +Math.min(saldo, enMoneda).toFixed(2);
+};
+
+/* ============================================================
+ * v5.55.6 — Plan de pago de deudas: meta, proyección, tiempo, reserva
+ * ============================================================ */
+
+/** Total por cobrar (cartera): suma de deuda de todos los clientes. */
+RN.investment.porCobrarTotal = function () {
+  var mes = RN.calc.mesActualStr();
+  var t = 0;
+  (RN.state.clients || []).forEach(function (c) {
+    t += RN.calc.deudaTotalCliente ? RN.calc.deudaTotalCliente(c, mes) : 0;
+  });
+  return +t.toFixed(2);
+};
+
+/**
+ * Libre proyectado si se cobrara toda la cartera pendiente.
+ * Aproxima: libre actual + porCobrar × (1 − % reserva).
+ */
+RN.investment.libreProyectadoTrasCobros = function () {
+  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0, pct: 30 };
+  var libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  var pctRes = +(b.pct != null ? b.pct : (RN.state.config && RN.state.config.pctReservaCaja)) || 0;
+  if (pctRes < 0) pctRes = 0;
+  if (pctRes > 100) pctRes = 100;
+  var porCobrar = RN.investment.porCobrarTotal();
+  var libreExtra = porCobrar * (100 - pctRes) / 100;
+  return +(libre + Math.max(0, libreExtra)).toFixed(2);
+};
+
+/** Meta de cuota de esta deuda en su moneda (0 = sin meta). */
+RN.investment.metaCuotaDeuda = function (inv) {
+  if (!inv) return 0;
+  return Math.max(0, +inv.metaCuotaMoneda || 0);
+};
+
+/** Fecha objetivo YYYY-MM-DD o ''. */
+RN.investment.fechaObjetivoDeuda = function (inv) {
+  if (!inv || !inv.fechaObjetivo) return '';
+  return String(inv.fechaObjetivo).slice(0, 10);
+};
+
+/** Convierte CUP → moneda de la deuda. */
+RN.investment.cupAMonedaDeuda = function (inv, cup) {
+  var mon = RN.investment.monedaDeuda(inv);
+  cup = +cup || 0;
+  if (mon !== 'USD') return +cup.toFixed(2);
+  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
+  if (!(tasa > 0)) return 0;
+  return +(cup / tasa).toFixed(2);
+};
+
+/** Convierte moneda de la deuda → CUP. */
+RN.investment.monedaDeudaACup = function (inv, montoMon) {
+  var mon = RN.investment.monedaDeuda(inv);
+  montoMon = +montoMon || 0;
+  if (mon !== 'USD') return +montoMon.toFixed(2);
+  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
+  if (!(tasa > 0)) return 0;
+  return +(montoMon * tasa).toFixed(2);
+};
+
+/**
+ * Plan completo de pago para una deuda.
+ * @returns {object}
+ */
+RN.investment.planDevolucion = function (inv) {
+  var mon = RN.investment.monedaDeuda(inv);
+  var saldo = RN.investment.saldoADevolverMoneda(inv);
+  var pctIdeal = RN.investment.pctLibreDeudas(); // default 25
+  var pctBajo = Math.min(pctIdeal, 10);
+  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0, reserva: 0 };
+  var libreReal = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  var reserva = Math.max(0, +(b.reserva) || 0);
+  var libreProy = RN.investment.libreProyectadoTrasCobros();
+  var porCobrar = RN.investment.porCobrarTotal();
+
+  var sugIdeal = Math.min(saldo, RN.investment.cupAMonedaDeuda(inv, libreProy * pctIdeal / 100));
+  var sugReal25 = Math.min(saldo, RN.investment.cupAMonedaDeuda(inv, libreReal * pctIdeal / 100));
+  var sugReal10 = Math.min(saldo, RN.investment.cupAMonedaDeuda(inv, libreReal * pctBajo / 100));
+
+  var metaCuota = RN.investment.metaCuotaDeuda(inv);
+  var fechaObj = RN.investment.fechaObjetivoDeuda(inv);
+
+  // Cuota efectiva para proyección de meses
+  var cuotaRef = metaCuota > 0 ? metaCuota : (sugIdeal > 0 ? sugIdeal : sugReal25);
+  var mesesEst = null;
+  if (saldo > 0 && cuotaRef > 0) {
+    mesesEst = Math.ceil(saldo / cuotaRef);
+  }
+  // Si hay fecha objetivo, cuota cuota necesaria
+  var cuotaPorFecha = null;
+  var mesesHastaFecha = null;
+  if (fechaObj && saldo > 0) {
+    var hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    var fin = new Date(fechaObj + 'T00:00:00');
+    if (!isNaN(fin.getTime()) && fin > hoy) {
+      mesesHastaFecha = (fin.getFullYear() - hoy.getFullYear()) * 12 + (fin.getMonth() - hoy.getMonth());
+      if (fin.getDate() > hoy.getDate()) { /* same month partial counts as 1 if any days left */ }
+      if (mesesHastaFecha < 1) mesesHastaFecha = 1;
+      cuotaPorFecha = +(saldo / mesesHastaFecha).toFixed(2);
+    }
+  }
+
+  // Elegir recomendación
+  var pctRec = pctIdeal;
+  var sugerido = sugReal25;
+  var nivel = 'ok'; // ok | bajo | reserva
+  var mensajes = [];
+  var tocaReserva = false;
+  var reservaNecesariaCUP = 0;
+
+  var libreApretado = libreReal < libreProy * 0.5 && porCobrar > 0;
+  // Meta / fecha como objetivo del pago de este mes
+  var objetivoMes = metaCuota;
+  if (cuotaPorFecha != null && (objetivoMes <= 0 || cuotaPorFecha > objetivoMes)) {
+    objetivoMes = cuotaPorFecha;
+  }
+
+  if (saldo <= 0) {
+    sugerido = 0;
+    mensajes.push('Deuda liquidada.');
+  } else if (libreReal <= 0.01) {
+    pctRec = 0;
+    sugerido = 0;
+    nivel = 'reserva';
+    mensajes.push('No hay bolsillo libre disponible ahora.');
+    if (objetivoMes > 0) {
+      reservaNecesariaCUP = RN.investment.monedaDeudaACup(inv, Math.min(saldo, objetivoMes));
+      if (reservaNecesariaCUP > 0 && reserva > 0) {
+        tocaReserva = true;
+        mensajes.push('Para cumplir la meta harían falta ' + RN.calc.formatCUP(Math.min(reservaNecesariaCUP, reserva)) + ' de la reserva (confirmación requerida).');
+      }
+    } else {
+      mensajes.push('Cobra la cartera o espera ingresos antes de pagar, o confirma usar reserva.');
+    }
+  } else if (sugReal25 + 0.0001 >= Math.min(saldo, sugIdeal) && !libreApretado) {
+    pctRec = pctIdeal;
+    sugerido = sugReal25;
+    nivel = 'ok';
+    mensajes.push('Puedes mantener el ' + pctIdeal + '% del libre.');
+  } else if (libreApretado || sugReal25 < sugIdeal * 0.6) {
+    // Libre tocado / menor de lo proyectado
+    if (sugReal10 > 0 && sugReal25 < sugIdeal * 0.5) {
+      pctRec = pctBajo;
+      sugerido = Math.max(sugReal10, Math.min(sugReal25, saldo));
+      nivel = 'bajo';
+      mensajes.push('El libre ya está justo respecto a lo proyectado tras cobros. Se recomienda bajar al ' + pctBajo + '%.');
+    } else {
+      pctRec = pctIdeal;
+      sugerido = sugReal25;
+      nivel = 'bajo';
+      mensajes.push('Libre real menor que el proyectado tras cobros. Sugerido según libre de hoy (' + pctIdeal + '%).');
+    }
+  } else {
+    pctRec = pctIdeal;
+    sugerido = sugReal25;
+    nivel = 'ok';
+  }
+
+  // Si hay meta/cuota y el sugerido no llega
+  if (objetivoMes > 0 && sugerido + 0.0001 < Math.min(saldo, objetivoMes)) {
+    var faltaMon = +(Math.min(saldo, objetivoMes) - sugerido).toFixed(2);
+    var faltaCUP = RN.investment.monedaDeudaACup(inv, faltaMon);
+    if (faltaCUP > 0.01) {
+      nivel = 'reserva';
+      tocaReserva = true;
+      reservaNecesariaCUP = faltaCUP;
+      mensajes.push('La meta/cuota del mes es mayor que el sugerido por libre. Faltan ' +
+        (mon === 'USD' ? faltaMon.toFixed(2) + ' USD' : RN.calc.formatCUP(faltaMon)) +
+        ' (≈ ' + RN.calc.formatCUP(faltaCUP) + '). Puedes usar reserva solo confirmando.');
+    }
+  }
+
+  // Tiempo estimado textual
+  var tiempoTxt = '';
+  if (mesesEst != null && mesesEst > 0) {
+    tiempoTxt = '≈ ' + mesesEst + ' mes' + (mesesEst === 1 ? '' : 'es');
+    if (metaCuota > 0) tiempoTxt += ' (según meta de cuota)';
+    else tiempoTxt += ' (según ' + pctIdeal + '% del libre proyectado)';
+  }
+  if (fechaObj && mesesHastaFecha) {
+    tiempoTxt += (tiempoTxt ? ' · ' : '') + 'objetivo ' + fechaObj + ' (cuota ≈ ' +
+      (mon === 'USD' ? cuotaPorFecha.toFixed(2) + ' USD' : RN.calc.formatCUP(cuotaPorFecha)) + '/mes)';
+  }
+
+  return {
+    moneda: mon,
+    saldo: saldo,
+    libreReal: libreReal,
+    libreProyectado: libreProy,
+    porCobrar: porCobrar,
+    pctIdeal: pctIdeal,
+    pctRecomendado: pctRec,
+    sugeridoIdeal: +sugIdeal.toFixed(2),
+    sugeridoReal: +sugerido.toFixed(2),
+    sugerido25Real: +sugReal25.toFixed(2),
+    sugerido10Real: +sugReal10.toFixed(2),
+    metaCuota: metaCuota,
+    fechaObjetivo: fechaObj,
+    cuotaPorFecha: cuotaPorFecha,
+    mesesEstimados: mesesEst,
+    tiempoTxt: tiempoTxt,
+    nivel: nivel,
+    tocaReserva: tocaReserva,
+    reservaNecesariaCUP: +reservaNecesariaCUP.toFixed(2),
+    reservaDisponible: reserva,
+    mensajes: mensajes
+  };
+};
+
+/** Formato corto de un monto en moneda de deuda. */
+RN.investment.fmtMontoDeuda = function (inv, monto) {
+  var mon = RN.investment.monedaDeuda(inv);
+  monto = +monto || 0;
+  if (mon === 'USD') {
+    return (typeof RN.moneda !== 'undefined' && RN.moneda.formatUSD)
+      ? RN.moneda.formatUSD(monto)
+      : (monto.toFixed(2) + ' USD');
+  }
+  return RN.calc.formatCUP(monto);
 };
 
 /**

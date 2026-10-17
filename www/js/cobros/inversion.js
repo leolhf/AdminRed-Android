@@ -105,6 +105,22 @@ RN.inversion._form = function () {
           <small class="muted" style="display:block;margin-top:4px" id="inv-origen-preview"></small>
         </div>
       </div>
+      <div id="inv-meta-deuda-block" style="display:none">
+        <div class="form-row cols-2">
+          <div>
+            <label>Meta de cuota mensual (opcional)</label>
+            <input id="inv-meta-cuota" type="number" step="0.01" min="0" inputmode="decimal"
+              value="${inv && inv.metaCuotaMoneda ? inv.metaCuotaMoneda : ''}"
+              placeholder="0 = sin meta">
+            <small class="muted">En la moneda del préstamo (USD o CUP). La app estima meses y avisa si hace falta reserva.</small>
+          </div>
+          <div>
+            <label>Fecha objetivo de liquidación (opcional)</label>
+            <input id="inv-fecha-objetivo" type="date" value="${inv && inv.fechaObjetivo ? String(inv.fechaObjetivo).slice(0,10) : ''}">
+            <small class="muted">Si la pones, se calcula la cuota necesaria para llegar a tiempo.</small>
+          </div>
+        </div>
+      </div>
       <div class="form-row"><div><label>Clientes vinculados (Ctrl/Cmd para varios)</label>
         <select id="inv-clientes" multiple style="height:120px">${clientesOpts}</select>
         <small class="muted" style="display:block;margin-top:4px">Solo el margen neto de estos clientes (ingreso − costo del mega) recupera la inversión. El ${pctPersonal}% de ganancia personal configurado NO computa como recuperación.</small>
@@ -183,6 +199,9 @@ RN.inversion._toggleOrigen = function () {
   }
   // v5.13.16 (UI-6): preview del saldo a devolver
   RN.inversion._actualizarPreviewSaldo();
+  // v5.55.6: meta de cuota / fecha objetivo solo para préstamos externos
+  var metaBlk = document.getElementById('inv-meta-deuda-block');
+  if (metaBlk) metaBlk.style.display = esPrestamo ? '' : 'none';
 };
 
 /**
@@ -268,7 +287,17 @@ RN.inversion.guardar = function () {
     totalPagoCUP: pago.totalRecibidoCUP,
     tasaUsdCompra: pago.tasaUsd,
     monedaDeuda: monedaDeuda,
-    montoMoneda: montoMoneda
+    montoMoneda: montoMoneda,
+    metaCuotaMoneda: (function () {
+      if (origenCapital !== 'prestado_externo') return 0;
+      var el = document.getElementById('inv-meta-cuota');
+      return Math.max(0, parseFloat(el && el.value) || 0);
+    })(),
+    fechaObjetivo: (function () {
+      if (origenCapital !== 'prestado_externo') return '';
+      var el = document.getElementById('inv-fecha-objetivo');
+      return el && el.value ? el.value.slice(0, 10) : '';
+    })()
   };
   const id = RN.inversion._editId;
   if (id) {
@@ -353,6 +382,10 @@ RN.inversion.eliminar = function (id) {
  * - Sugerido = % del bolsillo libre (default 25 %), convertido a esa moneda.
  * - Si la deuda es USD y pagas en CUP, se aplica la tasa del día.
  */
+
+/**
+ * Modal pagar deuda (v5.55.6): plan completo — libre real/proyectado, meta, tiempo, reserva.
+ */
 RN.inversion.devolucionPrestamo = function (inversionId) {
   var inv = (RN.state.investments || []).find(function (i) { return i.id === inversionId; });
   if (!inv) {
@@ -363,23 +396,22 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
     RN.notifyUI.toast('Esta inversión es capital propio, no requiere devolución', 'info');
     return;
   }
-  var mon = RN.investment.monedaDeuda(inv);
-  var saldoMon = RN.investment.saldoADevolverMoneda(inv);
-  var saldoCUP = RN.investment.saldoADevolver(inv);
-  var pct = RN.investment.pctLibreDeudas();
-  var sugeridoMon = RN.investment.sugeridoDevolucion(inv);
-  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0, reserva: 0 };
-  var libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
-  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
-  var recuperadoNeto = RN.investment.recuperadoNetoInv(inv);
+  var plan = RN.investment.planDevolucion(inv);
+  var mon = plan.moneda;
   var unit = mon === 'USD' ? 'USD' : 'CUP';
-  var fmtSaldo = RN.investment.fmtSaldoDeuda(inv);
-  var fmtPrincipal = mon === 'USD'
-    ? ((RN.moneda && RN.moneda.formatUSD) ? RN.moneda.formatUSD(RN.investment.montoMonedaDeuda(inv)) : RN.investment.montoMonedaDeuda(inv).toFixed(2) + ' USD')
-    : RN.calc.formatCUP(RN.investment.montoMonedaDeuda(inv));
-  var fmtDevuelto = mon === 'USD'
-    ? ((RN.moneda && RN.moneda.formatUSD) ? RN.moneda.formatUSD(RN.investment.totalDevueltoMoneda(inv)) : RN.investment.totalDevueltoMoneda(inv).toFixed(2) + ' USD')
-    : RN.calc.formatCUP(RN.investment.totalDevueltoMoneda(inv));
+  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
+  var sugerido = plan.sugeridoReal;
+  var fmt = function (m) { return RN.investment.fmtMontoDeuda(inv, m); };
+
+  var nivelBadge = plan.nivel === 'ok'
+    ? '<span class="badge ok">Libre OK</span>'
+    : (plan.nivel === 'bajo'
+      ? '<span class="badge due">Libre justo — ' + plan.pctRecomendado + '%</span>'
+      : '<span class="badge due">Puede requerir reserva</span>');
+
+  var msgsHtml = (plan.mensajes || []).map(function (m) {
+    return '<div class="muted" style="font-size:12px;margin-top:4px">• ' + m + '</div>';
+  }).join('');
 
   var html =
     '<div class="modal-header">' +
@@ -389,30 +421,37 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
     '<div class="modal-body">' +
       '<div class="kpi blue" style="margin-bottom:12px">' +
         '<div class="label">Saldo a devolver (' + unit + ')</div>' +
-        '<div class="value">' + fmtSaldo + '</div>' +
-        '<div class="sub">Préstamo ' + fmtPrincipal + ' · ya devuelto ' + fmtDevuelto +
-          (mon === 'USD' ? ' · el saldo se lleva en USD' : '') + '</div>' +
+        '<div class="value">' + fmt(plan.saldo) + '</div>' +
+        '<div class="sub">' + (plan.tiempoTxt ? plan.tiempoTxt : 'Sin estimación aún') +
+          (plan.metaCuota > 0 ? ' · Meta cuota: ' + fmt(plan.metaCuota) + '/mes' : '') + '</div>' +
       '</div>' +
-      '<div class="acc-row" style="margin-bottom:8px">' +
-        '<span class="acc-label">Bolsillo libre (caja)</span>' +
-        '<span class="acc-value">' + RN.calc.formatCUP(libre) + '</span>' +
-      '</div>' +
-      '<div class="acc-row" style="margin-bottom:12px">' +
-        '<span class="acc-label">Sugerido automático (' + pct + '% del libre)</span>' +
-        '<span class="acc-value"><strong>' + (mon === 'USD'
-          ? ((RN.moneda && RN.moneda.formatUSD) ? RN.moneda.formatUSD(sugeridoMon) : sugeridoMon.toFixed(2) + ' USD')
-          : RN.calc.formatCUP(sugeridoMon)) + '</strong></span>' +
-      '</div>' +
-      '<div class="flex wrap" style="gap:8px;margin-bottom:14px">' +
-        '<button type="button" class="btn sm primary" id="dev-btn-sugerido">Usar sugerido</button>' +
+      '<div class="acc-row"><span class="acc-label">Bolsillo libre hoy</span><span class="acc-value">' + RN.calc.formatCUP(plan.libreReal) + '</span></div>' +
+      '<div class="acc-row"><span class="acc-label">Libre proyectado (si cobras toda la cartera)</span><span class="acc-value">' + RN.calc.formatCUP(plan.libreProyectado) + '</span></div>' +
+      '<div class="acc-row" style="margin-bottom:8px"><span class="acc-label">Por cobrar (cartera)</span><span class="acc-value">' + RN.calc.formatCUP(plan.porCobrar) + '</span></div>' +
+      '<div class="acc-row"><span class="acc-label">Sugerido si cobras todo (' + plan.pctIdeal + '%)</span><span class="acc-value">' + fmt(plan.sugeridoIdeal) + '</span></div>' +
+      '<div class="acc-row" style="margin-bottom:8px"><span class="acc-label">Sugerido ahora (' + plan.pctRecomendado + '% libre real)</span><span class="acc-value"><strong>' + fmt(plan.sugeridoReal) + '</strong> ' + nivelBadge + '</span></div>' +
+      msgsHtml +
+      '<div class="flex wrap" style="gap:8px;margin:12px 0">' +
+        '<button type="button" class="btn sm primary" id="dev-btn-sugerido">Usar sugerido ahora</button>' +
+        (plan.sugeridoIdeal > plan.sugeridoReal + 0.001
+          ? '<button type="button" class="btn sm" id="dev-btn-ideal">Ideal post-cobros</button>' : '') +
+        (plan.metaCuota > 0
+          ? '<button type="button" class="btn sm" id="dev-btn-meta">Meta cuota</button>' : '') +
         '<button type="button" class="btn sm" id="dev-btn-todo">Liquidar saldo</button>' +
       '</div>' +
+      (plan.tocaReserva
+        ? '<label class="flex" style="gap:8px;align-items:flex-start;margin-bottom:12px;padding:10px;border:1px solid var(--border);border-radius:8px;background:var(--surface-2)">' +
+            '<input type="checkbox" id="dev-usar-reserva" style="margin-top:3px">' +
+            '<span><strong>Usar reserva</strong> para acercarme a la meta (hasta ' +
+            RN.calc.formatCUP(Math.min(plan.reservaNecesariaCUP, plan.reservaDisponible)) +
+            ' de ' + RN.calc.formatCUP(plan.reservaDisponible) + ' disponibles). Solo si lo confirmas.</span></label>'
+        : '') +
       '<div class="form-row cols-2">' +
-        '<div><label>Monto a pagar *</label>' +
+        '<div><label>Monto a pagar (' + unit + ') *</label>' +
           '<input id="dev-monto" type="number" step="0.01" min="0.01" inputmode="decimal" spellcheck="false" autocorrect="off" autocapitalize="off" ' +
-            'placeholder="0.00" value="' + (sugeridoMon > 0 ? sugeridoMon : '') + '" ' +
-            'data-moneda-deuda="' + mon + '" data-saldo-mon="' + saldoMon + '" data-saldo-cup="' + saldoCUP + '" data-libre="' + libre + '" data-tasa="' + tasa + '">' +
-          '<small class="muted" style="display:block;margin-top:4px">En moneda de la deuda (' + unit + '). Si pagas en otra moneda, indica abajo cómo sales de caja.</small>' +
+            'placeholder="0.00" value="' + (sugerido > 0 ? sugerido : '') + '" ' +
+            'data-moneda-deuda="' + mon + '" data-saldo-mon="' + plan.saldo + '" data-libre="' + plan.libreReal + '" data-tasa="' + tasa + '" ' +
+            'data-reserva="' + plan.reservaDisponible + '" data-toca-reserva="' + (plan.tocaReserva ? '1' : '0') + '">' +
         '</div>' +
         '<div><label>Pagas desde caja en</label>' +
           '<select id="dev-pago-moneda">' +
@@ -441,26 +480,32 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
   RN.uiComponents.modal(html, { lg: true });
 
   var montoInput = document.getElementById('dev-monto');
-  var selPago = document.getElementById('dev-pago-moneda');
   function refresh() { RN.inversion._validarDevolucion(montoInput); }
   if (montoInput) {
     montoInput.addEventListener('input', refresh);
     montoInput.addEventListener('change', refresh);
   }
+  var selPago = document.getElementById('dev-pago-moneda');
   if (selPago) selPago.addEventListener('change', refresh);
-  var btnSug = document.getElementById('dev-btn-sugerido');
-  if (btnSug) btnSug.addEventListener('click', function () {
-    if (montoInput) { montoInput.value = sugeridoMon > 0 ? sugeridoMon : ''; refresh(); }
-  });
-  var btnTodo = document.getElementById('dev-btn-todo');
-  if (btnTodo) btnTodo.addEventListener('click', function () {
-    if (montoInput) { montoInput.value = saldoMon > 0 ? saldoMon : ''; refresh(); }
-  });
+  var chk = document.getElementById('dev-usar-reserva');
+  if (chk) chk.addEventListener('change', refresh);
+
+  function setMonto(v) {
+    if (montoInput) { montoInput.value = v > 0 ? v : ''; refresh(); }
+  }
+  var b1 = document.getElementById('dev-btn-sugerido');
+  if (b1) b1.addEventListener('click', function () { setMonto(plan.sugeridoReal); });
+  var b2 = document.getElementById('dev-btn-ideal');
+  if (b2) b2.addEventListener('click', function () { setMonto(plan.sugeridoIdeal); });
+  var b3 = document.getElementById('dev-btn-meta');
+  if (b3) b3.addEventListener('click', function () { setMonto(Math.min(plan.saldo, plan.metaCuota)); });
+  var b4 = document.getElementById('dev-btn-todo');
+  if (b4) b4.addEventListener('click', function () { setMonto(plan.saldo); });
   refresh();
 };
 
 /**
- * Valida monto y muestra preview: impacto en caja + saldo restante en moneda de deuda.
+ * Valida monto; permite superar libre solo si se marcó "usar reserva".
  */
 RN.inversion._validarDevolucion = function (input) {
   var aviso = document.getElementById('dev-aviso');
@@ -472,66 +517,47 @@ RN.inversion._validarDevolucion = function (input) {
   var saldoMon = parseFloat(input.getAttribute('data-saldo-mon')) || 0;
   var libre = parseFloat(input.getAttribute('data-libre')) || 0;
   var tasa = parseFloat(input.getAttribute('data-tasa')) || 0;
-  var pagoMon = ((document.getElementById('dev-pago-moneda') || {}).value) || 'CUP';
+  var reserva = parseFloat(input.getAttribute('data-reserva')) || 0;
+  var usarReserva = !!(document.getElementById('dev-usar-reserva') || {}).checked;
 
-  // Equivalente en CUP que sale de caja
-  var cupSale = 0;
-  if (mon === 'USD') {
-    if (pagoMon === 'USD') cupSale = monto * (tasa || 0);
-    else cupSale = monto * (tasa || 0); // deuda USD: monto está en USD; pagar en CUP = USD * tasa
-    if (pagoMon === 'CUP') {
-      // usuario expresa el pago en USD de deuda; CUP = USD * tasa
-      cupSale = monto * (tasa || 0);
-    }
-  } else {
-    // deuda en CUP
-    if (pagoMon === 'USD') cupSale = monto; // monto en CUP de deuda; si sale USD de caja, el gasto contable sigue siendo monto CUP
-    else cupSale = monto;
-  }
-  // Clarificar: el campo "monto" siempre es en moneda de la deuda.
-  // CUP que sale de caja:
-  if (mon === 'USD') {
-    cupSale = tasa > 0 ? monto * tasa : 0;
-  } else {
-    cupSale = monto;
-  }
-
+  var cupSale = (mon === 'USD') ? (tasa > 0 ? monto * tasa : 0) : monto;
   var ok = true;
   var msgs = [];
-  if (monto <= 0) {
+  if (monto <= 0) ok = false;
+  else if (monto > saldoMon + 0.0001) {
     ok = false;
-  } else if (monto > saldoMon + 0.0001) {
-    ok = false;
-    msgs.push('<span class="badge due">⚠️ Excede el saldo (' + (mon === 'USD' ? monto.toFixed(2) + ' USD' : RN.calc.formatCUP(saldoMon)) + ')</span>');
-  }
-  if (monto > 0 && cupSale > libre + 0.01) {
-    msgs.push('<span class="badge due">⚠️ Supera el bolsillo libre (' + RN.calc.formatCUP(libre) + '). Se tocaría la reserva.</span>');
+    msgs.push('<span class="badge due">⚠️ Excede el saldo</span>');
   }
   if (mon === 'USD' && !(tasa > 0)) {
     ok = false;
-    msgs.push('<span class="badge due">⚠️ Configura la tasa USD en Ajustes para convertir a CUP de caja.</span>');
+    msgs.push('<span class="badge due">⚠️ Configura la tasa USD en Ajustes</span>');
   }
-  if (monto > 0 && ok && msgs.length === 0) {
-    msgs.push('<span class="badge ok">✓ Listo para registrar</span>');
+  if (monto > 0 && cupSale > libre + 0.01) {
+    var extra = cupSale - libre;
+    if (usarReserva && extra <= reserva + 0.01) {
+      msgs.push('<span class="badge due">🔒 Usarás ' + RN.calc.formatCUP(extra) + ' de la reserva</span>');
+    } else if (usarReserva) {
+      ok = false;
+      msgs.push('<span class="badge due">⚠️ Reserva insuficiente (' + RN.calc.formatCUP(reserva) + ')</span>');
+    } else {
+      ok = false;
+      msgs.push('<span class="badge due">⚠️ Supera el libre. Marca "Usar reserva" si quieres continuar</span>');
+    }
+  } else if (monto > 0 && ok) {
+    msgs.push('<span class="badge ok">✓ Sale del bolsillo libre</span>');
   }
   aviso.innerHTML = msgs.join(' ');
   if (btn) btn.disabled = !ok || monto <= 0;
-
   if (preview) {
     if (monto > 0 && (mon !== 'USD' || tasa > 0)) {
       var resto = Math.max(0, saldoMon - monto);
       preview.innerHTML = 'Sale de caja ≈ <strong>' + RN.calc.formatCUP(cupSale) + '</strong>' +
-        (mon === 'USD' ? ' (al tipo de hoy)' : '') +
+        (mon === 'USD' ? ' (tasa del día)' : '') +
         ' · Saldo quedaría en <strong>' + (mon === 'USD' ? resto.toFixed(2) + ' USD' : RN.calc.formatCUP(resto)) + '</strong>';
-    } else {
-      preview.innerHTML = '';
-    }
+    } else preview.innerHTML = '';
   }
 };
 
-/**
- * Guarda la devolución: reduce saldo en moneda de deuda; registra gasto en CUP (caja).
- */
 RN.inversion.guardarDevolucion = function (inversionId) {
   var input = document.getElementById('dev-monto');
   var montoMon = parseFloat(input && input.value) || 0;
@@ -578,6 +604,22 @@ RN.inversion.guardarDevolucion = function (inversionId) {
     concepto = 'Devolución de préstamo: ' + inv.concepto;
   }
   var pagoMon = ((document.getElementById('dev-pago-moneda') || {}).value) || 'CUP';
+  // v5.55.6: no tocar reserva sin confirmación
+  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, reserva: 0 };
+  var libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  var reserva = Math.max(0, +(b.reserva) || 0);
+  var usarReserva = !!(document.getElementById('dev-usar-reserva') || {}).checked;
+  if (montoCUP > libre + 0.01) {
+    var extra = montoCUP - libre;
+    if (!usarReserva) {
+      RN.notifyUI.toast('El pago supera el bolsillo libre. Marca "Usar reserva" para continuar.', 'error');
+      return;
+    }
+    if (extra > reserva + 0.01) {
+      RN.notifyUI.toast('Reserva insuficiente para este pago', 'error');
+      return;
+    }
+  }
 
   RN.state.gastos.push({
     id: RN.calc.uid('devinv'),
@@ -587,6 +629,7 @@ RN.inversion.guardarDevolucion = function (inversionId) {
     monedaDeuda: mon,
     monedaPagoCaja: pagoMon,
     tasaUsd: tasa,
+    usoReserva: !!(document.getElementById('dev-usar-reserva') || {}).checked && montoCUP > libre + 0.01,
     categoria: 'Devolución de préstamo',
     esDevolucionInversion: true,
     inversionId: inversionId,
@@ -856,7 +899,11 @@ RN.inversion._cardInversion = function (inv, opts) {
   // para distinguir el saldo con el prestamista del generado por el negocio.
   var subTxt;
   if (esDeuda) {
-    subTxt = estadoTxt + ' · debe ' + RN.calc.formatCUP(saldoDevolver) + ' · generado ' + RN.calc.formatCUP(recuperadoReal) + ' · ' + pctDevuelto + '% devuelto' + (fechaC ? ' · ' + dias + ' días' : '');
+    var _planSub = (!esConcluida && RN.investment.planDevolucion) ? RN.investment.planDevolucion(inv) : null;
+    subTxt = estadoTxt + ' · debe ' + RN.investment.fmtSaldoDeuda(inv) +
+      ' · ' + pctDevuelto + '% devuelto' +
+      (_planSub && _planSub.tiempoTxt ? ' · ' + _planSub.tiempoTxt : '') +
+      (fechaC ? ' · ' + dias + ' días' : '');
   } else if (esRecuperada) {
     subTxt = estadoTxt + ' · capital cubierto · ' + pctRecuperacion + '%' +
       (gananciaExtraInv > 0 ? ' · extra ' + RN.calc.formatCUP(gananciaExtraInv) : '') +
@@ -907,6 +954,17 @@ RN.inversion._cardInversion = function (inv, opts) {
           ? '<div class="acc-row" style="font-weight:600"><span class="acc-label">Saldo final</span><span class="acc-value"><span class="badge ok">0 · Liquidado</span></span></div>'
           : '<div class="acc-row" style="font-weight:600"><span class="acc-label">Saldo por devolver</span><span class="acc-value"><strong style="color:var(--warn)">' + RN.investment.fmtSaldoDeuda(inv) + '</strong></span></div>')
       + '<div class="acc-row"><span class="acc-label">% devuelto</span><span class="acc-value">' + pctDevuelto + '%</span></div>'
+      + (function () {
+          if (esConcluida || !RN.investment.planDevolucion) return '';
+          var pl = RN.investment.planDevolucion(inv);
+          var h = '';
+          if (pl.metaCuota > 0) h += '<div class="acc-row"><span class="acc-label">Meta cuota</span><span class="acc-value">' + RN.investment.fmtMontoDeuda(inv, pl.metaCuota) + '/mes</span></div>';
+          if (pl.fechaObjetivo) h += '<div class="acc-row"><span class="acc-label">Fecha objetivo</span><span class="acc-value">' + pl.fechaObjetivo + '</span></div>';
+          if (pl.tiempoTxt) h += '<div class="acc-row"><span class="acc-label">Tiempo estimado</span><span class="acc-value">' + pl.tiempoTxt + '</span></div>';
+          h += '<div class="acc-row"><span class="acc-label">Sugerido ahora</span><span class="acc-value">' + RN.investment.fmtMontoDeuda(inv, pl.sugeridoReal) + ' (' + pl.pctRecomendado + '% libre)</span></div>';
+          h += '<div class="acc-row"><span class="acc-label">Sugerido post-cobros</span><span class="acc-value">' + RN.investment.fmtMontoDeuda(inv, pl.sugeridoIdeal) + '</span></div>';
+          return h;
+        })()
       + barraHtml;
   } else {
     detalleEspecifico =
