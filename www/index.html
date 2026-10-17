@@ -116,8 +116,8 @@
           <h3>Bandeja del día</h3>
           <p class="muted" style="font-size:12px;margin:0 0 8px">Clientes, deudas y avisos priorizados. Un solo sitio para actuar.</p>
           <div id="panel-bandeja"></div>
-          <!-- Destinos que siguen llenando los widgets (visibles dentro de la bandeja) -->
-          <div id="panel-atencion" class="mt-16"></div>
+          <!-- Alertas van en la bandeja; aquí solo filtro + lista de clientes -->
+          <div id="panel-atencion" style="display:none" aria-hidden="true"></div>
           <div class="chips mt-16" id="atencion-chips" role="group" aria-label="Filtrar clientes que requieren atención"></div>
           <div id="panel-atencion-clientes"></div>
         </div>
@@ -157,9 +157,9 @@
         <div class="kpi-grid" id="kpi-dashboard-carteras"></div>
         <div class="card mt-16" id="card-caja-unificada">
           <h3>🏦 Caja</h3>
-          <p class="muted" style="font-size:12px;margin:0 0 8px">Libre · Reserva · Saldos físicos. Un solo bloque.</p>
+          <p class="muted" style="font-size:12px;margin:0 0 8px">Proyección al cierre, bolsillos y saldos físicos.</p>
           <div id="panel-caja"></div>
-          <div id="panel-caja-real" class="mt-16"></div>
+          <div id="panel-caja-real" style="display:none" aria-hidden="true"></div>
         </div>
         <div class="card mt-16" id="card-recuperacion">
           <h3>Capital en red</h3>

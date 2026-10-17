@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.9 — Fix Panel en Android vertical
+
+- Eliminada **duplicación de alertas** (bandeja + “requiere atención”).
+- Eliminada **duplicación de caja** (proyección ya trae CUP/USD físicos).
+- Cabecera del Panel: modo Día a día / Análisis en **fila completa** en pantallas estrechas.
+- Filas de la bandeja: texto y botón apilados, sin recorte horizontal.
+- “Ver más indicadores” **no se cierra** solo al refrescar el panel.
+
 ## v5.55.8 — Panel profesional (Hoy · Mes · Caja)
 
 - **3 zonas fijas:** Hoy (acción) → Mes (resultado) → Caja y capital.

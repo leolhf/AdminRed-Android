@@ -1473,3 +1473,73 @@ tr.cobranza-notificado-wa td:first-child {
 body.panel-modo-operacion .panel-analisis-only {
   display: none;
 }
+
+/* Cabecera del Panel en móvil vertical */
+@media (max-width: 600px) {
+  #view-dashboard .view-header {
+    gap: 6px;
+  }
+  #view-dashboard .view-header h2 {
+    font-size: 16px;
+  }
+  #view-dashboard .panel-mode-toggle {
+    order: 5;
+    width: 100%;
+    margin: 4px 0 0;
+    display: flex;
+  }
+  #view-dashboard .panel-mode-toggle .btn {
+    flex: 1;
+    justify-content: center;
+    padding: 8px 10px;
+    font-size: 12px;
+    min-height: 36px;
+  }
+  #view-dashboard .view-header .btn.primary {
+    font-size: 13px;
+    padding: 8px 12px;
+    min-height: 36px;
+  }
+  .panel-zone {
+    margin-top: 12px;
+  }
+  .panel-zone-label {
+    font-size: 10px;
+    margin-bottom: 8px;
+  }
+  /* Filas de bandeja: texto + botón no se aplastan */
+  #panel-bandeja .acc-row {
+    flex-wrap: wrap;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--border);
+  }
+  #panel-bandeja .acc-label {
+    flex: 1 1 100%;
+    min-width: 0;
+    font-size: 13px;
+    line-height: 1.35;
+  }
+  #panel-bandeja .acc-value {
+    width: 100%;
+    display: flex;
+    justify-content: flex-end;
+  }
+  #card-caja-unificada .btn {
+    font-size: 13px;
+  }
+  /* Chips de atención: scroll horizontal en vertical */
+  #atencion-chips {
+    display: flex;
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    gap: 6px;
+    padding-bottom: 4px;
+  }
+  #atencion-chips .chip,
+  #atencion-chips button {
+    flex-shrink: 0;
+  }
+}

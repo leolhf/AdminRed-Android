@@ -29,14 +29,9 @@ RN.panel.toggleKpiExtra = function () {
   var el = document.getElementById('kpi-dashboard-extra');
   var btn = document.getElementById('btn-kpi-extra');
   if (!el) return;
-  var visible = el.style.display !== 'none' && el.style.display !== '';
-  if (visible) {
-    el.style.display = 'none';
-    if (btn) btn.textContent = 'Ver más indicadores';
-  } else {
-    el.style.display = '';
-    if (btn) btn.textContent = 'Ocultar indicadores';
-  }
+  RN.panel._kpiExtraOpen = !RN.panel._kpiExtraOpen;
+  el.style.display = RN.panel._kpiExtraOpen ? '' : 'none';
+  if (btn) btn.textContent = RN.panel._kpiExtraOpen ? 'Ocultar indicadores' : 'Ver más indicadores';
 };
 
 RN.panel._kpiHtml = function (kpis) {
@@ -177,7 +172,7 @@ RN.render.dashboard = function () {
   if (cont) {
     cont.innerHTML = RN.panel._kpiHtml([
       { label: 'Ingresos del mes', value: RN.calc.formatCUP(ingresos), sub: (RN.render.subUSD ? RN.render.subUSD(ingresos, 'Toca para resumen') : '') + delta(ingresos, ingresosAnt), cls: 'green', click: 'RN.ingresosMes.abrir()' },
-      { label: 'Ganancia del mes', value: RN.calc.formatCUP(gananciaBruta), sub: (RN.render.subUSD ? RN.render.subUSD(gananciaBruta, 'Cobrado − paquete') : ''), cls: gananciaBruta >= 0 ? 'blue' : 'red', click: 'RN.gananciaCortes && RN.gananciaCortes.abrirReal()' },
+      { label: 'Ganancia del mes', value: RN.calc.formatCUP(gananciaBruta), sub: (RN.render.subUSD ? RN.render.subUSD(gananciaBruta, 'Cobrado − paquete') : ''), cls: gananciaBruta >= 0 ? 'blue' : 'red', click: 'if(RN.gananciaCortes)RN.gananciaCortes.abrirReal()' },
       { label: 'Utilidad neta', value: RN.calc.formatCUP(utilidad), sub: (RN.render.subUSD ? RN.render.subUSD(utilidad, 'Ingresos − Gastos') : '') + delta(utilidad, utilidadAnt), cls: utilidad >= 0 ? 'blue' : 'red', click: 'RN.utilidadMes.abrir()' },
       { label: 'Gastos del mes', value: RN.calc.formatCUP(gastos), sub: (RN.render.subUSD ? RN.render.subUSD(gastos, 'Toca para ver') : '') + delta(gastos, gastosAnt, { invertido: true }), cls: 'amber', click: 'RN.tabs.ir(\'gastos\')' }
     ]);
@@ -187,15 +182,14 @@ RN.render.dashboard = function () {
   if (contExtra) {
     contExtra.innerHTML = RN.panel._kpiHtml([
       { label: 'Costo del paquete', value: RN.calc.formatCUP(costoPaquete), sub: costoPaquete > 0 ? 'Proveedor' : 'Sin paquete', cls: 'amber', click: 'RN.paqueteProveedor.abrir()' },
-      { label: 'Ganancia proyectada', value: RN.calc.formatCUP(gananciaProyectada), sub: 'Esperado − paquete', cls: gananciaProyectada >= 0 ? 'green' : 'red', click: 'RN.gananciaCortes && RN.gananciaCortes.abrirProyectada()' },
+      { label: 'Ganancia proyectada', value: RN.calc.formatCUP(gananciaProyectada), sub: 'Esperado − paquete', cls: gananciaProyectada >= 0 ? 'green' : 'red', click: 'if(RN.gananciaCortes)RN.gananciaCortes.abrirProyectada()' },
       { label: 'Ingreso esperado', value: RN.calc.formatCUP(esperado), sub: 'Si cobran todos', cls: 'blue' },
       { label: 'Fondo de caja', value: RN.calc.formatCUP(fondoCaja), sub: 'Total (reserva + libre)', cls: fondoCaja >= 0 ? 'green' : 'red', click: 'RN.caja.extraer()' }
     ]);
-    if (modo === 'operacion') {
-      contExtra.style.display = 'none';
-      var btn = document.getElementById('btn-kpi-extra');
-      if (btn) btn.textContent = 'Ver más indicadores';
-    }
+    // Respetar si el usuario abrió el detalle (no cerrar en cada re-render)
+    contExtra.style.display = RN.panel._kpiExtraOpen ? '' : 'none';
+    var btnEx = document.getElementById('btn-kpi-extra');
+    if (btnEx) btnEx.textContent = RN.panel._kpiExtraOpen ? 'Ocultar indicadores' : 'Ver más indicadores';
   }
 
   var contCart = document.getElementById('kpi-dashboard-carteras');

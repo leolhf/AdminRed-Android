@@ -634,11 +634,22 @@ RN.panelWidgets.renderCajaReal = function () {
  * ============================================================ */
 
 RN.panelWidgets.renderAll = function () {
-  RN.panelWidgets.renderCajaReal();
-  RN.panelWidgets.renderAtencionClientes();
+  // v5.55.9: Panel nuevo (bandeja + caja unificada) evita duplicar alertas y caja física
+  var panelNuevo = !!document.getElementById('panel-bandeja');
+  if (panelNuevo) {
+    RN.panelWidgets.renderCajaProyectada(); // ya incluye bolsillos + CUP/USD
+    var cr = document.getElementById('panel-caja-real');
+    if (cr) cr.innerHTML = '';
+    var at = document.getElementById('panel-atencion');
+    if (at) at.innerHTML = ''; // la bandeja ya lista alertas
+    RN.panelWidgets.renderAtencionClientes();
+  } else {
+    RN.panelWidgets.renderCajaReal();
+    RN.panelWidgets.renderAtencion();
+    RN.panelWidgets.renderAtencionClientes();
+    RN.panelWidgets.renderCajaProyectada();
+  }
   RN.panelWidgets.renderTendencia();
-  RN.panelWidgets.renderAtencion();
   RN.panelWidgets.renderCortes();
   RN.panelWidgets.renderRentabilidad();
-  RN.panelWidgets.renderCajaProyectada();
 };
