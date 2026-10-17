@@ -106,7 +106,7 @@ RN.render.compararClientePorIP = function (a, b) {
 
 /** Render completo: refresca todas las vistas. */
 RN.render.todo = function () {
-  ['dashboard', 'clientes', 'cobros', 'realizados', 'inversion', 'deudas', 'inventario', 'gastos', 'reportes', 'calendario', 'descuentos', 'salud', 'margen', 'morosos', 'incidencias'].forEach(v => {
+  ['dashboard', 'clientes', 'cobros', 'realizados', 'caja', 'inversion', 'deudas', 'inventario', 'gastos', 'reportes', 'calendario', 'descuentos', 'salud', 'margen', 'morosos', 'incidencias'].forEach(v => {
     RN.render.vista(v);
   });
   RN.config.rellenarForm();
@@ -123,6 +123,7 @@ RN.render.vista = function (view) {
     case 'cobros': RN.render.cobros(); break;
     case 'realizados': RN.render.realizados(); break;
     case 'inversion': RN.render.inversion(); break;
+    case 'caja': RN.render.caja && RN.render.caja(); break;
     case 'deudas': RN.render.deudas && RN.render.deudas(); break;
     case 'inventario': RN.render.inventario(); break;
     case 'gastos': RN.render.gastos(); break;

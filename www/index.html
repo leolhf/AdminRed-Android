@@ -74,6 +74,7 @@
       <div class="subtab" data-view="calendario">Calendario</div>
     </div>
     <div class="subtabs" data-group="dinero">
+      <div class="subtab" data-view="caja">Caja</div>
       <div class="subtab" data-view="deudas">Por pagar</div>
       <div class="subtab" data-view="inversion">Capital en red</div>
       <div class="subtab" data-view="gastos">Gastos</div>
@@ -151,22 +152,26 @@
         </div>
       </div>
 
-      <!-- ===== ZONA 3: CAJA Y CAPITAL ===== -->
+      <!-- ===== ZONA 3: RESUMEN DINERO (detalle de caja en Dinero → Caja) ===== -->
       <div class="panel-zone" id="panel-zone-caja">
-        <div class="panel-zone-label">Caja y capital</div>
+        <div class="panel-zone-label">Dinero · acceso rápido</div>
         <div class="kpi-grid" id="kpi-dashboard-carteras"></div>
-        <div class="card mt-16" id="card-caja-unificada">
-          <h3>🏦 Caja</h3>
-          <p class="muted" style="font-size:12px;margin:0 0 8px">Proyección al cierre, bolsillos y saldos físicos.</p>
-          <div id="panel-caja"></div>
-          <div id="panel-caja-real" style="display:none" aria-hidden="true"></div>
+        <div class="card mt-16" id="card-acceso-caja">
+          <div class="flex wrap" style="align-items:center;gap:10px;justify-content:space-between">
+            <div>
+              <strong>Caja</strong>
+              <div class="muted" style="font-size:12px">Libre, reserva, proyección y saldos físicos</div>
+            </div>
+            <button type="button" class="btn primary sm" onclick="RN.tabs.ir('caja')">Abrir caja</button>
+          </div>
         </div>
-        <div class="card mt-16" id="card-recuperacion">
+        <div class="card mt-16" id="card-recuperacion" style="display:none">
           <h3>Capital en red</h3>
           <div id="dashboard-recuperacion"></div>
+          <div style="margin-top:8px"><button type="button" class="btn sm" onclick="RN.tabs.ir('inversion')">Ver capital en red</button></div>
         </div>
         <div class="card mt-16" id="card-por-pagar" style="display:none">
-          <h3>Por pagar (pasivos)</h3>
+          <h3>Por pagar</h3>
           <div id="dashboard-por-pagar"></div>
         </div>
         <div class="card mt-16" id="card-proveedor">
@@ -174,7 +179,6 @@
         </div>
       </div>
 
-      <!-- Compat: ids antiguos por si algún script los busca -->
       <div id="card-caja-real" style="display:none" aria-hidden="true"></div>
       <div id="card-caja-proy" style="display:none" aria-hidden="true"></div>
       <div id="card-atencion" style="display:none" aria-hidden="true"></div>
@@ -249,6 +253,31 @@
     </section>
 
     <!-- POR PAGAR (pasivos / préstamos externos) -->
+    <!-- CAJA (Dinero) v5.55.11 -->
+    <section class="view" id="view-caja">
+      <div class="view-header">
+        <h2>Caja</h2>
+        <div class="spacer"></div>
+        <button class="btn" onclick="RN.cuadre.abrir()">🧮 Cuadrar</button>
+        <button class="btn" onclick="RN.caja.extraer()">💵 Retirar</button>
+        <button class="btn primary" onclick="RN.modalCobro.abrirDesdeCobros()">+ Cobrar</button>
+      </div>
+      <p class="muted" style="margin:0 0 12px;font-size:13px">Bolsillos (reserva / libre), proyección al cierre y saldos físicos. El Panel solo muestra el libre con acceso aquí.</p>
+      <div class="kpi-grid" id="kpi-caja"></div>
+      <div class="card mt-16">
+        <h3>Proyección y bolsillos</h3>
+        <div id="panel-caja"></div>
+      </div>
+      <div class="card mt-16">
+        <h3>Saldos físicos y acciones</h3>
+        <div id="panel-caja-real"></div>
+      </div>
+      <div class="card mt-16">
+        <h3>Historial de cuadres</h3>
+        <button type="button" class="btn sm" onclick="RN.cuadre.listar()">Ver historial</button>
+      </div>
+    </section>
+
     <section class="view" id="view-deudas">
       <div class="view-header"><h2>Por pagar</h2><div class="spacer"></div>
         <button class="btn" onclick="RN.investment.abrirPoliticaDeudas && RN.investment.abrirPoliticaDeudas()">⚙️ Política</button>

@@ -3,6 +3,29 @@
  * Parte de RN.render (extraído de render.js en v5.45.0; el código no cambió).
  * Depende de: ui/render.js (helpers), calculations.js.
  */
+
+/** v5.55.11 — Vista Dinero → Caja (detalle; el Panel solo enlaza aquí). */
+RN.render.caja = function () {
+  var kpi = document.getElementById('kpi-caja');
+  if (kpi && RN.calc.bolsillos) {
+    var b = RN.calc.bolsillos();
+    var libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+    var kpis = [
+      { label: 'Libre (retirable)', value: RN.calc.formatCUP(libre), cls: libre > 0 ? 'green' : 'red' },
+      { label: 'Reserva', value: RN.calc.formatCUP(b.reserva || 0), cls: 'amber' },
+      { label: 'Fondo total', value: RN.calc.formatCUP(b.fondo != null ? b.fondo : RN.calc.fondoCaja()), cls: 'blue' },
+      { label: 'Por pagar proveedor', value: RN.calc.formatCUP(RN.calc.saldoProveedorMes ? RN.calc.saldoProveedorMes() : 0), cls: 'red' }
+    ];
+    kpi.innerHTML = kpis.map(function (k) {
+      return '<div class="kpi ' + k.cls + '"><div class="label">' + k.label + '</div><div class="value">' + k.value + '</div></div>';
+    }).join('');
+  }
+  if (RN.panelWidgets) {
+    if (RN.panelWidgets.renderCajaProyectada) RN.panelWidgets.renderCajaProyectada();
+    if (RN.panelWidgets.renderCajaReal) RN.panelWidgets.renderCajaReal();
+  }
+};
+
 // ---------- INVERSION ----------
 RN.render.inversion = function () {
   // v5.55.7: solo capital propio (ya no mezcla pasivos)

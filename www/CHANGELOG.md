@@ -2,6 +2,20 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.12 — Flujo de préstamo → caja + destino
+
+- Al **crear un préstamo externo**: se registra **depósito en caja** (entrada del dinero).
+- **Destino** (default: queda en caja): capital en red / inventario / retiro personal.
+- Capital e inventario generan **gasto de aplicación** (sale de caja).
+- Retiro personal genera **retiro** ligado al préstamo.
+- Al **eliminar** el préstamo se limpian depósito, aplicación y retiro asociados (y las devoluciones).
+
+## v5.55.11 — Caja en Dinero; Panel más limpio
+
+- Nueva vista **Dinero → Caja**: proyección, bolsillos, saldos físicos, cuadrar y retirar.
+- **Panel:** sin bloque detallado de caja; KPI “Libre en caja” y carteras con acceso directo.
+- Grupo Dinero abre por defecto en **Caja**.
+
 ## v5.55.10 — Pago del paquete del proveedor (parcial + descuento + multi-moneda)
 
 - **Pagos parciales:** el saldo del mes se acumula; no se marca pagado hasta cubrir el paquete.

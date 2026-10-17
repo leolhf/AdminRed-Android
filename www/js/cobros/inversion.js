@@ -114,8 +114,18 @@ RN.inversion._form = function () {
             <option value="propio" ${origenVal === 'propio' ? 'selected' : ''}>Capital propio (no hay que devolverlo)</option>
             <option value="prestado_externo" ${origenVal === 'prestado_externo' ? 'selected' : ''}>Préstamo externo (dinero que debo devolver)</option>
           </select>
-          <small class="muted" style="display:block;margin-top:4px" id="inv-origen-ayuda">Si el dinero lo prestó un banco, familiar u otra persona y debes devolverlo, elige "Préstamo externo". La app llevará un saldo a devolver y podrás registrar devoluciones desde la caja.</small>
+          <small class="muted" style="display:block;margin-top:4px" id="inv-origen-ayuda">Si el dinero lo prestó un banco, familiar u otra persona y debes devolverlo, elige "Préstamo externo". El dinero entra a caja y puedes indicar el destino.</small>
           <small class="muted" style="display:block;margin-top:4px" id="inv-origen-preview"></small>
+          <div id="inv-destino-block" style="display:none;margin-top:10px">
+            <label>Destino del dinero recibido</label>
+            <select id="inv-destino-prestamo">
+              <option value="caja">Queda en caja (disponible)</option>
+              <option value="capital_red">Se usa en capital / equipos de la red</option>
+              <option value="inventario">Se usa en inventario / material</option>
+              <option value="retiro_personal">Sale como retiro personal</option>
+            </select>
+            <small class="muted" style="display:block;margin-top:4px">Primero se registra la entrada a caja. Según el destino, puede quedar o salir de inmediato (compra o retiro).</small>
+          </div>
         </div>
       </div>
       <div id="inv-meta-deuda-block" style="display:none">
@@ -187,11 +197,16 @@ RN.inversion._form = function () {
     var selO = document.getElementById('inv-origen');
     if (selO) {
       selO.value = RN.inversion._forzarOrigen;
-      // En deuda nueva ocultamos capital propio como opción preferida
     }
     RN.inversion._forzarOrigen = null;
   }
   RN.inversion._toggleOrigen();
+  // Precargar destino si se edita un préstamo existente
+  if (RN.inversion._editId) {
+    var invE = (RN.state.investments || []).find(function (i) { return i.id === RN.inversion._editId; });
+    var destSel = document.getElementById('inv-destino-prestamo');
+    if (invE && destSel && invE.destinoPrestamo) destSel.value = invE.destinoPrestamo;
+  }
 };
 
 /** v5.12.9 — Actualiza la ayuda y el label del monto según el origen del capital. */
@@ -223,6 +238,12 @@ RN.inversion._toggleOrigen = function () {
   // v5.55.6: meta de cuota / fecha objetivo solo para préstamos externos
   var metaBlk = document.getElementById('inv-meta-deuda-block');
   if (metaBlk) metaBlk.style.display = esPrestamo ? '' : 'none';
+  // v5.55.12: destino del dinero del préstamo
+  var destBlk = document.getElementById('inv-destino-block');
+  if (destBlk) destBlk.style.display = esPrestamo ? '' : 'none';
+  if (ayuda && esPrestamo) {
+    ayuda.textContent = 'El préstamo entra a caja. Elige el destino: dejarlo disponible, aplicarlo a equipos/red, inventario o retiro personal. Luego devuelves desde caja.';
+  }
 };
 
 /**
@@ -320,18 +341,136 @@ RN.inversion.guardar = function () {
       return el && el.value ? el.value.slice(0, 10) : '';
     })()
   };
+  // Destino del préstamo (solo aplica a nuevos préstamos externos)
+  var destinoPrestamo = 'caja';
+  if (origenCapital === 'prestado_externo') {
+    var destEl = document.getElementById('inv-destino-prestamo');
+    destinoPrestamo = (destEl && destEl.value) || 'caja';
+    if (['caja', 'capital_red', 'inventario', 'retiro_personal'].indexOf(destinoPrestamo) < 0) {
+      destinoPrestamo = 'caja';
+    }
+    data.destinoPrestamo = destinoPrestamo;
+  }
+
   const id = RN.inversion._editId;
   if (id) {
     Object.assign(RN.state.investments.find(x => x.id === id), data);
-  } else {
-    data.id = RN.calc.uid('inv');
-    data.fecha = new Date().toISOString();
-    RN.state.investments.push(data);
+    RN.storageLocal.guardar();
+    RN.uiComponents.cerrarModal();
+    RN.render.todo();
+    RN.notifyUI.toast('Inversión actualizada', 'success');
+    return;
   }
+
+  data.id = RN.calc.uid('inv');
+  data.fecha = new Date().toISOString();
+  RN.state.investments.push(data);
+
+  // v5.55.12: flujo de caja del préstamo recibido
+  var flujoMsg = '';
+  if (origenCapital === 'prestado_externo' && monto > 0) {
+    flujoMsg = RN.inversion._aplicarFlujoPrestamoNuevo(data, pago, destinoPrestamo) || '';
+  }
+
   RN.storageLocal.guardar();
   RN.uiComponents.cerrarModal();
   RN.render.todo();
-  RN.notifyUI.toast(id ? 'Inversión actualizada' : 'Inversión creada', 'success');
+  RN.notifyUI.toast(
+    (origenCapital === 'prestado_externo' ? 'Préstamo registrado' : 'Inversión creada')
+      + (flujoMsg ? ' · ' + flujoMsg : ''),
+    'success'
+  );
+};
+
+/**
+ * v5.55.12 — Al crear un préstamo externo:
+ * 1) Depósito a caja (entrada del dinero prestado).
+ * 2) Según destino: queda en caja, sale a capital/inventario (gasto) o retiro personal.
+ */
+RN.inversion._aplicarFlujoPrestamoNuevo = function (inv, pago, destino) {
+  destino = destino || 'caja';
+  var montoCUP = +(inv.monto || 0);
+  if (!(montoCUP > 0)) return '';
+  var fechaISO = (inv.fechaCompra || new Date().toISOString().slice(0, 10)).slice(0, 10) + 'T00:00:00';
+  var mes = fechaISO.slice(0, 7);
+  var tasa = pago && pago.tasaUsd ? pago.tasaUsd : (RN.moneda.tasa() || 0);
+  var moneda = (pago && pago.moneda) || inv.monedaPago || 'CUP';
+  var montoUSD = (pago && pago.montoUSD) || inv.montoPagoUSD || 0;
+  var montoCUPDir = (pago && pago.montoCUP) || inv.montoPagoCUP || 0;
+  if (moneda === 'USD') montoCUPDir = 0;
+  if (moneda === 'CUP') montoUSD = 0;
+
+  RN.state.depositos = RN.state.depositos || [];
+  RN.state.retiros = RN.state.retiros || [];
+  RN.state.gastos = RN.state.gastos || [];
+
+  var depId = RN.calc.uid('deposito');
+  RN.state.depositos.push({
+    id: depId,
+    concepto: 'Préstamo recibido — ' + (inv.concepto || 'Préstamo'),
+    monto: montoCUP,
+    moneda: moneda,
+    montoOriginal: montoUSD,
+    montoCUPDirecto: montoCUPDir,
+    tasaUsada: tasa,
+    tasaAlMomento: tasa,
+    fecha: fechaISO,
+    mes: mes,
+    esPrestamoRecibido: true,
+    inversionId: inv.id
+  });
+  inv.depositoPrestamoId = depId;
+
+  var partes = ['entrada a caja ' + RN.calc.formatCUP(montoCUP)];
+
+  if (destino === 'caja') {
+    partes.push('queda disponible');
+    return partes.join(', ');
+  }
+
+  if (destino === 'retiro_personal') {
+    var retId = RN.calc.uid('retiro');
+    RN.state.retiros.push({
+      id: retId,
+      concepto: 'Retiro desde préstamo — ' + (inv.concepto || 'Préstamo'),
+      monto: montoCUP,
+      moneda: moneda,
+      montoOriginal: montoUSD,
+      montoCUPDirecto: montoCUPDir,
+      tasaUsada: tasa,
+      tasaAlMomento: tasa,
+      fecha: fechaISO,
+      mes: mes,
+      esRetiroDesdePrestamo: true,
+      inversionId: inv.id
+    });
+    inv.retiroPrestamoId = retId;
+    partes.push('salida como retiro personal');
+    return partes.join(', ');
+  }
+
+  // capital_red | inventario → gasto de aplicación (sale de caja, uso del negocio)
+  var cat = destino === 'inventario' ? 'Inventario / material' : 'Capital / equipos';
+  var conc = (destino === 'inventario' ? 'Aplicación préstamo a inventario — ' : 'Aplicación préstamo a capital en red — ')
+    + (inv.concepto || 'Préstamo');
+  var gasId = RN.calc.uid('gasto');
+  RN.state.gastos.push({
+    id: gasId,
+    fecha: fechaISO,
+    mes: mes,
+    concepto: conc,
+    monto: montoCUP,
+    categoria: cat,
+    moneda: moneda,
+    montoPagadoUSD: montoUSD,
+    montoPagadoCUP: montoCUPDir,
+    tasaUsd: tasa,
+    esAplicacionPrestamo: true,
+    inversionId: inv.id
+  });
+  inv.aplicacionPrestamoId = gasId;
+  partes.push(destino === 'inventario' ? 'aplicado a inventario' : 'aplicado a capital en red');
+  return partes.join(', ');
 };
 
 /**
@@ -373,9 +512,19 @@ RN.inversion.eliminar = function (id) {
   }
   RN.uiComponents.confirm('Eliminar ' + tipoTxt, msg, () => {
     RN.state.investments = RN.state.investments.filter(x => x.id !== id);
-    // Solo si es préstamo, eliminar también sus devoluciones
+    // Solo si es préstamo, eliminar también sus devoluciones y el flujo de caja ligado
     if (esPrestamo) {
-      RN.state.gastos = (RN.state.gastos || []).filter(g => !(g.esDevolucionInversion && g.inversionId === id));
+      RN.state.gastos = (RN.state.gastos || []).filter(function (g) {
+        if (g.esDevolucionInversion && g.inversionId === id) return false;
+        if (g.esAplicacionPrestamo && g.inversionId === id) return false;
+        return true;
+      });
+      RN.state.depositos = (RN.state.depositos || []).filter(function (d) {
+        return !(d.esPrestamoRecibido && d.inversionId === id);
+      });
+      RN.state.retiros = (RN.state.retiros || []).filter(function (r) {
+        return !(r.esRetiroDesdePrestamo && r.inversionId === id);
+      });
     }
     RN.storageLocal.guardar();
     RN.render.todo();

@@ -164,7 +164,7 @@ RN.render.dashboard = function () {
       { label: 'Cobranza', value: cob.pagaron + '/' + cob.total, sub: 'Faltan ' + cob.faltan + (parciales ? ' · ' + parciales + ' parcial' : '') + ' — toca', cls: 'blue', click: 'RN.cobranza.abrir()' },
       { label: 'Tasa de cobro', value: tasaCob + '%', sub: 'Servicio cobrado sobre esperado', cls: tasaCob >= 70 ? 'green' : (tasaCob >= 40 ? 'amber' : 'red') },
       { label: 'Clientes morosos', value: String(morosos), sub: morosos ? 'Atrasados — toca' : 'Ninguno atrasado', cls: morosos ? 'red' : 'green', click: 'RN.mora.abrir()' },
-      { label: 'Libre en caja', value: RN.calc.formatCUP(libre), sub: RN.render.subUSD ? RN.render.subUSD(libre, 'Bolsillo retirable') : 'Bolsillo retirable', cls: libre > 0 ? 'green' : 'red', click: 'RN.caja.extraer()' }
+      { label: 'Libre en caja', value: RN.calc.formatCUP(libre), sub: (RN.render.subUSD ? RN.render.subUSD(libre, 'Toca para abrir caja') : 'Toca para abrir caja'), cls: libre > 0 ? 'green' : 'red', click: 'RN.tabs.ir(\'caja\')' }
     ]);
   }
 
@@ -184,7 +184,7 @@ RN.render.dashboard = function () {
       { label: 'Costo del paquete', value: RN.calc.formatCUP(costoPaquete), sub: costoPaquete > 0 ? 'Proveedor' : 'Sin paquete', cls: 'amber', click: 'RN.paqueteProveedor.abrir()' },
       { label: 'Ganancia proyectada', value: RN.calc.formatCUP(gananciaProyectada), sub: 'Esperado − paquete', cls: gananciaProyectada >= 0 ? 'green' : 'red', click: 'if(RN.gananciaCortes)RN.gananciaCortes.abrirProyectada()' },
       { label: 'Ingreso esperado', value: RN.calc.formatCUP(esperado), sub: 'Si cobran todos', cls: 'blue' },
-      { label: 'Fondo de caja', value: RN.calc.formatCUP(fondoCaja), sub: 'Total (reserva + libre)', cls: fondoCaja >= 0 ? 'green' : 'red', click: 'RN.caja.extraer()' }
+      { label: 'Fondo de caja', value: RN.calc.formatCUP(fondoCaja), sub: 'Total (reserva + libre)', cls: fondoCaja >= 0 ? 'green' : 'red', click: 'RN.tabs.ir(\'caja\')' }
     ]);
     // Respetar si el usuario abrió el detalle (no cerrar en cada re-render)
     contExtra.style.display = RN.panel._kpiExtraOpen ? '' : 'none';
@@ -213,7 +213,7 @@ RN.render.dashboard = function () {
     contCart.innerHTML = RN.panel._kpiHtml([
       { label: 'Por cobrar', value: RN.calc.formatCUP(porCobrar), sub: 'Cartera de clientes', cls: 'blue', click: 'RN.tabs.ir(\'cobros\')' },
       { label: 'Por pagar', value: RN.calc.formatCUP(saldoDeudas), sub: 'Préstamos externos', cls: saldoDeudas > 0 ? 'red' : 'green', click: 'RN.tabs.ir(\'deudas\')' },
-      { label: 'En caja (libre)', value: RN.calc.formatCUP(libre), sub: 'Reserva ' + RN.calc.formatCUP(b.reserva || 0), cls: 'green', click: 'RN.caja.extraer()' }
+      { label: 'En caja (libre)', value: RN.calc.formatCUP(libre), sub: 'Reserva ' + RN.calc.formatCUP(b.reserva || 0) + ' · abrir caja', cls: 'green', click: 'RN.tabs.ir(\'caja\')' }
     ]);
   }
 

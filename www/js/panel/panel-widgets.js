@@ -634,20 +634,18 @@ RN.panelWidgets.renderCajaReal = function () {
  * ============================================================ */
 
 RN.panelWidgets.renderAll = function () {
-  // v5.55.9: Panel nuevo (bandeja + caja unificada) evita duplicar alertas y caja física
+  // v5.55.11: Caja vive en Dinero → Caja (#panel-caja / #panel-caja-real).
+  // Panel: bandeja sin duplicar alertas; widgets de análisis solo si existen nodos.
   var panelNuevo = !!document.getElementById('panel-bandeja');
+  RN.panelWidgets.renderCajaProyectada();
+  RN.panelWidgets.renderCajaReal();
   if (panelNuevo) {
-    RN.panelWidgets.renderCajaProyectada(); // ya incluye bolsillos + CUP/USD
-    var cr = document.getElementById('panel-caja-real');
-    if (cr) cr.innerHTML = '';
     var at = document.getElementById('panel-atencion');
-    if (at) at.innerHTML = ''; // la bandeja ya lista alertas
+    if (at) at.innerHTML = '';
     RN.panelWidgets.renderAtencionClientes();
   } else {
-    RN.panelWidgets.renderCajaReal();
     RN.panelWidgets.renderAtencion();
     RN.panelWidgets.renderAtencionClientes();
-    RN.panelWidgets.renderCajaProyectada();
   }
   RN.panelWidgets.renderTendencia();
   RN.panelWidgets.renderCortes();
