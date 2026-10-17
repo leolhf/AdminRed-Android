@@ -184,6 +184,43 @@ RN.render.dashboard = function () {
     RN.render.animarBarrasRecuperacion();
   }
 
+  // v5.55.7: Por pagar esta semana (pasivos)
+  (function () {
+    var card = document.getElementById('card-por-pagar');
+    var box = document.getElementById('dashboard-por-pagar');
+    if (!card || !box || !RN.investment || !RN.investment.colaDeudasOrdenada) return;
+    var cola = RN.investment.colaDeudasOrdenada();
+    if (!cola.length) {
+      card.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+    card.style.display = '';
+    var hoy = new Date(); hoy.setHours(0,0,0,0);
+    var en7 = new Date(hoy.getTime() + 7 * 86400000);
+    var filas = cola.slice(0, 5).map(function (inv) {
+      var plan = RN.investment.planDevolucion(inv);
+      var fo = plan.fechaObjetivo || '';
+      var urg = '';
+      if (fo) {
+        var d = new Date(fo + 'T00:00:00');
+        if (!isNaN(d.getTime())) {
+          if (d < hoy) urg = '<span class="badge due">Vencida</span> ';
+          else if (d <= en7) urg = '<span class="badge due">Esta semana</span> ';
+        }
+      }
+      return '<div class="acc-row" style="align-items:center">'
+        + '<span class="acc-label">' + urg + RN.render.esc(inv.concepto || 'Deuda')
+        + (plan.tiempoTxt ? ' <span class="muted">· ' + plan.tiempoTxt + '</span>' : '')
+        + '</span>'
+        + '<span class="acc-value"><strong>' + RN.investment.fmtSaldoDeuda(inv) + '</strong> '
+        + '<button class="btn sm primary" onclick="RN.tabs.ir(\'deudas\'); setTimeout(function(){ RN.inversion.devolucionPrestamo(\'' + inv.id + '\'); }, 120)">Pagar</button></span>'
+        + '</div>';
+    }).join('');
+    box.innerHTML = filas
+      + '<div style="margin-top:10px"><button class="btn sm" onclick="RN.tabs.ir(\'deudas\')">Ver agenda completa</button></div>';
+  })();
+
   // v5.16.0: widgets enriquecidos del Panel (tendencia, atención, cortes,
   // rentabilidad y caja proyectada). Se renderizan al final para no bloquear
   // los KPIs si algún widget fallara.

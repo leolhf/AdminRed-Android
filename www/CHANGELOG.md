@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.7 — Organización profesional de dinero (pasivos vs capital)
+
+- **Por pagar** (submenú Dinero): solo préstamos a devolver; agenda ordenada por vencimiento/meta/saldo.
+- **Capital en red**: solo inversiones de capital propio y su recuperación.
+- **Política de pagos** en Ajustes: % libre (25), % austeridad (10), uso de reserva (nunca / con meta / siempre confirmando).
+- **Panel (Inicio):** tarjeta “Por pagar esta semana” con acceso rápido a Pagar.
+- Textos de carteras: Por pagar · Capital en red (además de Gastos / Inventario / Descuentos).
+
 ## v5.55.6 — Plan completo de pago de deudas
 
 - **Meta por deuda**: cuota mensual y/o fecha objetivo al crear/editar préstamo externo.

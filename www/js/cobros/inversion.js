@@ -55,6 +55,19 @@ RN.inversion = RN.inversion || {};
 
 RN.inversion._editId = null;
 
+
+/** v5.55.7 — Nueva inversión de capital propio (vista Capital en red). */
+RN.inversion.abrirNuevaPropia = function () {
+  RN.inversion._forzarOrigen = 'propio';
+  RN.inversion.abrirNueva();
+};
+
+/** v5.55.7 — Nueva deuda / préstamo externo (vista Por pagar). */
+RN.inversion.abrirNuevaDeuda = function () {
+  RN.inversion._forzarOrigen = 'prestado_externo';
+  RN.inversion.abrirNueva();
+};
+
 RN.inversion.abrirNueva = function () {
   RN.inversion._editId = null;
   RN.inversion._form();
@@ -170,6 +183,14 @@ RN.inversion._form = function () {
     }
   }
   RN.moneda.recalcBloquePago('inv-pago');
+  if (RN.inversion._forzarOrigen) {
+    var selO = document.getElementById('inv-origen');
+    if (selO) {
+      selO.value = RN.inversion._forzarOrigen;
+      // En deuda nueva ocultamos capital propio como opción preferida
+    }
+    RN.inversion._forzarOrigen = null;
+  }
   RN.inversion._toggleOrigen();
 };
 

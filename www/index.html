@@ -74,7 +74,8 @@
       <div class="subtab" data-view="calendario">Calendario</div>
     </div>
     <div class="subtabs" data-group="dinero">
-      <div class="subtab" data-view="inversion">Inversiones y deudas</div>
+      <div class="subtab" data-view="deudas">Por pagar</div>
+      <div class="subtab" data-view="inversion">Capital en red</div>
       <div class="subtab" data-view="gastos">Gastos</div>
       <div class="subtab" data-view="inventario">Inventario</div>
       <div class="subtab" data-view="descuentos">Descuentos</div>
@@ -143,7 +144,12 @@
       <div class="card mt-16" id="card-proveedor">
         <div id="dashboard-proveedor"></div>
       </div>
-    </section>
+    
+      <div class="card mt-16" id="card-por-pagar" style="display:none">
+        <h3>Por pagar esta semana</h3>
+        <div id="dashboard-por-pagar"></div>
+      </div>
+</section>
 
     <!-- CLIENTES -->
     <section class="view" id="view-clientes">
@@ -192,47 +198,49 @@
     </section>
 
     <!-- INVERSION + DEUDAS (v5.13.2: fusion visual) -->
+    <!-- CAPITAL EN RED (inversiones propias) — separado de pasivos v5.55.7 -->
     <section class="view" id="view-inversion">
-      <div class="view-header"><h2>Inversiones y deudas</h2><div class="spacer"></div>
-        <button class="btn primary" onclick="RN.inversion.abrirNueva()">+ Nueva inversión</button>
+      <div class="view-header"><h2>Capital en red</h2><div class="spacer"></div>
+        <button class="btn primary" onclick="RN.inversion.abrirNuevaPropia()">+ Nueva inversión</button>
       </div>
-
-      <!-- KPIs combinados: inversión + deudas -->
+      <p class="muted" style="margin:0 0 12px;font-size:13px">Dinero <strong>tuyo</strong> puesto en la red. Aquí solo se sigue la recuperación — no hay que “devolverlo” a un acreedor.</p>
       <div class="kpi-stack" id="kpi-inversion"></div>
-
-      <!-- Barra de recuperación global de la inversión -->
       <div class="card mt-16" id="card-recuperacion-inv" style="display:none">
-        <h3>Recuperación de la inversión</h3>
+        <h3>Recuperación del capital</h3>
         <div id="inversion-recuperacion"></div>
       </div>
-
-      <!-- v5.32.0: Barra de devolución global de deudas personales activas (préstamos externos) -->
-      <div class="card mt-16" id="card-recuperacion-deudas" style="display:none">
-        <h3>Deudas personales activas</h3>
-        <div id="deudas-recuperacion"></div>
-      </div>
-
-      <!-- Bloque 1: Inversiones activas (capital propio aún por recuperar) -->
       <div class="card mt-16">
-        <h3>Inversiones <span class="muted" style="font-size:13px;font-weight:400">(capital propio por recuperar)</span></h3>
+        <h3>En recuperación <span class="muted" style="font-size:13px;font-weight:400">(capital propio)</span></h3>
         <div class="accordion-list" id="lista-inversion"></div>
       </div>
-
-      <!-- v5.52.5: Inversiones de capital propio ya recuperadas -->
       <div class="card mt-16" id="card-inversiones-recuperadas" style="display:none">
-        <h3>Inversiones recuperadas <span class="muted" style="font-size:13px;font-weight:400">(capital propio ya cubierto)</span></h3>
+        <h3>Ya recuperadas</h3>
         <div class="accordion-list" id="lista-inversiones-recuperadas"></div>
       </div>
+    </section>
 
-      <!-- Bloque 2: Deudas personales activas (prestamos externos por devolver) -->
+    <!-- POR PAGAR (pasivos / préstamos externos) -->
+    <section class="view" id="view-deudas">
+      <div class="view-header"><h2>Por pagar</h2><div class="spacer"></div>
+        <button class="btn" onclick="RN.investment.abrirPoliticaDeudas && RN.investment.abrirPoliticaDeudas()">⚙️ Política</button>
+        <button class="btn primary" onclick="RN.inversion.abrirNuevaDeuda()">+ Nueva deuda</button>
+      </div>
+      <p class="muted" style="margin:0 0 12px;font-size:13px">Dinero que <strong>debes</strong> devolver (banco, familiar, prestamista). El saldo se lleva en la moneda del contrato; la caja paga al tipo del día.</p>
+      <div class="kpi-stack" id="kpi-deudas"></div>
+      <div class="card mt-16" id="card-politica-deudas">
+        <h3>Política de pagos</h3>
+        <div id="politica-deudas-resumen" class="muted" style="font-size:13px"></div>
+      </div>
+      <div class="card mt-16" id="card-recuperacion-deudas" style="display:none">
+        <h3>Progreso global</h3>
+        <div id="deudas-recuperacion"></div>
+      </div>
       <div class="card mt-16">
-        <h3>Deudas personales activas <span class="muted" style="font-size:13px;font-weight:400">(préstamos por devolver)</span></h3>
+        <h3>Agenda de pagos <span class="muted" style="font-size:13px;font-weight:400">(ordenadas por prioridad)</span></h3>
         <div class="accordion-list" id="lista-deudas-activas"></div>
       </div>
-
-      <!-- Bloque 3: Historial de deudas concluidas (totalmente liquidadas) -->
       <div class="card mt-16" id="card-deudas-concluidas" style="display:none">
-        <h3>Deudas concluidas <span class="muted" style="font-size:13px;font-weight:400">(totalmente liquidadas)</span></h3>
+        <h3>Ya liquidadas</h3>
         <div class="accordion-list" id="lista-deudas-concluidas"></div>
       </div>
     </section>
@@ -468,6 +476,15 @@
         </div>
         <div class="form-row">
           <div><label>% de la ganancia del mes a reservar (modelo "dos bolsillos") — cada mes, de la ganancia del mes (ingresos − gastos), este porcentaje va al bolsillo RESERVA (intocable) y el resto al bolsillo LIBRE (retirable). Los retiros salen solo del bolsillo libre. Ej: 70% → si el mes deja 10mil de ganancia, se reservan 7mil y quedan 3mil libres. Default 70.</label><input type="number" id="cfg-pct-reserva-caja" step="1" min="0" max="100" value="70" placeholder="Ej: 70" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
+          <div><label>% del bolsillo libre sugerido para deudas (política normal) — Default 25.</label><input type="number" id="cfg-pct-libre-deudas" step="1" min="0" max="100" value="25" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
+          <div><label>% de austeridad si el libre está bajo — Default 10.</label><input type="number" id="cfg-pct-austeridad-deudas" step="1" min="0" max="100" value="10" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
+          <div><label>Uso de reserva para deudas</label>
+            <select id="cfg-politica-reserva-deudas">
+              <option value="nunca">Nunca tocar reserva</option>
+              <option value="con_meta">Solo si hay meta y confirmo</option>
+              <option value="siempre_confirmar">Permitir con confirmación siempre</option>
+            </select>
+          </div>
         </div>
         <button class="btn primary" onclick="RN.config.guardar()">Guardar configuración</button>
       </div>

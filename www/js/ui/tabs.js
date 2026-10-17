@@ -16,6 +16,7 @@ RN.tabs._vistaAGrupo = {
   calendario:  'operacion',
   realizados:  'operacion',
   inversion:   'dinero',
+  deudas:      'dinero',
   inventario:  'dinero',
   gastos:      'dinero',
   descuentos:  'dinero',
@@ -156,7 +157,7 @@ RN.tabs.irGrupo = function (grupo) {
   var primeraVista = {
     inicio:    'dashboard',
     operacion: 'clientes',
-    dinero:    'inversion',
+    dinero:    'deudas',
     red:       'red',
     analisis:  'reportes'
   };

@@ -51,6 +51,16 @@ RN.config.cargar = function () {
       if (RN.state.config.pctReservaCaja === undefined || RN.state.config.pctReservaCaja === null) {
         RN.state.config.pctReservaCaja = 70;
       }
+      // v5.55.7: política de pago de deudas (pasivos)
+      if (RN.state.config.pctLibreDeudas === undefined || RN.state.config.pctLibreDeudas === null) {
+        RN.state.config.pctLibreDeudas = 25;
+      }
+      if (RN.state.config.pctAusteridadDeudas === undefined || RN.state.config.pctAusteridadDeudas === null) {
+        RN.state.config.pctAusteridadDeudas = 10;
+      }
+      if (!RN.state.config.politicaReservaDeudas) {
+        RN.state.config.politicaReservaDeudas = 'con_meta';
+      }
       // v5.12.4: paquete pendiente para el próximo mes (null si no hay)
       if (RN.state.config.paquetePendiente === undefined) {
         RN.state.config.paquetePendiente = null;
@@ -115,6 +125,13 @@ RN.config.guardar = function () {
   // v5.17.0/v5.18.0: % de la ganancia proyectada del mes a mantener como reserva en caja
   const pctReserva = parseFloat((document.getElementById('cfg-pct-reserva-caja') || {}).value);
   RN.state.config.pctReservaCaja = isNaN(pctReserva) ? 70 : Math.max(0, Math.min(100, pctReserva));
+  // v5.55.7 política deudas
+  var pl = parseFloat((document.getElementById('cfg-pct-libre-deudas') || {}).value);
+  RN.state.config.pctLibreDeudas = isNaN(pl) ? 25 : Math.max(0, Math.min(100, pl));
+  var pa = parseFloat((document.getElementById('cfg-pct-austeridad-deudas') || {}).value);
+  RN.state.config.pctAusteridadDeudas = isNaN(pa) ? 10 : Math.max(0, Math.min(100, pa));
+  var pr = (document.getElementById('cfg-politica-reserva-deudas') || {}).value;
+  if (pr === 'nunca' || pr === 'con_meta' || pr === 'siempre_confirmar') RN.state.config.politicaReservaDeudas = pr;
   // v5.24.0: comprobación automática de actualizaciones (toggle en Ajustes).
   const autoUpdEl = document.getElementById('cfg-auto-updates');
   if (autoUpdEl) RN.state.config.autoCheckUpdates = autoUpdEl.value === 'true';
@@ -160,6 +177,9 @@ RN.config.rellenarForm = function () {
   t('cfg-pct-ganancia-mes', c.pctRecuperacionGananciaMes || 0);
   // v5.17.0/v5.18.0: % de la ganancia proyectada del mes a mantener como reserva en caja
   t('cfg-pct-reserva-caja', (c.pctReservaCaja === undefined || c.pctReservaCaja === null) ? 70 : c.pctReservaCaja);
+  t('cfg-pct-libre-deudas', (c.pctLibreDeudas === undefined || c.pctLibreDeudas === null) ? 25 : c.pctLibreDeudas);
+  t('cfg-pct-austeridad-deudas', (c.pctAusteridadDeudas === undefined || c.pctAusteridadDeudas === null) ? 10 : c.pctAusteridadDeudas);
+  t('cfg-politica-reserva-deudas', c.politicaReservaDeudas || 'con_meta');
   // v5.24.0: comprobación automática de actualizaciones (default true).
   t('cfg-auto-updates', String(c.autoCheckUpdates !== false));
 };

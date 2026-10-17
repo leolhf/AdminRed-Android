@@ -1,27 +1,14 @@
 /**
- * ui/views/finanzas.js — Vistas de Finanzas: Inversiones y deudas, Inventario y Gastos.
+ * ui/views/finanzas.js — Vistas de Finanzas: Capital en red, Por pagar, Inventario y Gastos.
  * Parte de RN.render (extraído de render.js en v5.45.0; el código no cambió).
  * Depende de: ui/render.js (helpers), calculations.js.
  */
 // ---------- INVERSION ----------
 RN.render.inversion = function () {
+  // v5.55.7: solo capital propio (ya no mezcla pasivos)
   const kpi = document.getElementById('kpi-inversion');
-  const pctPersonal = RN.investment.pctPersonal();
-  // v5.13.2 (fusión visual): KPIs combinados de inversión + deudas en una sola grid.
-  // v5.13.16 (UI-3): KPIs agrupados en dos bloques con sub-títulos para reducir
-  //   el scroll vertical en móvil y dar contexto visual inmediato.
-  // v5.13.16 (LOG-1): El KPI "% recuperación" usa porcentajeRecuperacionEfectiva()
-  //   cuando pctGananciaMes > 0, para ser consistente con el "% efectivo" de cada
-  //   card. Antes usaba porcentajeRecuperacion() (solo margen de clientes) y
-  //   contradecía el porcentaje efectivo de las cards.
   if (kpi) {
-    var _deudasActivas = RN.investment.deudasActivas();
-    var _deudasConcluidas = RN.investment.deudasConcluidas();
-    var _saldoDeudas = _deudasActivas.reduce(function (s, i) { return s + RN.investment.saldoADevolver(i); }, 0);
-    var _devueltoActivas = _deudasActivas.reduce(function (s, i) { return s + RN.investment.totalDevuelto(i); }, 0);
-    var _devueltoConcluidas = _deudasConcluidas.reduce(function (s, i) { return s + RN.investment.totalDevuelto(i); }, 0);
     var _pctGananciaMes = RN.investment.pctGananciaMes();
-    // v5.13.16 (LOG-1): usar % efectivo cuando hay aporte extra de ganancia del mes
     var _pctRecKPI = _pctGananciaMes > 0
       ? RN.investment.porcentajeRecuperacionEfectiva()
       : RN.investment.porcentajeRecuperacion();
@@ -36,25 +23,12 @@ RN.render.inversion = function () {
       { label: _pctLabel, value: _pctRecKPI + '%', cls: 'amber' },
       { label: 'Por recuperar', value: RN.calc.formatCUP(Math.max(0, RN.investment.totalInvertido() - _totalRecKPI)), cls: 'red' }
     ];
-    var _kpiDeudas = [
-      { label: 'Deudas activas', value: String(_deudasActivas.length), cls: 'blue' },
-      { label: 'Saldo por devolver', value: RN.calc.formatCUP(_saldoDeudas), cls: 'red' },
-      { label: 'Ya devuelto (activas)', value: RN.calc.formatCUP(_devueltoActivas), cls: 'amber' },
-      { label: 'Concluidas', value: String(_deudasConcluidas.length) + ' · ' + RN.calc.formatCUP(_devueltoConcluidas), cls: 'green' }
-    ];
-    var _kpiHtml = '<div class="kpi-group-title">Inversiones</div>'
-      + '<div class="kpi-grid">'
-      + _kpiInversiones.map(k => '<div class="kpi ' + k.cls + '"><div class="label">' + k.label + '</div><div class="value">' + k.value + '</div></div>').join('')
-      + '</div>'
-      + '<div class="kpi-group-title" style="margin-top:12px">Deudas personales</div>'
-      + '<div class="kpi-grid">'
-      + _kpiDeudas.map(k => '<div class="kpi ' + k.cls + '"><div class="label">' + k.label + '</div><div class="value">' + k.value + '</div></div>').join('')
-      + '</div>';
-    kpi.innerHTML = _kpiHtml;
+    kpi.innerHTML = '<div class="kpi-group-title">Capital en red</div><div class="kpi-grid">'
+      + _kpiInversiones.map(function (k) {
+        return '<div class="kpi ' + k.cls + '"><div class="label">' + k.label + '</div><div class="value">' + k.value + '</div></div>';
+      }).join('') + '</div>';
   }
 
-  // v5.12.6 (propuesta B): barra animada de recuperación global de la inversión.
-  // Se muestra solo si hay inversiones registradas (la card viene oculta por defecto).
   const recupInvEl = document.getElementById('inversion-recuperacion');
   const recupInvCard = document.getElementById('card-recuperacion-inv');
   if (recupInvEl && recupInvCard) {
@@ -66,69 +40,28 @@ RN.render.inversion = function () {
     }
   }
 
-  // v5.32.0: barra gemela de devolución global de deudas personales activas
-  // (préstamos externos). Se muestra solo si hay deudas activas registradas.
-  const recupDeudasEl = document.getElementById('deudas-recuperacion');
-  const recupDeudasCard = document.getElementById('card-recuperacion-deudas');
-  if (recupDeudasEl && recupDeudasCard) {
-    var totalPrestadoActivas = RN.investment.totalPrestadoActivas();
-    if (totalPrestadoActivas > 0) {
-      recupDeudasCard.style.display = '';
-      recupDeudasEl.innerHTML = RN.render.barraRecuperacion(
-        totalPrestadoActivas,
-        RN.investment.totalDevueltoActivas(),
-        RN.investment.porcentajeDevueltoDeudas(),
-        {
-          icono: '🤝',
-          titulo: 'Deudas personales activas',
-          labelInvertido: 'Prestado',
-          labelRecuperado: 'Devuelto',
-          labelFaltante: 'Por devolver',
-          textoVacio: 'Sin deudas personales activas',
-          textoCompleto: '✓ Deuda devuelta',
-          textoProceso: 'En proceso de devolución',
-          avisoCosto: false
-        }
-      ) + (RN.investment.htmlMetaDevolucion ? RN.investment.htmlMetaDevolucion() : "");
-    } else {
-      recupDeudasCard.style.display = 'none';
-    }
-  }
-
-  // v5.52.5: marcar capital propio que ya alcanzó el 100 % de recuperación
-  var _recienRecuperadas = RN.investment.verificarRecuperaciones
-    ? RN.investment.verificarRecuperaciones()
-    : [];
-  if (_recienRecuperadas.length) {
-    try { RN.storageLocal.guardar(); } catch (e) {}
-    var _nombres = _recienRecuperadas.map(function (i) { return i.concepto || 'Inversión'; }).join(', ');
-    if (RN.notifyUI && RN.notifyUI.toast) {
-      RN.notifyUI.toast('🎉 Inversión recuperada: ' + _nombres + '. El margen de aquí en adelante es ganancia.', 'success');
-    }
-  }
-
   const cont = document.getElementById('lista-inversion');
-  if (!cont) return;
-
   var _invActivas = RN.investment.inversionesActivas
     ? RN.investment.inversionesActivas()
-    : (RN.state.investments || []).filter(function (inv) {
-        return RN.investment.origenCapital(inv) !== 'prestado_externo' && !inv.inversionRecuperada;
+    : (RN.state.investments || []).filter(function (i) {
+        return RN.investment.origenCapital(i) !== 'prestado_externo' && !i.inversionRecuperada;
       });
   var _invRecuperadas = RN.investment.inversionesRecuperadas
     ? RN.investment.inversionesRecuperadas()
-    : (RN.state.investments || []).filter(function (inv) {
-        return RN.investment.origenCapital(inv) !== 'prestado_externo' && !!inv.inversionRecuperada;
+    : (RN.state.investments || []).filter(function (i) {
+        return RN.investment.origenCapital(i) !== 'prestado_externo' && !!i.inversionRecuperada;
       });
 
-  if (!_invActivas.length && !_invRecuperadas.length) {
-    cont.innerHTML = '<div class="acc-empty"><div class="icon">📈</div>No hay inversiones con capital propio registradas.</div>';
-  } else if (!_invActivas.length) {
-    cont.innerHTML = '<div class="acc-empty"><div class="icon">✓</div>Todas las inversiones de capital propio están recuperadas. El margen actual es ganancia.</div>';
-  } else {
-    cont.innerHTML = _invActivas.map(function (inv) {
-      return RN.inversion._cardInversion(inv, { esDeuda: false, esRecuperada: false });
-    }).join('');
+  if (cont) {
+    if (!_invActivas.length && !_invRecuperadas.length) {
+      cont.innerHTML = '<div class="acc-empty"><div class="icon">📈</div>No hay inversiones con capital propio. Usa “+ Nueva inversión”.</div>';
+    } else if (!_invActivas.length) {
+      cont.innerHTML = '<div class="acc-empty"><div class="icon">✓</div>Todo el capital propio está recuperado. El margen actual es ganancia.</div>';
+    } else {
+      cont.innerHTML = _invActivas.map(function (inv) {
+        return RN.inversion._cardInversion(inv, { esDeuda: false, esRecuperada: false });
+      }).join('');
+    }
   }
 
   var contRec = document.getElementById('lista-inversiones-recuperadas');
@@ -150,21 +83,85 @@ RN.render.inversion = function () {
     }
   }
 
-  // v5.12.6: disparar la animación de la barra de recuperación tras pintarla.
   if (typeof requestAnimationFrame === 'function') {
     requestAnimationFrame(RN.render.animarBarrasRecuperacion);
-  } else {
+  } else if (RN.render.animarBarrasRecuperacion) {
     RN.render.animarBarrasRecuperacion();
   }
-
-  // v5.13.2 (fusión visual): renderizar también las listas de deudas
-  // (activas y concluidas) dentro de esta misma vista unificada.
-  // Los KPIs de deudas ya se integraron arriba en la grid combinada.
-  var _act = RN.investment.deudasActivas();
-  var _conc = RN.investment.deudasConcluidas();
-  RN.inversion._renderDeudasActivas(_act);
-  RN.inversion._renderDeudasConcluidas(_conc);
 };
+
+/** v5.55.7 — Vista Por pagar (pasivos): agenda, política, KPIs de deuda. */
+RN.render.deudas = function () {
+  var kpi = document.getElementById('kpi-deudas');
+  var _act = RN.investment.colaDeudasOrdenada
+    ? RN.investment.colaDeudasOrdenada()
+    : RN.investment.deudasActivas();
+  var _conc = RN.investment.deudasConcluidas();
+  var _saldo = (_act || []).reduce(function (s, i) {
+    return s + (RN.investment.saldoADevolverMoneda ? RN.investment.monedaDeudaACup(i, RN.investment.saldoADevolverMoneda(i)) : RN.investment.saldoADevolver(i));
+  }, 0);
+  var _devAct = (_act || []).reduce(function (s, i) { return s + RN.investment.totalDevuelto(i); }, 0);
+  var _devConc = (_conc || []).reduce(function (s, i) { return s + RN.investment.totalDevuelto(i); }, 0);
+  if (kpi) {
+    var kpis = [
+      { label: 'Deudas activas', value: String((_act || []).length), cls: 'blue' },
+      { label: 'Saldo por devolver', value: RN.calc.formatCUP(_saldo), cls: 'red' },
+      { label: 'Ya devuelto (activas)', value: RN.calc.formatCUP(_devAct), cls: 'amber' },
+      { label: 'Liquidadas', value: String((_conc || []).length) + ' · ' + RN.calc.formatCUP(_devConc), cls: 'green' }
+    ];
+    kpi.innerHTML = '<div class="kpi-group-title">Pasivos (por pagar)</div><div class="kpi-grid">'
+      + kpis.map(function (k) {
+        return '<div class="kpi ' + k.cls + '"><div class="label">' + k.label + '</div><div class="value">' + k.value + '</div></div>';
+      }).join('') + '</div>';
+  }
+
+  var polEl = document.getElementById('politica-deudas-resumen');
+  if (polEl && RN.investment.textoPoliticaDeudas) {
+    polEl.innerHTML = RN.investment.textoPoliticaDeudas()
+      + ' <button type="button" class="btn sm" style="margin-left:6px" onclick="RN.investment.abrirPoliticaDeudas()">Editar en Ajustes</button>';
+  }
+
+  var recupDeudasEl = document.getElementById('deudas-recuperacion');
+  var recupDeudasCard = document.getElementById('card-recuperacion-deudas');
+  if (recupDeudasEl && recupDeudasCard) {
+    var totalPrestadoActivas = RN.investment.totalPrestadoActivas
+      ? RN.investment.totalPrestadoActivas()
+      : 0;
+    if (totalPrestadoActivas > 0 && RN.render.barraRecuperacion) {
+      recupDeudasCard.style.display = '';
+      recupDeudasEl.innerHTML = RN.render.barraRecuperacion(
+        totalPrestadoActivas,
+        RN.investment.totalDevueltoActivas ? RN.investment.totalDevueltoActivas() : 0,
+        RN.investment.porcentajeDevueltoDeudas ? RN.investment.porcentajeDevueltoDeudas() : 0,
+        {
+          labelFaltante: 'Por devolver',
+          textoVacio: 'Sin deudas personales activas',
+          textoProceso: 'En proceso de devolución',
+          avisoCosto: false
+        }
+      );
+      if (RN.investment.htmlMetaDevolucion) {
+        recupDeudasEl.innerHTML += RN.investment.htmlMetaDevolucion();
+      }
+    } else {
+      recupDeudasCard.style.display = 'none';
+    }
+  }
+
+  if (RN.inversion && RN.inversion._renderDeudasActivas) {
+    RN.inversion._renderDeudasActivas(_act || []);
+  }
+  if (RN.inversion && RN.inversion._renderDeudasConcluidas) {
+    RN.inversion._renderDeudasConcluidas(_conc || []);
+  }
+
+  if (typeof requestAnimationFrame === 'function') {
+    requestAnimationFrame(RN.render.animarBarrasRecuperacion);
+  } else if (RN.render.animarBarrasRecuperacion) {
+    RN.render.animarBarrasRecuperacion();
+  }
+};
+
 // ---------- INVENTARIO ----------
 RN.render.inventario = function () {
   const cont = document.getElementById('lista-inventario');

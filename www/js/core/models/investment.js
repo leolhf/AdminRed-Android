@@ -505,6 +505,78 @@ RN.investment.pctLibreDeudas = function () {
   return p;
 };
 
+/** % de austeridad si el libre está bajo. Default 10. */
+RN.investment.pctAusteridadDeudas = function () {
+  var p = +(RN.state && RN.state.config && RN.state.config.pctAusteridadDeudas);
+  if (!(p >= 0 && p <= 100)) p = 10;
+  return p;
+};
+
+/**
+ * Política de reserva: 'nunca' | 'con_meta' | 'siempre_confirmar'
+ */
+RN.investment.politicaReservaDeudas = function () {
+  var v = (RN.state && RN.state.config && RN.state.config.politicaReservaDeudas) || 'con_meta';
+  if (v !== 'nunca' && v !== 'con_meta' && v !== 'siempre_confirmar') v = 'con_meta';
+  return v;
+};
+
+/** Texto legible de la política (para UI). */
+RN.investment.textoPoliticaDeudas = function () {
+  var n = RN.investment.pctLibreDeudas();
+  var a = RN.investment.pctAusteridadDeudas();
+  var r = RN.investment.politicaReservaDeudas();
+  var rt = r === 'nunca' ? 'nunca se toca la reserva'
+    : (r === 'con_meta' ? 'reserva solo si hay meta y confirmas'
+    : 'reserva permitida con confirmación');
+  return 'En condiciones normales se sugiere destinar el ' + n + '% del bolsillo libre a deudas. '
+    + 'Si el libre está justo respecto a lo que proyectas tras cobrar, se baja al ' + a + '%. '
+    + 'La reserva: ' + rt + '.';
+};
+
+/**
+ * Agenda ordenada de deudas activas:
+ * 1) con fecha objetivo vencida o esta semana
+ * 2) prioridad alta (si existe)
+ * 3) con meta de cuota
+ * 4) mayor saldo
+ */
+RN.investment.colaDeudasOrdenada = function () {
+  var hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  var en7 = new Date(hoy.getTime() + 7 * 86400000);
+  var list = (RN.investment.deudasActivas() || []).slice();
+  function score(inv) {
+    var s = 0;
+    var fo = RN.investment.fechaObjetivoDeuda(inv);
+    if (fo) {
+      var d = new Date(fo + 'T00:00:00');
+      if (!isNaN(d.getTime())) {
+        if (d < hoy) s += 1000;
+        else if (d <= en7) s += 500;
+      }
+    }
+    if (inv.prioridadDeuda === 'alta') s += 200;
+    if (RN.investment.metaCuotaDeuda(inv) > 0) s += 50;
+    s += Math.min(49, RN.investment.saldoADevolverMoneda(inv) / 1000);
+    return s;
+  }
+  list.sort(function (a, b) { return score(b) - score(a); });
+  return list;
+};
+
+RN.investment.abrirPoliticaDeudas = function () {
+  if (RN.ajustes && RN.ajustes.abrir) {
+    RN.ajustes.abrir();
+    setTimeout(function () {
+      var el = document.getElementById('cfg-pct-libre-deudas');
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200);
+  } else {
+    RN.notifyUI.toast('Abre Ajustes para editar la política de deudas', 'info');
+  }
+};
+
 /**
  * Moneda en la que se lleva el saldo de la deuda: 'USD' | 'CUP'.
  * Explicit inv.monedaDeuda, o se infiere del pago al crear el préstamo.
@@ -649,8 +721,8 @@ RN.investment.monedaDeudaACup = function (inv, montoMon) {
 RN.investment.planDevolucion = function (inv) {
   var mon = RN.investment.monedaDeuda(inv);
   var saldo = RN.investment.saldoADevolverMoneda(inv);
-  var pctIdeal = RN.investment.pctLibreDeudas(); // default 25
-  var pctBajo = Math.min(pctIdeal, 10);
+  var pctIdeal = RN.investment.pctLibreDeudas();
+  var pctBajo = Math.min(pctIdeal, RN.investment.pctAusteridadDeudas());
   var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0, reserva: 0 };
   var libreReal = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
   var reserva = Math.max(0, +(b.reserva) || 0);
@@ -742,17 +814,25 @@ RN.investment.planDevolucion = function (inv) {
   }
 
   // Si hay meta/cuota y el sugerido no llega
+  var polRes = RN.investment.politicaReservaDeudas();
   if (objetivoMes > 0 && sugerido + 0.0001 < Math.min(saldo, objetivoMes)) {
     var faltaMon = +(Math.min(saldo, objetivoMes) - sugerido).toFixed(2);
     var faltaCUP = RN.investment.monedaDeudaACup(inv, faltaMon);
     if (faltaCUP > 0.01) {
       nivel = 'reserva';
-      tocaReserva = true;
       reservaNecesariaCUP = faltaCUP;
-      mensajes.push('La meta/cuota del mes es mayor que el sugerido por libre. Faltan ' +
-        (mon === 'USD' ? faltaMon.toFixed(2) + ' USD' : RN.calc.formatCUP(faltaMon)) +
-        ' (≈ ' + RN.calc.formatCUP(faltaCUP) + '). Puedes usar reserva solo confirmando.');
+      if (polRes === 'nunca') {
+        tocaReserva = false;
+        mensajes.push('La meta supera el libre. Política: no tocar reserva. Reduce la meta o espera cobros.');
+      } else if (polRes === 'con_meta' || polRes === 'siempre_confirmar') {
+        tocaReserva = true;
+        mensajes.push('La meta/cuota del mes es mayor que el sugerido por libre. Faltan ' +
+          (mon === 'USD' ? faltaMon.toFixed(2) + ' USD' : RN.calc.formatCUP(faltaMon)) +
+          ' (≈ ' + RN.calc.formatCUP(faltaCUP) + '). Puedes usar reserva solo confirmando.');
+      }
     }
+  } else if (polRes === 'siempre_confirmar' && libreReal <= 0.01 && saldo > 0) {
+    tocaReserva = true;
   }
 
   // Tiempo estimado textual
