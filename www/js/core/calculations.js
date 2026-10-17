@@ -1321,7 +1321,9 @@ RN.calc.cajaProyeccion = function (mes) {
     .sort(function (x, y) { return x.dia - y.dia; });
 
   var costoPaquete = RN.calc.montoPaqueteProveedor();
-  var porPagar = (costoPaquete > 0 && !RN.calc.pagoProveedorMes(mes)) ? costoPaquete : 0;
+  var porPagar = (costoPaquete > 0 && RN.calc.saldoProveedorMes)
+    ? RN.calc.saldoProveedorMes(mes)
+    : ((costoPaquete > 0 && !RN.calc.pagoProveedorMes(mes)) ? costoPaquete : 0);
   var utilHoy = RN.calc.utilidadMes(mes);
 
   var resolver = function (fraccion) {
@@ -1383,6 +1385,48 @@ RN.calc.gastosMes = function (mes) {
 RN.calc.pagoProveedorMes = function (mes) {
   mes = mes || RN.calc.mesActualStr();
   return RN.state.gastos.find(g => g.esPagoProveedor && (g.mes || '').slice(0, 7) === mes.slice(0, 7)) || null;
+};
+
+/** v5.55.10 — Todos los pagos al proveedor del mes. */
+RN.calc.pagosProveedorMes = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  return (RN.state.gastos || []).filter(function (g) {
+    return g.esPagoProveedor && (g.mes || '').slice(0, 7) === String(mes).slice(0, 7);
+  });
+};
+
+/** Total pagado al proveedor en el mes (CUP), sin descuentos. */
+RN.calc.totalPagadoProveedorMes = function (mes) {
+  return RN.calc.pagosProveedorMes(mes).reduce(function (s, g) {
+    return s + (+g.monto || 0);
+  }, 0);
+};
+
+/** Total de descuentos aplicados a pagos del proveedor en el mes (CUP). */
+RN.calc.totalDescuentoProveedorMes = function (mes) {
+  return RN.calc.pagosProveedorMes(mes).reduce(function (s, g) {
+    return s + (+g.descuentoProveedor || 0);
+  }, 0);
+};
+
+/**
+ * Saldo pendiente del paquete del mes (CUP).
+ * = monto paquete − pagado − descuentos. Mínimo 0.
+ */
+RN.calc.saldoProveedorMes = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  var paquete = RN.calc.montoPaqueteProveedor();
+  if (!(paquete > 0)) return 0;
+  var pagado = RN.calc.totalPagadoProveedorMes(mes);
+  var desc = RN.calc.totalDescuentoProveedorMes(mes);
+  return Math.max(0, +(paquete - pagado - desc).toFixed(2));
+};
+
+/** true si el paquete del mes está cubierto (pagado + descuento >= monto). */
+RN.calc.paqueteProveedorCubierto = function (mes) {
+  var paquete = RN.calc.montoPaqueteProveedor();
+  if (!(paquete > 0)) return true;
+  return RN.calc.saldoProveedorMes(mes) <= 0.01;
 };
 
 

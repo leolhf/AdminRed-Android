@@ -122,41 +122,51 @@ RN.paqueteProveedor.abrir = function () {
       '<p class="muted" id="prov-vig-info" style="margin-top:6px;font-size:12px">Los cambios se aplican inmediatamente al paquete actual.</p>' +
       '</div></div>' +
 
-      // --- Sección de pago ---
+      // --- Sección de pago (v5.55.10: parcial, descuento, multi-moneda) ---
       '<div style="border-top:1px solid var(--border);padding-top:12px;margin-top:4px">' +
+      '<div class="muted" style="font-size:13px;margin-bottom:8px" id="prov-saldo-mes"></div>' +
       '<div class="form-row"><div><label>Fecha de pago</label>' +
       '<input type="date" id="prov-fecha" value="' + new Date().toISOString().slice(0, 10) + '"></div></div>' +
 
       '<div class="form-row"><div><label>Moneda de pago</label>' +
-      '<div style="display:flex;gap:8px">' +
-        '<button class="cobro-moneda-btn active" id="prov-moneda-cup" onclick="RN.paqueteProveedor.setMoneda(\'CUP\')">CUP</button>' +
-        '<button class="cobro-moneda-btn" id="prov-moneda-usd" onclick="RN.paqueteProveedor.setMoneda(\'USD\')">USD</button>' +
-        '<!-- Oculto: el negocio ya opera en USD, no se necesita mixto para pagos nuevos -->' +
-        '<button class="cobro-moneda-btn" id="prov-moneda-mixto" onclick="RN.paqueteProveedor.setMoneda(\'MIXTO\')" style="display:none">Mixto</button>' +
+      '<div style="display:flex;gap:8px;flex-wrap:wrap">' +
+        '<button type="button" class="cobro-moneda-btn active" id="prov-moneda-cup" onclick="RN.paqueteProveedor.setMoneda(\'CUP\')">CUP</button>' +
+        '<button type="button" class="cobro-moneda-btn" id="prov-moneda-usd" onclick="RN.paqueteProveedor.setMoneda(\'USD\')">USD</button>' +
+        '<button type="button" class="cobro-moneda-btn" id="prov-moneda-mixto" onclick="RN.paqueteProveedor.setMoneda(\'MIXTO\')">Mixto</button>' +
       '</div></div></div>' +
 
       '<div class="form-row" id="prov-grupo-usd" style="display:none"><div><label>Monto en USD</label>' +
-      '<input type="number" id="prov-monto-usd" step="0.01" placeholder="0" value="0" oninput="RN.paqueteProveedor.recalcular()"></div></div>' +
+      '<input type="number" id="prov-monto-usd" step="0.01" min="0" inputmode="decimal" placeholder="0" value="0" oninput="RN.paqueteProveedor.recalcular()"></div></div>' +
 
-      '<div class="form-row"><div><label>Monto en CUP</label>' +
-      '<input type="number" id="prov-monto-cup" step="0.01" placeholder="0" value="0" oninput="RN.paqueteProveedor.recalcular()"></div></div>' +
+      '<div class="form-row" id="prov-grupo-cup"><div><label>Monto en CUP</label>' +
+      '<input type="number" id="prov-monto-cup" step="0.01" min="0" inputmode="decimal" placeholder="0" value="0" oninput="RN.paqueteProveedor.recalcular()"></div></div>' +
 
-      '<div id="prov-desglose" style="background:var(--bg-alt);padding:12px;border-radius:8px;margin-bottom:12px;display:none"></div>' +
+      '<div class="form-row"><div><label>Descuento (CUP, opcional)</label>' +
+      '<input type="number" id="prov-descuento" step="0.01" min="0" inputmode="decimal" placeholder="0" value="0" oninput="RN.paqueteProveedor.recalcular()">' +
+      '<small class="muted">Reduce el saldo del paquete sin salir de caja (acuerdo con el proveedor).</small></div></div>' +
+
+      '<div class="flex wrap" style="gap:8px;margin-bottom:10px">' +
+        '<button type="button" class="btn sm" onclick="RN.paqueteProveedor.usarSaldoCompleto()">Cubrir saldo</button>' +
+        '<button type="button" class="btn sm" id="prov-btn-completar-otra" style="display:none" onclick="RN.paqueteProveedor.completarConOtraMoneda()">Completar con otra moneda</button>' +
+      '</div>' +
+
+      '<div id="prov-desglose" style="background:var(--bg-alt,var(--surface-2));padding:12px;border-radius:8px;margin-bottom:12px;display:none"></div>' +
+      '<div id="prov-aviso-moneda" style="margin-bottom:8px"></div>' +
       '</div>' +
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>' +
       '<button class="btn" onclick="RN.paqueteProveedor.guardarCambios()">\ud83d\udcbe Guardar cambios</button>' +
-      '<button class="btn primary" onclick="RN.paqueteProveedor.confirmar()">\ud83d\udcb3 Registrar pago</button>' +
+      '<button class="btn primary" id="prov-btn-pagar" onclick="RN.paqueteProveedor.confirmar()">\ud83d\udcb3 Registrar pago</button>' +
     '</div>';
 
   RN.uiComponents.modal(html);
   RN.paqueteProveedor._moneda = 'CUP';
   RN.paqueteProveedor._vigencia = 'este';
-  // Precargar el monto en CUP con el cálculo automático
-  var montoAuto = RN.paqueteProveedor.calcMontoPaquete();
+  // Precargar con el SALDO pendiente (permite parciales; no fuerza el total si ya hubo pagos)
+  var saldo = RN.calc.saldoProveedorMes ? RN.calc.saldoProveedorMes() : RN.paqueteProveedor.calcMontoPaquete();
   var cupInput = document.getElementById('prov-monto-cup');
-  if (cupInput) cupInput.value = montoAuto;
+  if (cupInput) cupInput.value = saldo > 0 ? saldo : 0;
   RN.paqueteProveedor.actualizarAviso();
   RN.paqueteProveedor.recalcular();
 };
@@ -186,12 +196,13 @@ RN.paqueteProveedor.setMoneda = function (moneda) {
     if (btn) btn.classList.toggle('active', m.toUpperCase() === moneda);
   });
   var grupoUsd = document.getElementById('prov-grupo-usd');
+  var grupoCup = document.getElementById('prov-grupo-cup');
   if (grupoUsd) grupoUsd.style.display = (moneda === 'USD' || moneda === 'MIXTO') ? '' : 'none';
+  if (grupoCup) grupoCup.style.display = (moneda === 'CUP' || moneda === 'MIXTO') ? '' : 'none';
+  // No pisar montos al cambiar moneda (respeta parciales); solo limpiar la no usada
   if (moneda === 'CUP') {
     var usdInput = document.getElementById('prov-monto-usd');
     if (usdInput) usdInput.value = 0;
-    var cupInput = document.getElementById('prov-monto-cup');
-    if (cupInput) cupInput.value = RN.paqueteProveedor.calcMontoPaquete();
   } else if (moneda === 'USD') {
     var cupInput2 = document.getElementById('prov-monto-cup');
     if (cupInput2) cupInput2.value = 0;
@@ -199,22 +210,85 @@ RN.paqueteProveedor.setMoneda = function (moneda) {
   RN.paqueteProveedor.recalcular();
 };
 
-/** Recalcula el total del pago y muestra el desglose. */
+/** Rellena el pago para cubrir el saldo pendiente (en la moneda activa). */
+RN.paqueteProveedor.usarSaldoCompleto = function () {
+  var saldo = RN.calc.saldoProveedorMes ? RN.calc.saldoProveedorMes() : RN.paqueteProveedor.calcMontoPaquete();
+  var desc = parseFloat((document.getElementById('prov-descuento') || {}).value) || 0;
+  var neto = Math.max(0, +(saldo - desc).toFixed(2));
+  var mon = RN.paqueteProveedor._moneda;
+  var tasa = RN.moneda.tasa();
+  if (mon === 'CUP') {
+    var cupIn = document.getElementById('prov-monto-cup');
+    var usdIn = document.getElementById('prov-monto-usd');
+    if (cupIn) cupIn.value = neto;
+    if (usdIn) usdIn.value = 0;
+  } else if (mon === 'USD') {
+    var usdIn2 = document.getElementById('prov-monto-usd');
+    var cupIn2 = document.getElementById('prov-monto-cup');
+    if (usdIn2) usdIn2.value = tasa > 0 ? +(neto / tasa).toFixed(2) : 0;
+    if (cupIn2) cupIn2.value = 0;
+  } else {
+    // Mixto: deja CUP con el neto (usuario reparte)
+    var cupIn3 = document.getElementById('prov-monto-cup');
+    if (cupIn3) cupIn3.value = neto;
+  }
+  RN.paqueteProveedor.recalcular();
+};
+
+/**
+ * Si falta cubrir el saldo y solo hay una moneda, pasa a MIXTO y precarga
+ * la otra moneda con el faltante convertido.
+ */
+RN.paqueteProveedor.completarConOtraMoneda = function () {
+  var info = RN.paqueteProveedor._faltanteInfo;
+  if (!info || !(info.faltaCUP > 0)) return;
+  var tasa = RN.moneda.tasa() || 0;
+  RN.paqueteProveedor.setMoneda('MIXTO');
+  var usdIn = document.getElementById('prov-monto-usd');
+  var cupIn = document.getElementById('prov-monto-cup');
+  if (info.sugerir === 'USD' && tasa > 0) {
+    if (usdIn) usdIn.value = +(info.faltaCUP / tasa).toFixed(2);
+  } else if (info.sugerir === 'CUP') {
+    if (cupIn) {
+      var cupActual = parseFloat(cupIn.value) || 0;
+      cupIn.value = +(cupActual + info.faltaCUP).toFixed(2);
+    }
+  }
+  RN.paqueteProveedor.recalcular();
+};
+
+/** Recalcula el total del pago, descuento, parcial y aviso multi-moneda. */
 RN.paqueteProveedor.recalcular = function () {
   var moneda = RN.paqueteProveedor._moneda;
   var megas = parseFloat((document.getElementById('prov-megas') || {}).value) || 0;
   var precioMega = parseFloat((document.getElementById('prov-precio-mega') || {}).value) || 0;
   var paquete = +(megas * precioMega).toFixed(2);
+  var saldo = RN.calc.saldoProveedorMes ? RN.calc.saldoProveedorMes() : paquete;
+  // Si el usuario cambió megas/precio en el form, el saldo base es el nuevo paquete menos ya pagado
+  var yaPagado = RN.calc.totalPagadoProveedorMes ? RN.calc.totalPagadoProveedorMes() : 0;
+  var yaDesc = RN.calc.totalDescuentoProveedorMes ? RN.calc.totalDescuentoProveedorMes() : 0;
+  if (paquete > 0) {
+    saldo = Math.max(0, +(paquete - yaPagado - yaDesc).toFixed(2));
+  }
 
-  if (moneda === 'CUP') {
-    var cupInput = document.getElementById('prov-monto-cup');
-    if (cupInput) cupInput.value = paquete;
+  var saldoEl = document.getElementById('prov-saldo-mes');
+  if (saldoEl) {
+    var txt = 'Saldo pendiente este mes: <strong>' + RN.calc.formatCUP(saldo) + '</strong>';
+    if (yaPagado > 0 || yaDesc > 0) {
+      txt += ' <span class="muted">(ya pagado ' + RN.calc.formatCUP(yaPagado)
+        + (yaDesc > 0 ? ' · descuentos ' + RN.calc.formatCUP(yaDesc) : '') + ')</span>';
+    }
+    saldoEl.innerHTML = txt;
   }
 
   var usd = parseFloat((document.getElementById('prov-monto-usd') || {}).value) || 0;
   var cup = parseFloat((document.getElementById('prov-monto-cup') || {}).value) || 0;
+  var descuento = parseFloat((document.getElementById('prov-descuento') || {}).value) || 0;
+  if (descuento < 0) descuento = 0;
   var tasa = RN.moneda.tasa();
   var totalCUP = +(cup + usd * tasa).toFixed(2);
+  var cubre = +(totalCUP + descuento).toFixed(2);
+  var falta = Math.max(0, +(saldo - cubre).toFixed(2));
 
   var desglose = document.getElementById('prov-desglose');
   if (!desglose) return;
@@ -223,32 +297,188 @@ RN.paqueteProveedor.recalcular = function () {
   var html = '';
   if (megas > 0 && precioMega > 0) {
     html += '<div class="cobro-desglose-row"><strong>' + megas + ' Megas \u00d7 ' + precioMega + ' CUP/Mega = ' + RN.calc.formatCUP(paquete) + '</strong></div>';
-  } else if (megas > 0 || precioMega > 0) {
-    html += '<div class="cobro-desglose-row muted">Completa megas y precio por mega para calcular el monto</div>';
   }
-
-  if (moneda === 'MIXTO' && usd > 0 && cup > 0) {
-    html += '<div class="cobro-desglose-row">USD ' + usd + ' \u00d7 ' + tasa + ' = ' + (usd * tasa).toFixed(2) + ' CUP</div>';
-    html += '<div class="cobro-desglose-row">+ CUP ' + cup + '</div>';
+  if (moneda === 'MIXTO' && (usd > 0 || cup > 0)) {
+    if (usd > 0) html += '<div class="cobro-desglose-row">USD ' + usd + ' \u00d7 ' + tasa + ' = ' + RN.calc.formatCUP(usd * tasa) + '</div>';
+    if (cup > 0) html += '<div class="cobro-desglose-row">+ CUP ' + RN.calc.formatCUP(cup) + '</div>';
   } else if (moneda === 'USD' && usd > 0) {
     html += '<div class="cobro-desglose-row">USD ' + usd + ' \u00d7 ' + tasa + ' = ' + RN.calc.formatCUP(usd * tasa) + '</div>';
+  } else if (moneda === 'CUP' && cup > 0) {
+    html += '<div class="cobro-desglose-row">CUP ' + RN.calc.formatCUP(cup) + '</div>';
   }
-
-  html += '<div class="cobro-desglose-row"><strong>Total a pagar: ' + RN.calc.formatCUP(totalCUP) + '</strong></div>';
-
-  if (paquete) {
-    var color = totalCUP >= paquete ? 'var(--success)' : 'var(--danger)';
-    var txt = totalCUP >= paquete ? 'Cubierto \u2713' : 'Falta ' + RN.calc.formatCUP(paquete - totalCUP);
-    html += '<div class="cobro-desglose-row" style="color:' + color + '">Paquete: ' + RN.calc.formatCUP(paquete) + ' \u00b7 ' + txt + '</div>';
+  html += '<div class="cobro-desglose-row"><strong>Este pago: ' + RN.calc.formatCUP(totalCUP) + '</strong></div>';
+  if (descuento > 0) {
+    html += '<div class="cobro-desglose-row">Descuento: ' + RN.calc.formatCUP(descuento) + '</div>';
+  }
+  if (saldo > 0) {
+    if (falta <= 0.01) {
+      html += '<div class="cobro-desglose-row" style="color:var(--success)">Saldo cubierto \u2713' +
+        (cubre > saldo + 0.01 ? ' (sobra ' + RN.calc.formatCUP(cubre - saldo) + ')' : '') + '</div>';
+    } else if (totalCUP > 0 || descuento > 0) {
+      html += '<div class="cobro-desglose-row" style="color:var(--danger)">Pago parcial · Falta ' + RN.calc.formatCUP(falta) + '</div>';
+    } else {
+      html += '<div class="cobro-desglose-row muted">Pendiente: ' + RN.calc.formatCUP(saldo) + '</div>';
+    }
   }
   desglose.innerHTML = html;
+
+  // Aviso: completar con la otra moneda
+  var aviso = document.getElementById('prov-aviso-moneda');
+  var btnComp = document.getElementById('prov-btn-completar-otra');
+  RN.paqueteProveedor._faltanteInfo = null;
+  if (aviso) {
+    if (falta > 0.01 && (totalCUP > 0 || descuento > 0) && moneda !== 'MIXTO') {
+      var sugerir = moneda === 'CUP' ? 'USD' : 'CUP';
+      var detalle = '';
+      if (sugerir === 'USD' && tasa > 0) {
+        detalle = 'Puedes completar con \u2248 <strong>' + (falta / tasa).toFixed(2) + ' USD</strong> (tasa ' + tasa + ').';
+      } else if (sugerir === 'CUP') {
+        detalle = 'Puedes completar con <strong>' + RN.calc.formatCUP(falta) + '</strong> en CUP.';
+      } else {
+        detalle = 'Configura la tasa USD en Ajustes para convertir.';
+      }
+      aviso.innerHTML = '<div class="badge due" style="display:block;white-space:normal;line-height:1.4;padding:8px 10px">' +
+        'Este pago en ' + moneda + ' no cubre el saldo. Faltan ' + RN.calc.formatCUP(falta) + '. ' + detalle +
+        ' Usa <strong>Mixto</strong> o el botón de completar.</div>';
+      RN.paqueteProveedor._faltanteInfo = { faltaCUP: falta, sugerir: sugerir };
+      if (btnComp) {
+        btnComp.style.display = '';
+        btnComp.textContent = sugerir === 'USD' ? 'Completar con USD' : 'Completar con CUP';
+      }
+    } else {
+      aviso.innerHTML = '';
+      if (btnComp) btnComp.style.display = 'none';
+    }
+  }
+
+  var btnPagar = document.getElementById('prov-btn-pagar');
+  if (btnPagar) {
+    if (totalCUP > 0 && falta > 0.01) btnPagar.textContent = '\ud83d\udcb3 Registrar pago parcial';
+    else if (totalCUP > 0) btnPagar.textContent = '\ud83d\udcb3 Registrar pago';
+    else btnPagar.textContent = '\ud83d\udcb3 Registrar pago';
+  }
 };
 
-/**
- * v5.12.4 — Guarda los cambios del paquete sin pagar.
- * Si vigencia = "este" → aplica inmediatamente a RN.state.config.
- * Si vigencia = "próximo" → guarda en RN.state.config.paquetePendiente.
- */
+/** Confirma y registra el pago (total o parcial) del paquete. */
+RN.paqueteProveedor.confirmar = function () {
+  var c = RN.paqueteProveedor.leerCampos();
+  var fecha = (document.getElementById('prov-fecha') || {}).value || new Date().toISOString().slice(0, 10);
+  var usd = parseFloat((document.getElementById('prov-monto-usd') || {}).value) || 0;
+  var cup = parseFloat((document.getElementById('prov-monto-cup') || {}).value) || 0;
+  var descuento = parseFloat((document.getElementById('prov-descuento') || {}).value) || 0;
+  if (descuento < 0) descuento = 0;
+  var moneda = RN.paqueteProveedor._moneda;
+  var tasa = RN.moneda.tasa();
+  var totalCUP = +(cup + usd * tasa).toFixed(2);
+
+  if (!c.megas || c.megas <= 0) {
+    RN.notifyUI.toast('Ingresa los megas contratados', 'error');
+    return;
+  }
+  if (!c.precioMega || c.precioMega <= 0) {
+    RN.notifyUI.toast('Ingresa el precio por mega', 'error');
+    return;
+  }
+  if ((!totalCUP || totalCUP <= 0) && descuento <= 0) {
+    RN.notifyUI.toast('Indica un monto a pagar o un descuento', 'error');
+    return;
+  }
+  if (moneda === 'USD' && usd > 0 && !(tasa > 0)) {
+    RN.notifyUI.toast('Configura la tasa USD en Ajustes', 'error');
+    return;
+  }
+
+  var saldo = RN.calc.saldoProveedorMes ? RN.calc.saldoProveedorMes() : c.monto;
+  // Ajustar saldo si el form cambió el paquete
+  var paqueteForm = c.monto;
+  var yaPagado = RN.calc.totalPagadoProveedorMes ? RN.calc.totalPagadoProveedorMes() : 0;
+  var yaDesc = RN.calc.totalDescuentoProveedorMes ? RN.calc.totalDescuentoProveedorMes() : 0;
+  if (paqueteForm > 0) saldo = Math.max(0, +(paqueteForm - yaPagado - yaDesc).toFixed(2));
+
+  var cubre = +(totalCUP + descuento).toFixed(2);
+  var esParcial = cubre + 0.01 < saldo;
+  var falta = Math.max(0, +(saldo - cubre).toFixed(2));
+
+  // Si paga solo en una moneda y no cubre: avisar y pedir confirmación o mixto
+  if (esParcial && moneda !== 'MIXTO' && totalCUP > 0 && !RN.paqueteProveedor._parcialOk) {
+    var msg = 'Pago parcial: faltan ' + RN.calc.formatCUP(falta);
+    if (moneda === 'CUP' && tasa > 0) {
+      msg += ' (puedes completar con \u2248 ' + (falta / tasa).toFixed(2) + ' USD).';
+    } else if (moneda === 'USD') {
+      msg += ' (puedes completar con ' + RN.calc.formatCUP(falta) + ' en CUP).';
+    }
+    msg += ' ¿Registrar igual como parcial?';
+    if (RN.uiComponents && RN.uiComponents.confirm) {
+      RN.uiComponents.confirm('Pago parcial del proveedor', msg, function () {
+        RN.paqueteProveedor._parcialOk = true;
+        RN.paqueteProveedor.confirmar();
+        RN.paqueteProveedor._parcialOk = false;
+      });
+      return;
+    }
+  }
+
+  RN.state.config.proveedorInternet = c.proveedor;
+  RN.state.config.proveedorMonto = c.monto;
+  RN.state.config.proveedorMegas = c.megas;
+  RN.state.config.proveedorPrecioMega = c.precioMega;
+  RN.state.config.plusMegas = Math.max(0, +c.plus || 0);
+
+  var concepto = (esParcial ? 'Pago parcial servicio internet' : 'Pago servicio internet')
+    + (c.proveedor ? ' \u2014 ' + c.proveedor : '');
+  if (descuento > 0) concepto += ' (desc. ' + RN.calc.formatCUP(descuento) + ')';
+
+  // Solo registrar gasto si hay salida de caja
+  if (totalCUP > 0) {
+    RN.state.gastos.push({
+      id: RN.calc.uid('gasto'),
+      fecha: fecha + 'T00:00:00',
+      mes: fecha.slice(0, 7),
+      concepto: concepto,
+      monto: totalCUP,
+      categoria: 'Internet proveedor',
+      moneda: moneda,
+      montoPagadoUSD: usd,
+      montoPagadoCUP: cup,
+      descuentoProveedor: descuento,
+      montoPaquete: c.monto,
+      megas: c.megas,
+      precioMega: c.precioMega,
+      esPagoProveedor: true,
+      esParcialProveedor: esParcial,
+      tasaUsd: tasa
+    });
+  } else if (descuento > 0) {
+    // Solo descuento: registro en gastos con monto 0 para historial del saldo
+    RN.state.gastos.push({
+      id: RN.calc.uid('gasto'),
+      fecha: fecha + 'T00:00:00',
+      mes: fecha.slice(0, 7),
+      concepto: 'Descuento proveedor' + (c.proveedor ? ' \u2014 ' + c.proveedor : ''),
+      monto: 0,
+      categoria: 'Internet proveedor',
+      moneda: 'CUP',
+      descuentoProveedor: descuento,
+      montoPaquete: c.monto,
+      megas: c.megas,
+      precioMega: c.precioMega,
+      esPagoProveedor: true,
+      esSoloDescuentoProveedor: true
+    });
+  }
+
+  RN.storageLocal.guardar();
+  RN.uiComponents.cerrarModal();
+  var toast = esParcial
+    ? ('Pago parcial registrado. Quedan ' + RN.calc.formatCUP(falta))
+    : ('Pago de servicio registrado (' + c.megas + 'M \u00d7 ' + c.precioMega + ' CUP/M)');
+  RN.notifyUI.toast(toast, 'success');
+  RN.render.gastos();
+  RN.render.dashboard();
+  RN.render.todo();
+  if (RN.render.realizados) RN.render.realizados();
+};
+
 RN.paqueteProveedor.guardarCambios = function () {
   var c = RN.paqueteProveedor.leerCampos();
   var reserva = isNaN(c.reserva) ? 1 : c.reserva;
@@ -296,64 +526,4 @@ RN.paqueteProveedor.guardarCambios = function () {
     RN.render.dashboard();
     RN.render.todo();
   }
-};
-
-/** Confirma y registra el pago del paquete vigente actual como gasto. */
-RN.paqueteProveedor.confirmar = function () {
-  var c = RN.paqueteProveedor.leerCampos();
-  var fecha = (document.getElementById('prov-fecha') || {}).value || new Date().toISOString().slice(0, 10);
-  var usd = parseFloat((document.getElementById('prov-monto-usd') || {}).value) || 0;
-  var cup = parseFloat((document.getElementById('prov-monto-cup') || {}).value) || 0;
-  var moneda = RN.paqueteProveedor._moneda;
-  var tasa = RN.moneda.tasa();
-  var totalCUP = +(cup + usd * tasa).toFixed(2);
-
-  if (!c.megas || c.megas <= 0) {
-    RN.notifyUI.toast('Ingresa los megas contratados', 'error');
-    return;
-  }
-  if (!c.precioMega || c.precioMega <= 0) {
-    RN.notifyUI.toast('Ingresa el precio por mega', 'error');
-    return;
-  }
-  if (!totalCUP || totalCUP <= 0) {
-    RN.notifyUI.toast('El total a pagar debe ser mayor que 0', 'error');
-    return;
-  }
-
-  // Al pagar, también se actualiza la config vigente (el paquete que se paga
-  // es el paquete actual). Si hay un cambio pendiente, no lo tocamos.
-  RN.state.config.proveedorInternet = c.proveedor;
-  RN.state.config.proveedorMonto = c.monto;
-  RN.state.config.proveedorMegas = c.megas;
-  RN.state.config.proveedorPrecioMega = c.precioMega;
-  RN.state.config.plusMegas = Math.max(0, +c.plus || 0);
-  // v5.13.5 (ISSUE #22): Eliminar persistir() y guardar() aquí; se consolidará
-  // en un solo guardar() tras agregar el gasto (evita triple escritura).
-
-  var gasto = {
-    id: RN.calc.uid('gasto'),
-    // v5.13.5 (ISSUE #21): Construir fecha ISO sin conversión de timezone.
-    fecha: fecha + 'T00:00:00',
-    mes: fecha.slice(0, 7),
-    concepto: 'Pago servicio internet' + (c.proveedor ? ' \u2014 ' + c.proveedor : ''),
-    monto: totalCUP,
-    categoria: 'Internet proveedor',
-    moneda: moneda,
-    montoPagadoUSD: usd,
-    montoPagadoCUP: cup,
-    montoPaquete: c.monto,
-    megas: c.megas,
-    precioMega: c.precioMega,
-    esPagoProveedor: true
-  };
-
-  RN.state.gastos.push(gasto);
-  RN.storageLocal.guardar();
-  RN.uiComponents.cerrarModal();
-  RN.notifyUI.toast('Pago de servicio registrado (' + c.megas + 'M \u00d7 ' + c.precioMega + ' CUP/M)', 'success');
-  RN.render.gastos();
-  RN.render.dashboard();
-  RN.render.todo();
-  if (RN.render.realizados) RN.render.realizados();
 };

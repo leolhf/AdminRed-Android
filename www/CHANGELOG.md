@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.10 — Pago del paquete del proveedor (parcial + descuento + multi-moneda)
+
+- **Pagos parciales:** el saldo del mes se acumula; no se marca pagado hasta cubrir el paquete.
+- **Descuento (CUP):** reduce el saldo sin salir de caja.
+- **Monedas:** CUP, USD y **Mixto** visibles.
+- Si pagas en una moneda y no alcanza: **aviso** y botón para completar con la otra (USD↔CUP) a la tasa del día.
+- Botón **Cubrir saldo** y confirmación al registrar un parcial.
+
 ## v5.55.9 — Fix Panel en Android vertical
 
 - Eliminada **duplicación de alertas** (bandeja + “requiere atención”).
