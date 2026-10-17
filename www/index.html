@@ -232,23 +232,52 @@
 
     <!-- INVERSION + DEUDAS (v5.13.2: fusion visual) -->
     <!-- CAPITAL EN RED (inversiones propias) — separado de pasivos v5.55.7 -->
+    <!-- CAPITAL EN RED v5.55.15 — Estado · En recuperación · Recuperadas · Cómo se calcula -->
     <section class="view" id="view-inversion">
-      <div class="view-header"><h2>Capital en red</h2><div class="spacer"></div>
-        <button class="btn primary" onclick="RN.inversion.abrirNuevaPropia()">+ Nueva inversión</button>
+      <div class="view-header">
+        <h2>Capital en red</h2>
+        <div class="spacer"></div>
+        <button type="button" class="btn" onclick="RN.tabs.ir('clientes')">Clientes</button>
+        <button type="button" class="btn primary" onclick="RN.inversion.abrirNuevaPropia()">+ Nueva inversión</button>
       </div>
-      <p class="muted" style="margin:0 0 12px;font-size:13px">Dinero <strong>tuyo</strong> puesto en la red. Aquí solo se sigue la recuperación — no hay que “devolverlo” a un acreedor.</p>
-      <div class="kpi-stack" id="kpi-inversion"></div>
-      <div class="card mt-16" id="card-recuperacion-inv" style="display:none">
-        <h3>Recuperación del capital</h3>
-        <div id="inversion-recuperacion"></div>
+      <p class="muted" style="margin:0 0 12px;font-size:13px">Dinero <strong>tuyo</strong> puesto en la red. Se recupera con el margen de clientes — no es una deuda a pagar.</p>
+
+      <div class="cap-zone">
+        <div class="cap-zone-label">Estado del capital</div>
+        <div id="cap-estado" class="card"></div>
+        <div class="kpi-stack mt-16" id="kpi-inversion"></div>
+        <div class="card mt-16" id="card-recuperacion-inv" style="display:none">
+          <div id="inversion-recuperacion"></div>
+        </div>
       </div>
-      <div class="card mt-16">
-        <h3>En recuperación <span class="muted" style="font-size:13px;font-weight:400">(capital propio)</span></h3>
-        <div class="accordion-list" id="lista-inversion"></div>
+
+      <div class="cap-zone">
+        <div class="cap-zone-label">En recuperación</div>
+        <div class="card">
+          <div class="accordion-list" id="lista-inversion"></div>
+        </div>
       </div>
-      <div class="card mt-16" id="card-inversiones-recuperadas" style="display:none">
-        <h3>Ya recuperadas</h3>
-        <div class="accordion-list" id="lista-inversiones-recuperadas"></div>
+
+      <div class="cap-zone">
+        <div class="cap-zone-label">Ya recuperadas</div>
+        <div class="card" id="card-inversiones-recuperadas" style="display:none">
+          <div class="accordion-list" id="lista-inversiones-recuperadas"></div>
+        </div>
+        <div id="cap-recuperadas-vacio" class="muted" style="font-size:13px;display:none">Aún no hay inversiones marcadas como recuperadas.</div>
+      </div>
+
+      <div class="cap-zone">
+        <div class="cap-zone-label">Cómo se calcula</div>
+        <div class="card">
+          <button type="button" class="btn sm" id="cap-btn-como" onclick="RN.capUI.toggleComo()">Ver método de recuperación</button>
+          <div id="cap-como" class="muted" style="font-size:13px;display:none;margin-top:10px;line-height:1.45">
+            La recuperación suma el <strong>margen neto</strong> de los clientes vinculados desde la fecha de la inversión
+            (cobros − costo del mega − retención personal, si aplica).
+            No es dinero que “debas cobrar aparte”: es cuánto del capital ya cubrió el negocio.
+            Cuando el recuperado alcanza el capital, el margen posterior cuenta como <strong>ganancia</strong>.
+            Este registro <strong>no mueve la caja</strong> por sí solo (a diferencia de un préstamo externo).
+          </div>
+        </div>
       </div>
     </section>
 
@@ -297,49 +326,137 @@
       <div id="kpi-caja" style="display:none" aria-hidden="true"></div>
     </section>
 
+    <!-- POR PAGAR v5.55.14 — Siguiente · Agenda · Resumen · Política -->
     <section class="view" id="view-deudas">
-      <div class="view-header"><h2>Por pagar</h2><div class="spacer"></div>
-        <button class="btn" onclick="RN.investment.abrirPoliticaDeudas && RN.investment.abrirPoliticaDeudas()">⚙️ Política</button>
-        <button class="btn primary" onclick="RN.inversion.abrirNuevaDeuda()">+ Nueva deuda</button>
+      <div class="view-header">
+        <h2>Por pagar</h2>
+        <div class="spacer"></div>
+        <button type="button" class="btn" onclick="RN.tabs.ir('caja')">Caja</button>
+        <button type="button" class="btn primary" onclick="RN.inversion.abrirNuevaDeuda()">+ Nueva deuda</button>
       </div>
-      <p class="muted" style="margin:0 0 12px;font-size:13px">Dinero que <strong>debes</strong> devolver (banco, familiar, prestamista). El saldo se lleva en la moneda del contrato; la caja paga al tipo del día.</p>
-      <div class="kpi-stack" id="kpi-deudas"></div>
-      <div class="card mt-16" id="card-politica-deudas">
-        <h3>Política de pagos</h3>
-        <div id="politica-deudas-resumen" class="muted" style="font-size:13px"></div>
+      <p class="muted" style="margin:0 0 12px;font-size:13px">Pasivos: dinero que <strong>debes</strong> devolver. Saldo en moneda del contrato; la caja paga al tipo del día.</p>
+
+      <div class="deuda-zone">
+        <div class="deuda-zone-label">Siguiente a pagar</div>
+        <div id="deuda-siguiente" class="card"></div>
       </div>
-      <div class="card mt-16" id="card-recuperacion-deudas" style="display:none">
-        <h3>Progreso global</h3>
-        <div id="deudas-recuperacion"></div>
+
+      <div class="deuda-zone">
+        <div class="deuda-zone-label">Agenda</div>
+        <div class="card">
+          <div class="accordion-list" id="lista-deudas-activas"></div>
+        </div>
       </div>
-      <div class="card mt-16">
-        <h3>Agenda de pagos <span class="muted" style="font-size:13px;font-weight:400">(ordenadas por prioridad)</span></h3>
-        <div class="accordion-list" id="lista-deudas-activas"></div>
+
+      <div class="deuda-zone">
+        <div class="deuda-zone-label">Resumen</div>
+        <div class="kpi-stack" id="kpi-deudas"></div>
+        <div class="card mt-16" id="card-recuperacion-deudas" style="display:none">
+          <h3>Devolución global</h3>
+          <div id="deudas-recuperacion"></div>
+        </div>
+        <div class="card mt-16" id="card-deudas-concluidas" style="display:none">
+          <h3>Ya liquidadas</h3>
+          <div class="accordion-list" id="lista-deudas-concluidas"></div>
+        </div>
       </div>
-      <div class="card mt-16" id="card-deudas-concluidas" style="display:none">
-        <h3>Ya liquidadas</h3>
-        <div class="accordion-list" id="lista-deudas-concluidas"></div>
+
+      <div class="deuda-zone">
+        <div class="deuda-zone-label">Política</div>
+        <div class="card" id="card-politica-deudas">
+          <button type="button" class="btn sm" id="deuda-btn-politica" onclick="RN.deudasUI.togglePolitica()">Ver reglas de pago</button>
+          <div id="politica-deudas-resumen" class="muted" style="font-size:13px;display:none;margin-top:10px"></div>
+        </div>
       </div>
     </section>
 
     <!-- INVENTARIO -->
+    <!-- INVENTARIO v5.55.17 — Resumen · Filtros · Productos · Pendientes -->
     <section class="view" id="view-inventario">
-      <div class="view-header"><h2>Inventario compartido</h2><div class="spacer"></div>
-        <button class="btn primary" onclick="RN.inventario.abrirNuevoLote()">+ Comprar producto</button>
+      <div class="view-header">
+        <h2>Inventario</h2>
+        <div class="spacer"></div>
+        <button type="button" class="btn" onclick="RN.inventarioUI.abrirAsignarRapido()">Asignar / vender</button>
+        <button type="button" class="btn primary" onclick="RN.inventario.abrirNuevoLote()">+ Comprar</button>
       </div>
-      <div class="accordion-list" id="lista-inventario"></div>
+      <p class="muted" style="margin:0 0 12px;font-size:13px">Material y equipos en stock (lotes FIFO). La compra puede registrarse como gasto; la venta puede entrar a caja.</p>
+
+      <div class="inv-zone">
+        <div class="inv-zone-label">Resumen</div>
+        <div id="inv-estado" class="card"></div>
+        <div class="kpi-grid mt-16" id="kpi-inventario"></div>
+      </div>
+
+      <div class="inv-zone" id="inv-pendientes-zone" style="display:none">
+        <div class="inv-zone-label">Asignado sin cobrar</div>
+        <div class="card" id="inv-pendientes"></div>
+      </div>
+
+      <div class="inv-zone">
+        <div class="inv-zone-label">Filtros</div>
+        <div class="card">
+          <div class="flex wrap" style="gap:8px;align-items:center">
+            <select id="inv-filtro-stock" onchange="RN.inventarioUI.onFiltro()" style="max-width:150px">
+              <option value="todos">Todos</option>
+              <option value="stock" selected>Con stock</option>
+              <option value="agotado">Agotados</option>
+            </select>
+            <input class="search" type="search" id="inv-filtro-q" placeholder="Buscar producto…" oninput="RN.inventarioUI.onFiltro()" style="flex:1;min-width:140px" spellcheck="false" autocorrect="off" autocapitalize="off">
+          </div>
+        </div>
+      </div>
+
+      <div class="inv-zone">
+        <div class="inv-zone-label">Productos</div>
+        <div class="card">
+          <div class="accordion-list" id="lista-inventario"></div>
+        </div>
+      </div>
     </section>
 
     <!-- GASTOS -->
+    <!-- GASTOS v5.55.16 — Este mes · Filtros · Movimientos -->
     <section class="view" id="view-gastos">
-      <div class="view-header"><h2>Gastos del negocio</h2><div class="spacer"></div>
-        <button class="btn primary" onclick="RN.gastos.abrirNuevo()">+ Nuevo gasto</button>
-        <button class="btn" onclick="RN.paqueteProveedor.abrir()">📡 Pagar mi servicio</button>
-        <button class="btn" onclick="RN.cuadre.abrir()">🧮 Cuadre de caja</button>
-        <button class="btn ghost" onclick="RN.cuadre.listar()">Historial de cuadres</button>
+      <div class="view-header">
+        <h2>Gastos</h2>
+        <div class="spacer"></div>
+        <button type="button" class="btn" onclick="RN.paqueteProveedor.abrir()">📡 Proveedor</button>
+        <button type="button" class="btn primary" onclick="RN.gastos.abrirNuevo()">+ Nuevo gasto</button>
       </div>
-      <div class="kpi-grid" id="kpi-gastos"></div>
-      <div class="accordion-list" id="lista-gastos"></div>
+      <p class="muted" style="margin:0 0 12px;font-size:13px">Costos operativos del negocio. Los cuadres están en <strong>Caja</strong>; las devoluciones de deuda en <strong>Por pagar</strong>.</p>
+
+      <div class="gas-zone">
+        <div class="gas-zone-label">Este mes</div>
+        <div id="gas-estado" class="card"></div>
+        <div class="kpi-grid mt-16" id="kpi-gastos"></div>
+      </div>
+
+      <div class="gas-zone">
+        <div class="gas-zone-label">Filtros</div>
+        <div class="card">
+          <div class="flex wrap" style="gap:8px;align-items:center">
+            <select id="gas-filtro-mes" onchange="RN.gastosUI.onFiltro()" style="max-width:140px"></select>
+            <select id="gas-filtro-tipo" onchange="RN.gastosUI.onFiltro()" style="max-width:140px">
+              <option value="operativo">Operativos</option>
+              <option value="proveedor">Proveedor</option>
+              <option value="todos">Todos (mes)</option>
+              <option value="cuadre">Solo cuadres</option>
+              <option value="otros">Ajustes / deuda</option>
+            </select>
+            <select id="gas-filtro-cat" onchange="RN.gastosUI.onFiltro()" style="max-width:140px">
+              <option value="">Todas las categorías</option>
+            </select>
+            <input class="search" type="search" id="gas-filtro-q" placeholder="Buscar…" oninput="RN.gastosUI.onFiltro()" style="flex:1;min-width:120px" spellcheck="false" autocorrect="off" autocapitalize="off">
+          </div>
+        </div>
+      </div>
+
+      <div class="gas-zone">
+        <div class="gas-zone-label">Movimientos</div>
+        <div class="card">
+          <div class="accordion-list" id="lista-gastos"></div>
+        </div>
+      </div>
     </section>
 
     <!-- REPORTES -->

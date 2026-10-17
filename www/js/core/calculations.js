@@ -1372,13 +1372,58 @@ RN.calc.reservaCaja = function (mes) {
   return b;
 };
 
-/** Gastos del mes. */
+/** Gastos del mes (todos los movimientos en gastos, incl. cuadres). Para fondo/compat. */
 RN.calc.gastosMes = function (mes) {
   mes = mes || RN.calc.mesActualStr();
   // v5.13.1: Bug #9 — simplificada la lógica de filtrado.
   var mesNorm = mes.slice(0, 7);
   return RN.state.gastos.filter(function (g) { return (g.mes || '').slice(0, 7) === mesNorm; })
     .reduce(function (s, g) { return s + (g.monto || 0); }, 0);
+};
+
+/**
+ * v5.55.16 — ¿Cuenta como gasto operativo del negocio?
+ * Excluye cuadres, devoluciones de préstamo, aplicaciones de préstamo y retiros legacy.
+ * Los pagos a proveedor SÍ son operativos.
+ */
+RN.calc.esGastoOperativo = function (g) {
+  if (!g) return false;
+  if (g.esCuadreCaja) return false;
+  if (g.esDevolucionInversion) return false;
+  if (g.esAplicacionPrestamo) return false;
+  if (g.esRetiroCaja) return false;
+  return true;
+};
+
+/** Tipo de movimiento en gastos para UI. */
+RN.calc.tipoGastoUI = function (g) {
+  if (!g) return 'operativo';
+  if (g.esCuadreCaja) return 'cuadre';
+  if (g.esDevolucionInversion) return 'devolucion';
+  if (g.esAplicacionPrestamo) return 'aplicacion';
+  if (g.esRetiroCaja) return 'retiro';
+  if (g.esPagoProveedor) return 'proveedor';
+  return 'operativo';
+};
+
+/** Gastos operativos del mes (KPI profesional de costos). */
+RN.calc.gastosOperativosMes = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  var mesNorm = String(mes).slice(0, 7);
+  return (RN.state.gastos || []).filter(function (g) {
+    return (g.mes || '').slice(0, 7) === mesNorm && RN.calc.esGastoOperativo(g);
+  }).reduce(function (s, g) { return s + (g.monto || 0); }, 0);
+};
+
+/** Gastos operativos del mes anterior (para delta). */
+RN.calc.gastosOperativosMesAnterior = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  var parts = String(mes).slice(0, 7).split('-');
+  var y = parseInt(parts[0], 10);
+  var m = parseInt(parts[1], 10) - 1;
+  if (m < 1) { m = 12; y -= 1; }
+  var prev = y + '-' + (m < 10 ? '0' : '') + m;
+  return RN.calc.gastosOperativosMes(prev);
 };
 
 /** Pago al proveedor de internet del mes indicado (o null si no hay). v5.8.6 */

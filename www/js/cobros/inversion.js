@@ -60,6 +60,13 @@ RN.inversion._editId = null;
 RN.inversion.abrirNuevaPropia = function () {
   RN.inversion._forzarOrigen = 'propio';
   RN.inversion.abrirNueva();
+  // Aviso: capital propio no mueve caja ni crea pasivo
+  setTimeout(function () {
+    var ayuda = document.getElementById('inv-origen-ayuda');
+    if (ayuda) {
+      ayuda.textContent = 'Capital propio: solo se sigue la recuperación con el margen de clientes. No crea deuda ni mueve la caja automáticamente. Vincula clientes para proyectar.';
+    }
+  }, 50);
 };
 
 /** v5.55.7 — Nueva deuda / préstamo externo (vista Por pagar). */
@@ -914,7 +921,7 @@ RN.inversion._htmlDetalleRecuperacion = function (inv, opts) {
   var _aporteMes = RN.investment.aporteMensualNeto(inv);
   var _proyeccion = RN.investment.proyectarRecuperacion(inv);
   var _nClientes = (inv.clienteIds || []).length;
-  var tituloRecuperacion = esDeuda ? 'Recuperación de la inversión' : 'Recuperación';
+  var tituloRecuperacion = esDeuda ? 'Generado por clientes (referencia)' : 'Recuperación';
   var _html = '<div class="acc-row" style="font-weight:600"><span class="acc-label">' + tituloRecuperacion + '</span><span class="acc-value">' + _pctRec + '%</span></div>'
     + '<div class="acc-row"><span class="acc-label">Clientes vinculados</span><span class="acc-value">' + _nClientes + '</span></div>'
     + '<div class="acc-row"><span class="acc-label">Recuperado (neto, automático)</span><span class="acc-value"><strong>' + RN.calc.formatCUP(_recuperado) + '</strong></span></div>';
@@ -1034,7 +1041,7 @@ RN.inversion._cardInversion = function (inv, opts) {
   fechaRecuperacionTxt = '';
   if (esDeuda) {
     dotCls = esConcluida ? 'ok' : 'warn';
-    estadoTxt = esConcluida ? '✅ Concluida' : '💨 Activa';
+    estadoTxt = esConcluida ? 'Liquidada' : 'Pasivo · Activa';
     if (esConcluida && inv.fechaConclusion) {
       fechaConclusionTxt = new Date(inv.fechaConclusion).toLocaleDateString('es-CU');
     }
@@ -1046,7 +1053,7 @@ RN.inversion._cardInversion = function (inv, opts) {
     }
   } else {
     dotCls = 'blue';
-    estadoTxt = 'Capital propio';
+    estadoTxt = 'Red · En recuperación';
   }
 
   // --- Barra de progreso ---
@@ -1070,29 +1077,42 @@ RN.inversion._cardInversion = function (inv, opts) {
   var subTxt;
   if (esDeuda) {
     var _planSub = (!esConcluida && RN.investment.planDevolucion) ? RN.investment.planDevolucion(inv) : null;
-    subTxt = estadoTxt + ' · debe ' + RN.investment.fmtSaldoDeuda(inv) +
-      ' · ' + pctDevuelto + '% devuelto' +
+    subTxt = estadoTxt + ' · ' + pctDevuelto + '% devuelto' +
       (_planSub && _planSub.tiempoTxt ? ' · ' + _planSub.tiempoTxt : '') +
-      (fechaC ? ' · ' + dias + ' días' : '');
+      (inv.destinoPrestamo === 'caja' ? ' · en caja' : '') +
+      (fechaC ? ' · ' + dias + ' d' : '');
   } else if (esRecuperada) {
     subTxt = estadoTxt + ' · capital cubierto · ' + pctRecuperacion + '%' +
       (gananciaExtraInv > 0 ? ' · extra ' + RN.calc.formatCUP(gananciaExtraInv) : '') +
       (fechaRecuperacionTxt ? ' · el ' + fechaRecuperacionTxt : '') +
       (fechaC ? ' · ' + dias + ' días' : '');
   } else {
-    subTxt = estadoTxt + ' · recuperado ' + RN.calc.formatCUP(Math.min(recuperadoReal, inv.monto || recuperadoReal)) + ' · ' + pctRecuperacion + '%' +
-      (gananciaExtraInv > 0 ? ' · extra ' + RN.calc.formatCUP(gananciaExtraInv) : '') +
-      (fechaC ? ' · ' + dias + ' días' : '');
+    var _nCli = (inv.clienteIds || []).length;
+    var _proy = '';
+    try { _proy = RN.investment.proyectarRecuperacion ? RN.investment.proyectarRecuperacion(inv) : ''; } catch (eP) {}
+    subTxt = estadoTxt + ' · ' + pctRecuperacion + '%' +
+      ' · ' + (_nCli ? (_nCli + ' cliente' + (_nCli === 1 ? '' : 's')) : 'sin clientes') +
+      (_proy && _proy !== 'Recuperada' ? ' · ' + _proy : '') +
+      (fechaC ? ' · ' + dias + ' d' : '');
   }
 
   // --- Monto total en el summary ---
   var montoAmt, montoLbl;
   if (esDeuda) {
+    if (esConcluida) {
+      montoAmt = RN.calc.formatCUP(inv.monto);
+      montoLbl = 'Prestado';
+    } else {
+      montoAmt = RN.investment.fmtSaldoDeuda(inv);
+      montoLbl = 'Por devolver';
+    }
+  } else if (esRecuperada) {
     montoAmt = RN.calc.formatCUP(inv.monto);
-    montoLbl = 'Prestado';
+    montoLbl = 'Capital';
   } else {
-    montoAmt = RN.calc.formatCUP(inv.monto);
-    montoLbl = 'Invertido';
+    var _restCard = RN.investment.restanteEfectivo ? RN.investment.restanteEfectivo(inv) : Math.max(0, (inv.monto || 0) - recuperadoReal);
+    montoAmt = RN.calc.formatCUP(_restCard);
+    montoLbl = 'Por recuperar';
   }
 
   // --- Historial de devoluciones (solo deudas) ---
@@ -1113,8 +1133,16 @@ RN.inversion._cardInversion = function (inv, opts) {
   // --- Filas de detalle específicas ---
   var detalleEspecifico = '';
   if (esDeuda) {
+    var _destMap = { caja: 'Quedó en caja', capital_red: 'Capital / equipos', inventario: 'Inventario', retiro_personal: 'Retiro personal' };
+    var _destTxt = _destMap[inv.destinoPrestamo] || (inv.depositoPrestamoId ? 'Entró a caja' : 'Sin flujo de caja (registro antiguo)');
+    var _monDeuda = RN.investment.monedaDeuda ? RN.investment.monedaDeuda(inv) : 'CUP';
+    var _planD = (!esConcluida && RN.investment.planDevolucion) ? RN.investment.planDevolucion(inv) : null;
     detalleEspecifico =
       '<div class="acc-row"><span class="acc-label">Estado</span><span class="acc-value"><span class="badge ' + (esConcluida ? 'ok' : 'warn') + '">' + estadoTxt + '</span></span></div>'
+      + '<div class="acc-row"><span class="acc-label">Moneda del contrato</span><span class="acc-value"><strong>' + _monDeuda + '</strong></span></div>'
+      + '<div class="acc-row"><span class="acc-label">Destino del dinero</span><span class="acc-value">' + RN.render.esc(_destTxt) + '</span></div>'
+      + (_planD && _planD.fechaObjetivo ? '<div class="acc-row"><span class="acc-label">Fecha objetivo</span><span class="acc-value">' + RN.render.esc(_planD.fechaObjetivo) + (_planD.tiempoTxt ? ' · ' + RN.render.esc(_planD.tiempoTxt) : '') + '</span></div>' : '')
+      + (_planD && _planD.metaCuota > 0 ? '<div class="acc-row"><span class="acc-label">Meta / cuota</span><span class="acc-value">' + RN.investment.fmtMontoDeuda(inv, _planD.metaCuota) + '</span></div>' : '')
       + '<div class="acc-row"><span class="acc-label">Fecha de creación</span><span class="acc-value">' + fechaTxt + '</span></div>'
       + (esConcluida && fechaConclusionTxt ? '<div class="acc-row"><span class="acc-label">Fecha de conclusión</span><span class="acc-value"><strong style="color:var(--green)">' + fechaConclusionTxt + '</strong></span></div>' : '')
       + '<div class="acc-row"><span class="acc-label">Días transcurridos</span><span class="acc-value">' + (fechaC ? dias + ' días' : '—') + '</span></div>'
@@ -1138,7 +1166,7 @@ RN.inversion._cardInversion = function (inv, opts) {
       + barraHtml;
   } else {
     detalleEspecifico =
-      '<div class="acc-row"><span class="acc-label">Origen del capital</span><span class="acc-value"><span class="badge ok">Capital propio</span></span></div>'
+      '<div class="acc-row"><span class="acc-label">Tipo</span><span class="acc-value"><span class="badge ok">Capital propio · no es deuda</span></span></div>'
       + '<div class="acc-row"><span class="acc-label">Fecha de compra</span><span class="acc-value">' + fechaTxt + '</span></div>'
       + '<div class="acc-row"><span class="acc-label">Días transcurridos</span><span class="acc-value">' + (fechaC ? dias + ' días' : '—') + '</span></div>'
       + '<div class="acc-row"><span class="acc-label">Monto invertido</span><span class="acc-value">' + RN.calc.formatCUP(inv.monto) + '</span></div>'
@@ -1164,8 +1192,8 @@ RN.inversion._cardInversion = function (inv, opts) {
         + '<button class="btn sm danger" onclick="RN.inversion.eliminar(\'' + RN.render.escAttr(inv.id) + '\')">🗑</button>';
     } else {
       accionesHtml =
-        '<button class="btn sm primary" onclick="RN.inversion.devolucionPrestamo(\'' + RN.render.escAttr(inv.id) + '\')">💨 Pagar deuda</button>'
-        + '<span class="badge warn" style="margin-left:4px">Saldo: ' + RN.calc.formatCUP(saldoDevolver) + '</span>'
+        '<button class="btn sm primary" onclick="RN.inversion.devolucionPrestamo(\'' + RN.render.escAttr(inv.id) + '\')">Pagar</button>'
+        + '<span class="badge warn" style="margin-left:4px">Saldo: ' + RN.investment.fmtSaldoDeuda(inv) + '</span>'
         + '<button class="btn sm" onclick="RN.inversion.historialDevoluciones(\'' + RN.render.escAttr(inv.id) + '\')">📋 Devoluciones</button>'
         + '<button class="btn sm" onclick="RN.inversion.abrirEditar(\'' + RN.render.escAttr(inv.id) + '\')">Editar</button>'
         + '<button class="btn sm danger" onclick="RN.inversion.eliminar(\'' + RN.render.escAttr(inv.id) + '\')">🗑</button>';
@@ -1177,6 +1205,13 @@ RN.inversion._cardInversion = function (inv, opts) {
   }
 
   // --- Ensamblaje de la tarjeta ---
+  // v5.55.14: en deudas activas, botón Pagar visible en el resumen (sin abrir acordeón)
+  var paySummary = '';
+  if (esDeuda && !esConcluida) {
+    paySummary = '<div class="acc-summary-pay">'
+      + '<button type="button" class="btn sm primary" onclick="event.stopPropagation(); RN.inversion.devolucionPrestamo(\'' + RN.render.escAttr(inv.id) + '\')">Pagar</button>'
+      + '</div>';
+  }
   return '<div class="acc-card" id="' + cardId + '">'
     + '<div class="acc-summary" onclick="' + toggleFn + '(\'' + cardId + '\')">'
     +   '<span class="acc-dot ' + dotCls + '"></span>'
@@ -1188,6 +1223,7 @@ RN.inversion._cardInversion = function (inv, opts) {
     +     '<div class="amt">' + montoAmt + '</div>'
     +     '<div class="lbl">' + montoLbl + '</div>'
     +   '</div>'
+    +   paySummary
     +   '<span class="acc-chevron">▼</span>'
     + '</div>'
     + '<div class="acc-details">'

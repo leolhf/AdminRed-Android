@@ -61,7 +61,11 @@ RN.investment.getProgresoEquipoCliente = function (cliente) {
 
 /** Inversión personal: total invertido. */
 RN.investment.totalInvertido = function () {
-  return RN.state.investments.reduce((s, i) => s + (i.monto || 0), 0);
+  // v5.55.15: solo capital propio (excluye préstamos externos)
+  return (RN.state.investments || []).reduce(function (s, i) {
+    if (RN.investment.origenCapital(i) === 'prestado_externo') return s;
+    return s + (i.monto || 0);
+  }, 0);
 };
 
 /**
@@ -72,7 +76,11 @@ RN.investment.totalInvertido = function () {
  * manual histórico inv.recuperado.
  */
 RN.investment.totalRecuperado = function () {
-  return RN.state.investments.reduce((s, i) => s + RN.investment.recuperadoRealInv(i), 0);
+  // v5.55.15: solo capital propio
+  return (RN.state.investments || []).reduce(function (s, i) {
+    if (RN.investment.origenCapital(i) === 'prestado_externo') return s;
+    return s + RN.investment.recuperadoRealInv(i);
+  }, 0);
 };
 
 /** Porcentaje global de recuperación (basado en el recuperado automático). */
@@ -459,6 +467,11 @@ RN.investment.origenCapital = function (inv) {
 };
 
 /** Nombre legible del origen del capital. */
+/** v5.55.15 — true si es capital propio (no préstamo externo). */
+RN.investment.esCapitalPropio = function (inv) {
+  return RN.investment.origenCapital(inv) !== 'prestado_externo';
+};
+
 RN.investment.origenCapitalTxt = function (inv) {
   return RN.investment.origenCapital(inv) === 'prestado_externo'
     ? 'Préstamo externo (a devolver)'
@@ -1016,7 +1029,9 @@ RN.investment.pctRecuperacionEfectiva = function (inv) {
  * cuando pctGananciaMes > 0.
  */
 RN.investment.totalRecuperadoEfectivo = function () {
+  // v5.55.15: solo capital propio
   return (RN.state.investments || []).reduce(function (s, i) {
+    if (RN.investment.origenCapital(i) === 'prestado_externo') return s;
     return s + RN.investment.recuperadoEfectivo(i);
   }, 0);
 };

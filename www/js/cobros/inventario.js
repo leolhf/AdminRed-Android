@@ -86,35 +86,73 @@ RN.inventario.guardarLote = function () {
 
   // v5.12.0: leer los campos de pago del bloque de moneda (metadata)
   const pago = RN.moneda.leerBloquePago('lot-pago', costoTotal);
+  var registrarGasto = !!(document.getElementById('lot-registrar-gasto') || {}).checked;
 
-  RN.state.inventario.push({
-    id: RN.calc.uid('lot'),
-    material,
+  var loteId = RN.calc.uid('lot');
+  var lote = {
+    id: loteId,
+    material: material,
     cantidad: cant,
     costoUnitario: costoU,
     costoTotal: costoTotal,
     notas: document.getElementById('lot-notas').value.trim(),
     fecha: new Date().toISOString(),
-    // Campos de pago (metadata)
     monedaPago: pago.moneda,
     montoPagoUSD: pago.montoUSD,
     montoPagoCUP: pago.montoCUP,
     montoPagoCUPDesdeUSD: pago.montoCUPDesdeUSD,
     totalPagoCUP: pago.totalRecibidoCUP,
     tasaUsdCompra: pago.tasaUsd
-  });
+  };
+
+  // v5.55.17: opcional — gasto / salida de caja ligada al lote
+  if (registrarGasto && costoTotal > 0) {
+    RN.state.gastos = RN.state.gastos || [];
+    var fecha = new Date().toISOString().slice(0, 10);
+    var gastoId = RN.calc.uid('gasto');
+    RN.state.gastos.push({
+      id: gastoId,
+      concepto: 'Compra inventario — ' + material,
+      monto: costoTotal,
+      categoria: 'Inventario / material',
+      fecha: fecha + 'T00:00:00',
+      mes: fecha.slice(0, 7),
+      moneda: pago.moneda || 'CUP',
+      montoPagadoUSD: pago.montoUSD || 0,
+      montoPagadoCUP: pago.montoCUP || 0,
+      tasaUsd: pago.tasaUsd || 0,
+      esCompraInventario: true,
+      loteInventarioId: loteId
+    });
+    lote.gastoCompraId = gastoId;
+  }
+
+  RN.state.inventario.push(lote);
   RN.storageLocal.guardar();
   RN.uiComponents.cerrarModal();
   RN.render.inventario();
-  RN.notifyUI.toast('Compra registrada: ' + cant + ' × ' + RN.calc.formatCUP(costoU) + ' = ' + RN.calc.formatCUP(costoTotal), 'success');
+  if (RN.render.gastos) RN.render.gastos();
+  if (RN.render.dashboard) RN.render.dashboard();
+  var msg = 'Compra: ' + cant + ' × ' + RN.calc.formatCUP(costoU) + ' = ' + RN.calc.formatCUP(costoTotal);
+  if (registrarGasto) msg += ' · gasto en caja';
+  RN.notifyUI.toast(msg, 'success');
 };
 
 RN.inventario.eliminarLote = function (id) {
-  RN.uiComponents.confirm('Eliminar lote', '¿Eliminar este lote y sus asignaciones?', () => {
-    RN.state.inventario = RN.state.inventario.filter(x => x.id !== id);
-    RN.state.asignacionesInventario = RN.state.asignacionesInventario.filter(a => a.loteId !== id);
+  var asigs = (RN.state.asignacionesInventario || []).filter(function (a) { return a.loteId === id; });
+  if (asigs.length) {
+    RN.notifyUI.toast('No se puede eliminar: el lote tiene ' + asigs.length + ' asignación(es). Anula las asignaciones primero.', 'error');
+    return;
+  }
+  var lote = (RN.state.inventario || []).find(function (x) { return x.id === id; });
+  RN.uiComponents.confirm('Eliminar lote', '¿Eliminar este lote' + (lote && lote.gastoCompraId ? ' y su gasto ligado' : '') + '?', function () {
+    RN.state.inventario = RN.state.inventario.filter(function (x) { return x.id !== id; });
+    if (lote && lote.gastoCompraId) {
+      RN.state.gastos = (RN.state.gastos || []).filter(function (g) { return g.id !== lote.gastoCompraId; });
+    }
     RN.storageLocal.guardar();
     RN.render.inventario();
+    if (RN.render.gastos) RN.render.gastos();
     RN.notifyUI.toast('Lote eliminado', 'warn');
   }, { danger: true });
 };

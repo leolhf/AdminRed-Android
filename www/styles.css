@@ -1604,3 +1604,91 @@ body.panel-modo-operacion .panel-analisis-only {
   .caja-hero-value { font-size: 26px; }
   .view-header .btn { font-size: 12px; padding: 8px 10px; min-height: 36px; }
 }
+
+
+/* ---------- Por pagar v5.55.14 ---------- */
+.deuda-zone { margin-top: 16px; }
+.deuda-zone-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.deuda-siguiente-hero { padding: 4px 0; }
+.deuda-siguiente-hero .ds-name { font-size: 16px; font-weight: 700; margin-bottom: 4px; }
+.deuda-siguiente-hero .ds-saldo { font-size: 24px; font-weight: 800; color: var(--danger); line-height: 1.2; }
+.deuda-siguiente-hero .ds-meta { font-size: 12px; color: var(--text-muted); margin: 6px 0 10px; }
+.deuda-siguiente-hero .ds-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.deuda-siguiente-hero .ds-actions .btn { flex: 1 1 auto; min-width: 110px; justify-content: center; }
+.acc-summary-pay {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  flex-shrink: 0; margin-left: 6px;
+}
+.acc-summary-pay .btn { min-height: 32px; padding: 6px 10px; font-size: 12px; }
+@media (max-width: 600px) {
+  .acc-summary { flex-wrap: wrap; }
+  .acc-summary-pay { width: 100%; flex-direction: row; justify-content: flex-end; margin: 4px 0 0; }
+}
+
+
+/* ---------- Capital en red v5.55.15 ---------- */
+.cap-zone { margin-top: 16px; }
+.cap-zone-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.cap-hero .cap-pct {
+  font-size: 28px; font-weight: 800; line-height: 1.15; margin: 4px 0 2px;
+  color: var(--blue, #2563eb);
+}
+.cap-hero .cap-pct.is-done { color: var(--success, #16a34a); }
+.cap-hero .cap-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 10px; }
+.cap-hero-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 10px;
+}
+.cap-hero-grid .cap-mini {
+  background: var(--bg, var(--surface-2)); border-radius: var(--radius-sm);
+  padding: 10px; border: 1px solid var(--border);
+}
+.cap-hero-grid .cap-mini .lbl { font-size: 11px; color: var(--text-muted); }
+.cap-hero-grid .cap-mini .val { font-size: 15px; font-weight: 700; margin-top: 2px; }
+
+
+/* ---------- Gastos v5.55.16 ---------- */
+.gas-zone { margin-top: 16px; }
+.gas-zone-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.gas-hero .gas-total {
+  font-size: 26px; font-weight: 800; line-height: 1.15; margin: 4px 0 2px;
+  color: var(--danger, #dc2626);
+}
+.gas-hero .gas-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+.gas-hero-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.gas-hero-actions .btn { flex: 1 1 auto; min-width: 110px; justify-content: center; }
+
+
+/* ---------- Inventario v5.55.17 ---------- */
+.inv-zone { margin-top: 16px; }
+.inv-zone-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.inv-hero .inv-valor {
+  font-size: 26px; font-weight: 800; line-height: 1.15; margin: 4px 0 2px;
+  color: var(--blue, #2563eb);
+}
+.inv-hero .inv-sub { font-size: 12px; color: var(--text-muted); margin-bottom: 8px; }
+.inv-hero-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.inv-hero-actions .btn { flex: 1 1 auto; min-width: 110px; justify-content: center; }
+.acc-summary-inv-actions {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  flex-shrink: 0; margin-left: 6px;
+}
+.acc-summary-inv-actions .btn { min-height: 32px; padding: 6px 10px; font-size: 12px; }
+@media (max-width: 600px) {
+  .acc-summary-inv-actions { width: 100%; flex-direction: row; justify-content: flex-end; margin-top: 4px; }
+}

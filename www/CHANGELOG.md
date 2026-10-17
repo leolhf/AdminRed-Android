@@ -2,6 +2,39 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.17 — Inventario profesional
+
+- **KPIs visibles:** valor en stock, unidades, agotados, margen potencial (antes se calculaban y no se mostraban).
+- Hero de resumen + acciones Comprar / Asignar.
+- Filtros: con stock / agotados / búsqueda.
+- **Asignado sin cobrar** como bandeja de pendientes.
+- Compra: opción **Registrar como gasto / salida de caja** (ligada al lote).
+- No eliminar lotes con asignaciones; botón Asignar en el resumen de cada producto.
+
+## v5.55.16 — Gastos profesionales
+
+- KPI **gastos operativos del mes** (excluye cuadres, devoluciones de deuda, aplicaciones de préstamo, retiros legacy).
+- Lista filtrada por **mes**; filtros por tipo, categoría y búsqueda.
+- Cabecera: solo **Nuevo gasto** y **Proveedor** (cuadre queda en Caja).
+- Hero del mes + delta vs mes anterior + mayor categoría + saldo proveedor.
+- **Editar** gastos operativos/proveedor; mensajes de borrado según tipo.
+
+## v5.55.15 — Capital en red profesional
+
+- **Bugfix:** `totalInvertido` / `totalRecuperado` / efectivo solo cuentan capital propio (excluyen préstamos).
+- **Estado del capital:** hero con % recuperado, por recuperar y tiempo estimado.
+- KPIs de activo (por recuperar en ámbar, no rojo de deuda).
+- Tarjetas: “Red · En recuperación”, por recuperar, clientes y proyección.
+- Bloque colapsable **Cómo se calcula**; aviso al crear inversión propia (no mueve caja).
+
+## v5.55.14 — Por pagar profesional
+
+- **Siguiente a pagar** arriba (saldo, badges, Pagar, enlace a Caja).
+- **Agenda** antes que resumen; política colapsable (“Ver reglas”).
+- Tarjetas de **pasivo**: “Por devolver”, moneda del contrato, destino del dinero, meta/fecha.
+- Botón **Pagar** visible en el resumen de cada deuda activa.
+- KPI dual: total CUP + tramo USD de contrato; progreso renombrado a **Devolución global**.
+
 ## v5.55.13 — Caja profesional (Ahora · Movimientos · Cierre)
 
 - **Ahora:** hero “Puedes retirar” (libre), reserva, fondo, CUP/USD físicos, acciones Retirar / Depositar / Cuadrar / Cobrar.
