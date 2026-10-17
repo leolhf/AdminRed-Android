@@ -242,6 +242,22 @@ RN.inversion.guardar = function () {
   // v5.12.9: origen del capital
   const origenCapital = document.getElementById('inv-origen').value || 'propio';
 
+  // v5.55.5: moneda de la deuda = en qué moneda se lleva el saldo a devolver
+  var monedaDeuda = 'CUP';
+  var montoMoneda = monto;
+  if (origenCapital === 'prestado_externo') {
+    if (pago.moneda === 'USD' && (pago.montoUSD || 0) > 0) {
+      monedaDeuda = 'USD';
+      montoMoneda = pago.montoUSD;
+    } else if (pago.moneda === 'MIXTO' && (pago.montoUSD || 0) > 0) {
+      var tasaP = pago.tasaUsd || 0;
+      var cupDesdeUsd = (pago.montoUSD || 0) * tasaP;
+      if (cupDesdeUsd >= (pago.montoCUP || 0)) {
+        monedaDeuda = 'USD';
+        montoMoneda = pago.montoUSD;
+      }
+    }
+  }
   const data = {
     concepto, monto, clienteIds: clientes, fechaCompra,
     origenCapital,
@@ -250,7 +266,9 @@ RN.inversion.guardar = function () {
     montoPagoCUP: pago.montoCUP,
     montoPagoCUPDesdeUSD: pago.montoCUPDesdeUSD,
     totalPagoCUP: pago.totalRecibidoCUP,
-    tasaUsdCompra: pago.tasaUsd
+    tasaUsdCompra: pago.tasaUsd,
+    monedaDeuda: monedaDeuda,
+    montoMoneda: montoMoneda
   };
   const id = RN.inversion._editId;
   if (id) {
@@ -328,6 +346,13 @@ RN.inversion.eliminar = function (id) {
  * Abre el modal para registrar una devolución de préstamo de una inversión.
  * @param {string} inversionId — ID de la inversión (préstamo externo).
  */
+
+/**
+ * Abre el modal para registrar una devolución de préstamo (v5.55.5).
+ * - Saldo en moneda de la deuda (USD o CUP).
+ * - Sugerido = % del bolsillo libre (default 25 %), convertido a esa moneda.
+ * - Si la deuda es USD y pagas en CUP, se aplica la tasa del día.
+ */
 RN.inversion.devolucionPrestamo = function (inversionId) {
   var inv = (RN.state.investments || []).find(function (i) { return i.id === inversionId; });
   if (!inv) {
@@ -338,159 +363,230 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
     RN.notifyUI.toast('Esta inversión es capital propio, no requiere devolución', 'info');
     return;
   }
-  var saldoDevolver = RN.investment.saldoADevolver(inv);
+  var mon = RN.investment.monedaDeuda(inv);
+  var saldoMon = RN.investment.saldoADevolverMoneda(inv);
+  var saldoCUP = RN.investment.saldoADevolver(inv);
+  var pct = RN.investment.pctLibreDeudas();
+  var sugeridoMon = RN.investment.sugeridoDevolucion(inv);
+  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0, reserva: 0 };
+  var libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
   var recuperadoNeto = RN.investment.recuperadoNetoInv(inv);
-  var fondoDisponible = RN.calc.fondoCaja();
-  // Lo máximo que se puede devolver es el menor entre: saldo a devolver,
-  // lo recuperado neto (no devuelves lo que aún no generó el negocio) y
-  // el fondo de caja disponible. Pero permitimos pasar del recuperado neto
-  // (advertimos) porque el dueño puede usar otros fondos.
-  var sugerido = Math.min(saldoDevolver, Math.max(0, recuperadoNeto));
-
-  // v5.13.16 (BUG-4): Mostrar el recuperado neto REAL (puede ser negativo)
-  // en lugar de ocultarlo con Math.max(0, ...). El usuario necesita saber si
-  // está devolviendo más de lo que el negocio ha generado.
-  var recNetoColor = recuperadoNeto < 0 ? 'var(--danger)' : 'var(--green)';
-  var recNetoTxt = recuperadoNeto < 0
-    ? '<strong style="color:' + recNetoColor + '">' + RN.calc.formatCUP(recuperadoNeto) + '</strong>'
-      + ' <span class="muted" style="font-size:11px">(has devuelto más de lo generado)</span>'
-    : '<strong style="color:' + recNetoColor + '">' + RN.calc.formatCUP(recuperadoNeto) + '</strong>';
+  var unit = mon === 'USD' ? 'USD' : 'CUP';
+  var fmtSaldo = RN.investment.fmtSaldoDeuda(inv);
+  var fmtPrincipal = mon === 'USD'
+    ? ((RN.moneda && RN.moneda.formatUSD) ? RN.moneda.formatUSD(RN.investment.montoMonedaDeuda(inv)) : RN.investment.montoMonedaDeuda(inv).toFixed(2) + ' USD')
+    : RN.calc.formatCUP(RN.investment.montoMonedaDeuda(inv));
+  var fmtDevuelto = mon === 'USD'
+    ? ((RN.moneda && RN.moneda.formatUSD) ? RN.moneda.formatUSD(RN.investment.totalDevueltoMoneda(inv)) : RN.investment.totalDevueltoMoneda(inv).toFixed(2) + ' USD')
+    : RN.calc.formatCUP(RN.investment.totalDevueltoMoneda(inv));
 
   var html =
     '<div class="modal-header">' +
-      '<h3>💨 Devolver préstamo — ' + RN.render.esc(inv.concepto) + '</h3>' +
+      '<h3>💨 Pagar deuda — ' + RN.render.esc(inv.concepto) + '</h3>' +
       '<button class="close" onclick="RN.uiComponents.cerrarModal()">×</button>' +
     '</div>' +
     '<div class="modal-body">' +
       '<div class="kpi blue" style="margin-bottom:12px">' +
-        '<div class="label">Saldo a devolver al prestamista</div>' +
-        '<div class="value">' + RN.calc.formatCUP(saldoDevolver) + '</div>' +
-        '<div class="sub">De un préstamo de ' + RN.calc.formatCUP(inv.monto) + ' · ya devuelto ' + RN.calc.formatCUP(RN.investment.totalDevuelto(inv)) + '</div>' +
+        '<div class="label">Saldo a devolver (' + unit + ')</div>' +
+        '<div class="value">' + fmtSaldo + '</div>' +
+        '<div class="sub">Préstamo ' + fmtPrincipal + ' · ya devuelto ' + fmtDevuelto +
+          (mon === 'USD' ? ' · el saldo se lleva en USD' : '') + '</div>' +
+      '</div>' +
+      '<div class="acc-row" style="margin-bottom:8px">' +
+        '<span class="acc-label">Bolsillo libre (caja)</span>' +
+        '<span class="acc-value">' + RN.calc.formatCUP(libre) + '</span>' +
       '</div>' +
       '<div class="acc-row" style="margin-bottom:12px">' +
-        '<span class="acc-label">Recuperado neto (generado por el negocio, aún sin devolver)</span>' +
-        '<span class="acc-value">' + recNetoTxt + '</span>' +
+        '<span class="acc-label">Sugerido automático (' + pct + '% del libre)</span>' +
+        '<span class="acc-value"><strong>' + (mon === 'USD'
+          ? ((RN.moneda && RN.moneda.formatUSD) ? RN.moneda.formatUSD(sugeridoMon) : sugeridoMon.toFixed(2) + ' USD')
+          : RN.calc.formatCUP(sugeridoMon)) + '</strong></span>' +
       '</div>' +
-      '<div class="acc-row" style="margin-bottom:16px">' +
-        '<span class="acc-label">Fondo de caja disponible ahora</span>' +
-        '<span class="acc-value">' + RN.calc.formatCUP(fondoDisponible) + '</span>' +
+      '<div class="flex wrap" style="gap:8px;margin-bottom:14px">' +
+        '<button type="button" class="btn sm primary" id="dev-btn-sugerido">Usar sugerido</button>' +
+        '<button type="button" class="btn sm" id="dev-btn-todo">Liquidar saldo</button>' +
       '</div>' +
-      '<div class="form-row"><div>' +
-        '<label>Monto a devolver (CUP) *</label>' +
-        // v5.13.16 (CODE-3): data-attributes en lugar de oninput inline
-        '<input id="dev-monto" type="number" step="0.01" min="0.01" placeholder="0.00" value="' + (sugerido > 0 ? sugerido.toFixed(2) : '') + '"' +
-          ' data-saldo="' + saldoDevolver + '" data-fondo="' + fondoDisponible + '" data-recuperado="' + recuperadoNeto + '">' +
-        '<small class="muted" style="display:block;margin-top:4px">Sugerido: lo recuperado del negocio que aún no has devuelto (' + RN.calc.formatCUP(Math.max(0, recuperadoNeto)) + ').</small>' +
-      '</div></div>' +
+      '<div class="form-row cols-2">' +
+        '<div><label>Monto a pagar *</label>' +
+          '<input id="dev-monto" type="number" step="0.01" min="0.01" inputmode="decimal" spellcheck="false" autocorrect="off" autocapitalize="off" ' +
+            'placeholder="0.00" value="' + (sugeridoMon > 0 ? sugeridoMon : '') + '" ' +
+            'data-moneda-deuda="' + mon + '" data-saldo-mon="' + saldoMon + '" data-saldo-cup="' + saldoCUP + '" data-libre="' + libre + '" data-tasa="' + tasa + '">' +
+          '<small class="muted" style="display:block;margin-top:4px">En moneda de la deuda (' + unit + '). Si pagas en otra moneda, indica abajo cómo sales de caja.</small>' +
+        '</div>' +
+        '<div><label>Pagas desde caja en</label>' +
+          '<select id="dev-pago-moneda">' +
+            '<option value="CUP"' + (mon === 'CUP' ? ' selected' : '') + '>CUP</option>' +
+            '<option value="USD"' + (mon === 'USD' ? ' selected' : '') + '>USD</option>' +
+          '</select>' +
+          '<small class="muted" style="display:block;margin-top:4px">Tasa hoy: 1 USD = ' + (tasa || '—') + ' CUP</small>' +
+        '</div>' +
+      '</div>' +
       '<div class="form-row"><div>' +
         '<label>Concepto (opcional)</label>' +
-        '<input id="dev-concepto" placeholder="Ej: Pago de cuota del préstamo a Juan" spellcheck="true" autocorrect="on" autocapitalize="sentences">' +
+        '<input id="dev-concepto" placeholder="Ej: Cuota a Juan" lang="es" spellcheck="true" autocorrect="on" autocapitalize="sentences">' +
       '</div></div>' +
       '<div class="form-row"><div>' +
         '<label>Fecha</label>' +
         '<input id="dev-fecha" type="date" value="' + new Date().toISOString().slice(0, 10) + '">' +
       '</div></div>' +
       '<div id="dev-aviso" style="margin-top:8px"></div>' +
+      '<div id="dev-preview" class="muted" style="margin-top:8px;font-size:13px"></div>' +
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>' +
-      '<button class="btn primary" onclick="RN.inversion.guardarDevolucion(\'' + RN.render.escAttr(inv.id) + '\')" id="dev-btn-guardar">💨 Registrar devolución</button>' +
+      '<button class="btn primary" id="dev-guardar-btn" onclick="RN.inversion.guardarDevolucion(\'' + RN.render.escAttr(inv.id) + '\')">Registrar pago</button>' +
     '</div>';
-  RN.uiComponents.modal(html);
-  // v5.13.16 (CODE-3): event delegation vía addEventListener en lugar de oninput inline
+
+  RN.uiComponents.modal(html, { lg: true });
+
   var montoInput = document.getElementById('dev-monto');
+  var selPago = document.getElementById('dev-pago-moneda');
+  function refresh() { RN.inversion._validarDevolucion(montoInput); }
   if (montoInput) {
-    montoInput.addEventListener('input', function () {
-      RN.inversion._validarDevolucion(this);
-    });
+    montoInput.addEventListener('input', refresh);
+    montoInput.addEventListener('change', refresh);
   }
-  // Validación inicial
-  RN.inversion._validarDevolucion(document.getElementById('dev-monto'));
+  if (selPago) selPago.addEventListener('change', refresh);
+  var btnSug = document.getElementById('dev-btn-sugerido');
+  if (btnSug) btnSug.addEventListener('click', function () {
+    if (montoInput) { montoInput.value = sugeridoMon > 0 ? sugeridoMon : ''; refresh(); }
+  });
+  var btnTodo = document.getElementById('dev-btn-todo');
+  if (btnTodo) btnTodo.addEventListener('click', function () {
+    if (montoInput) { montoInput.value = saldoMon > 0 ? saldoMon : ''; refresh(); }
+  });
+  refresh();
 };
 
 /**
- * v5.13.2 — Validación en tiempo real del monto a devolver (movida desde caja.js).
- * v5.13.16 (BUG-3): El botón se deshabilita cuando monto > saldoDevolver
- *   (antes se mostraba la advertencia pero el botón seguía habilitado,
- *   creando una UX inconsistente: el usuario hacía clic y recibía un error
- *   solo en guardarDevolucion).
- * v5.13.16 (CODE-3): Los valores de validación se leen de los data-attributes
- *   del input (data-saldo, data-fondo, data-recuperado) en lugar de recibirse
- *   como parámetros inline, evitando problemas con formatos exponenciales.
- * @param {HTMLInputElement} input — el campo de monto con data-attributes.
+ * Valida monto y muestra preview: impacto en caja + saldo restante en moneda de deuda.
  */
 RN.inversion._validarDevolucion = function (input) {
-  if (!input) return;
-  var monto = parseFloat(input.value) || 0;
   var aviso = document.getElementById('dev-aviso');
-  var btn = document.getElementById('dev-btn-guardar');
-  if (!aviso) return;
-  // v5.13.16 (CODE-3): leer valores desde data-attributes
-  var saldoDevolver = parseFloat(input.getAttribute('data-saldo')) || 0;
-  var fondoDisponible = parseFloat(input.getAttribute('data-fondo')) || 0;
-  var recuperadoNeto = parseFloat(input.getAttribute('data-recuperado')) || 0;
+  var preview = document.getElementById('dev-preview');
+  var btn = document.getElementById('dev-guardar-btn');
+  if (!input || !aviso) return;
+  var monto = parseFloat(input.value) || 0;
+  var mon = input.getAttribute('data-moneda-deuda') || 'CUP';
+  var saldoMon = parseFloat(input.getAttribute('data-saldo-mon')) || 0;
+  var libre = parseFloat(input.getAttribute('data-libre')) || 0;
+  var tasa = parseFloat(input.getAttribute('data-tasa')) || 0;
+  var pagoMon = ((document.getElementById('dev-pago-moneda') || {}).value) || 'CUP';
 
-  if (monto <= 0) {
-    aviso.innerHTML = '<span class="badge warn">Ingresa un monto válido mayor que 0</span>';
-    if (btn) btn.disabled = true;
-  } else if (monto > saldoDevolver) {
-    aviso.innerHTML = '<span class="badge due">⚠️ El monto excede el saldo a devolver (' + RN.calc.formatCUP(saldoDevolver) + ').</span>';
-    if (btn) btn.disabled = true;  // v5.13.16 (BUG-3): deshabilitar, era false
-  } else if (monto > fondoDisponible) {
-    aviso.innerHTML = '<span class="badge due">⚠️ El monto excede el fondo de caja disponible (' + RN.calc.formatCUP(fondoDisponible) + '). El fondo quedará negativo.</span>';
-    if (btn) btn.disabled = false;
-  } else if (monto > recuperadoNeto) {
-    aviso.innerHTML = '<span class="badge warn">ℹ️ Devuelves más de lo recuperado del negocio (' + RN.calc.formatCUP(recuperadoNeto) + '). Estás usando otros fondos para adelantar el pago.</span>';
-    if (btn) btn.disabled = false;
+  // Equivalente en CUP que sale de caja
+  var cupSale = 0;
+  if (mon === 'USD') {
+    if (pagoMon === 'USD') cupSale = monto * (tasa || 0);
+    else cupSale = monto * (tasa || 0); // deuda USD: monto está en USD; pagar en CUP = USD * tasa
+    if (pagoMon === 'CUP') {
+      // usuario expresa el pago en USD de deuda; CUP = USD * tasa
+      cupSale = monto * (tasa || 0);
+    }
   } else {
-    aviso.innerHTML = '<span class="badge ok">✓ Saldo a devolver restante: ' + RN.calc.formatCUP(+(saldoDevolver - monto).toFixed(2)) + '</span>';
-    if (btn) btn.disabled = false;
+    // deuda en CUP
+    if (pagoMon === 'USD') cupSale = monto; // monto en CUP de deuda; si sale USD de caja, el gasto contable sigue siendo monto CUP
+    else cupSale = monto;
+  }
+  // Clarificar: el campo "monto" siempre es en moneda de la deuda.
+  // CUP que sale de caja:
+  if (mon === 'USD') {
+    cupSale = tasa > 0 ? monto * tasa : 0;
+  } else {
+    cupSale = monto;
+  }
+
+  var ok = true;
+  var msgs = [];
+  if (monto <= 0) {
+    ok = false;
+  } else if (monto > saldoMon + 0.0001) {
+    ok = false;
+    msgs.push('<span class="badge due">⚠️ Excede el saldo (' + (mon === 'USD' ? monto.toFixed(2) + ' USD' : RN.calc.formatCUP(saldoMon)) + ')</span>');
+  }
+  if (monto > 0 && cupSale > libre + 0.01) {
+    msgs.push('<span class="badge due">⚠️ Supera el bolsillo libre (' + RN.calc.formatCUP(libre) + '). Se tocaría la reserva.</span>');
+  }
+  if (mon === 'USD' && !(tasa > 0)) {
+    ok = false;
+    msgs.push('<span class="badge due">⚠️ Configura la tasa USD en Ajustes para convertir a CUP de caja.</span>');
+  }
+  if (monto > 0 && ok && msgs.length === 0) {
+    msgs.push('<span class="badge ok">✓ Listo para registrar</span>');
+  }
+  aviso.innerHTML = msgs.join(' ');
+  if (btn) btn.disabled = !ok || monto <= 0;
+
+  if (preview) {
+    if (monto > 0 && (mon !== 'USD' || tasa > 0)) {
+      var resto = Math.max(0, saldoMon - monto);
+      preview.innerHTML = 'Sale de caja ≈ <strong>' + RN.calc.formatCUP(cupSale) + '</strong>' +
+        (mon === 'USD' ? ' (al tipo de hoy)' : '') +
+        ' · Saldo quedaría en <strong>' + (mon === 'USD' ? resto.toFixed(2) + ' USD' : RN.calc.formatCUP(resto)) + '</strong>';
+    } else {
+      preview.innerHTML = '';
+    }
   }
 };
 
 /**
- * v5.13.2 — Guarda la devolución de préstamo como un gasto marcado
- * (esDevolucionInversion + inversionId). Sale de la caja.
- * (Movida desde caja.js, referencias RN.caja.* actualizadas a RN.inversion.*)
- * v5.13.16 (CODE-2): Reemplazada la llamada RN.inversion.renderDeudas() por
- *   RN.render.inversion() directamente (renderDeudas era un wrapper vacío).
- * v5.13.16 (UI-5): Añade una animación de destaque cuando la deuda se liquida
- *   (verificarConclusion devuelve true) antes de re-renderizar.
+ * Guarda la devolución: reduce saldo en moneda de deuda; registra gasto en CUP (caja).
  */
 RN.inversion.guardarDevolucion = function (inversionId) {
-  var monto = parseFloat(document.getElementById('dev-monto').value) || 0;
-  if (monto < 0) {
+  var input = document.getElementById('dev-monto');
+  var montoMon = parseFloat(input && input.value) || 0;
+  if (montoMon < 0) {
     RN.notifyUI.toast('El monto no puede ser negativo', 'error');
     return;
   }
-  if (monto <= 0) {
+  if (montoMon <= 0) {
     RN.notifyUI.toast('El monto debe ser mayor que 0', 'error');
     return;
   }
-  // v5.13.4 (Mejora #5): Validar que la devolución no exceda el saldo pendiente
   var inv = (RN.state.investments || []).find(function (i) { return i.id === inversionId; });
   if (!inv) return;
-  var totalDevuelto = RN.investment.totalDevuelto(inv);
-  var saldoPendiente = inv.monto - totalDevuelto;
-  if (monto > saldoPendiente + 0.01) {
-    RN.notifyUI.toast('La devolución (' + RN.calc.formatCUP(monto) +
-      ') excede el saldo pendiente (' + RN.calc.formatCUP(saldoPendiente) + ')', 'error');
+  var mon = RN.investment.monedaDeuda(inv);
+  var saldoMon = RN.investment.saldoADevolverMoneda(inv);
+  if (montoMon > saldoMon + 0.0001) {
+    RN.notifyUI.toast('El pago excede el saldo pendiente en ' + mon, 'error');
     return;
   }
-  var concepto = document.getElementById('dev-concepto').value.trim();
-  var fecha = document.getElementById('dev-fecha').value || new Date().toISOString().slice(0, 10);
-  // v5.13.5 (ISSUE #12): Construir fecha ISO sin conversión de timezone.
+  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
+  var montoCUP;
+  if (mon === 'USD') {
+    if (!(tasa > 0)) {
+      RN.notifyUI.toast('Configura la tasa USD en Ajustes', 'error');
+      return;
+    }
+    montoCUP = +(montoMon * tasa).toFixed(2);
+  } else {
+    montoCUP = +montoMon.toFixed(2);
+  }
+  // También validar vs saldo CUP legado (compat)
+  var saldoCUP = RN.investment.saldoADevolver(inv);
+  if (mon === 'CUP' && montoCUP > saldoCUP + 0.01) {
+    RN.notifyUI.toast('La devolución excede el saldo pendiente (' + RN.calc.formatCUP(saldoCUP) + ')', 'error');
+    return;
+  }
+
+  var concepto = (document.getElementById('dev-concepto') || {}).value || '';
+  concepto = (concepto || '').trim();
+  var fecha = (document.getElementById('dev-fecha') || {}).value || new Date().toISOString().slice(0, 10);
   var fechaISO = fecha + 'T00:00:00';
   var mes = fecha.slice(0, 7);
-
   if (!concepto) {
     concepto = 'Devolución de préstamo: ' + inv.concepto;
   }
+  var pagoMon = ((document.getElementById('dev-pago-moneda') || {}).value) || 'CUP';
 
   RN.state.gastos.push({
     id: RN.calc.uid('devinv'),
     concepto: concepto,
-    monto: monto,
+    monto: montoCUP,
+    montoMonedaDeuda: montoMon,
+    monedaDeuda: mon,
+    monedaPagoCaja: pagoMon,
+    tasaUsd: tasa,
     categoria: 'Devolución de préstamo',
     esDevolucionInversion: true,
     inversionId: inversionId,
@@ -498,14 +594,10 @@ RN.inversion.guardarDevolucion = function (inversionId) {
     mes: mes
   });
 
-  // v5.13.1: Bug #6 — eliminado el guardado duplicado dentro de if(concluida).
   var concluida = RN.investment.verificarConclusion(inv);
 
   RN.storageLocal.guardar();
 
-  // v5.13.16 (UI-5): Animación de destaque al liquidar una deuda.
-  // Antes de cerrar el modal y re-renderizar, aplicamos un efecto visual
-  // a la card de la deuda liquidada para dar feedback inmediato del logro.
   if (concluida) {
     var cardLiquidada = document.getElementById('acc-deuda-' + inv.id);
     if (cardLiquidada) {
@@ -516,100 +608,12 @@ RN.inversion.guardarDevolucion = function (inversionId) {
   }
 
   RN.uiComponents.cerrarModal();
-  RN.render.dashboard();
-  RN.render.inversion();
-  RN.render.gastos();
-  // v5.13.16 (CODE-2): RN.render.inversion() ya pinta todo (inversiones + deudas + KPIs).
-  // Se elimina la llamada a RN.inversion.renderDeudas() (wrapper vacío).
-  // v5.13.5 (ISSUE #13): Consolidar los dos toasts consecutivos en uno solo.
-  // Antes se mostraba "¡Deuda liquidada!" y luego "Devolución registrada: X",
-  // lo que podía confundir o solaparse visualmente.
-  var msg = 'Devolución registrada: ' + RN.calc.formatCUP(monto);
-  if (concluida) {
-    msg = '🎉 ¡Deuda liquidada! (' + RN.calc.formatCUP(monto) + ') · Trasladada al historial de deudas concluidas.';
-  }
-  RN.notifyUI.toast(msg, 'success');
+  if (RN.render && RN.render.dashboard) RN.render.dashboard();
+  if (RN.render && RN.render.inversion) RN.render.inversion();
+  RN.notifyUI.toast(concluida ? 'Deuda liquidada' : 'Pago registrado', 'success');
 };
 
-/**
- * v5.13.2 — Muestra el historial de devoluciones de una inversión.
- * (Movida desde caja.js, referencias actualizadas a RN.inversion.*)
- */
-RN.inversion.historialDevoluciones = function (inversionId) {
-  var inv = (RN.state.investments || []).find(function (i) { return i.id === inversionId; });
-  if (!inv) return;
-  var devs = RN.investment.devolucionesInv(inv)
-    .sort(function (a, b) { return new Date(b.fecha) - new Date(a.fecha); });
-  var total = RN.investment.totalDevuelto(inv);
 
-  var filas = devs.length === 0
-    ? '<p class="muted" style="text-align:center;padding:24px">No hay devoluciones registradas</p>'
-    : devs.map(function (d) {
-        var fecha = new Date(d.fecha).toLocaleDateString('es-CU');
-        return '<tr>' +
-          '<td>' + fecha + '</td>' +
-          '<td>' + RN.render.esc(d.concepto) + '</td>' +
-          '<td style="text-align:right;font-weight:bold;color:var(--red,#dc2626)">-' + RN.calc.formatCUP(d.monto) + '</td>' +
-          '<td style="text-align:center"><button class="btn sm ghost danger" onclick="RN.inversion.eliminarDevolucion(\'' + RN.render.escAttr(d.id) + '\',\'' + RN.render.escAttr(inv.id) + '\')">✕</button></td>' +
-        '</tr>';
-      }).join('');
-
-  var html =
-    '<div class="modal-header">' +
-      '<h3>💨 Devoluciones — ' + RN.render.esc(inv.concepto) + '</h3>' +
-      '<button class="close" onclick="RN.uiComponents.cerrarModal()">×</button>' +
-    '</div>' +
-    '<div class="modal-body">' +
-      '<div class="kpi blue" style="margin-bottom:16px">' +
-        '<div class="label">Total devuelto</div>' +
-        '<div class="value">' + RN.calc.formatCUP(total) + '</div>' +
-        '<div class="sub">Saldo a devolver: ' + RN.calc.formatCUP(RN.investment.saldoADevolver(inv)) + ' · ' + devs.length + ' devolución(es)</div>' +
-      '</div>' +
-      '<table class="table" style="width:100%">' +
-        '<thead><tr><th>Fecha</th><th>Concepto</th><th style="text-align:right">Monto</th><th style="text-align:center">Acción</th></tr></thead>' +
-        '<tbody>' + filas + '</tbody>' +
-      '</table>' +
-    '</div>' +
-    '<div class="modal-footer">' +
-      '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cerrar</button>' +
-      '<button class="btn primary" onclick="RN.uiComponents.cerrarModal(); RN.inversion.devolucionPrestamo(\'' + RN.render.escAttr(inv.id) + '\')">💨 Nueva devolución</button>' +
-    '</div>';
-  RN.uiComponents.modal(html);
-};
-
-/**
- * v5.13.2 — Elimina una devolución (devuelve el dinero al saldo a devolver y a la caja).
- * (Movida desde caja.js, referencias actualizadas a RN.inversion.*)
- * v5.13.16 (CODE-2): Reemplazada RN.inversion.renderDeudas() por RN.render.inversion().
- */
-RN.inversion.eliminarDevolucion = function (gastoId, inversionId) {
-  RN.uiComponents.confirm('Eliminar devolución',
-    '¿Eliminar esta devolución? El dinero volverá al saldo a devolver y al fondo de caja.',
-    function () {
-      RN.state.gastos = RN.state.gastos.filter(function (g) { return g.id !== gastoId; });
-      RN.storageLocal.guardar();
-      RN.inversion.historialDevoluciones(inversionId);
-      RN.render.dashboard();
-      RN.render.inversion();
-      RN.render.gastos();
-      // v5.13.16 (CODE-2): RN.render.inversion() ya pinta todo unificado.
-      RN.notifyUI.toast('Devolución eliminada. Saldo actualizado.', 'success');
-    }, { danger: true });
-};
-
-/* ============================================================
- * v5.13.2 — VISTA DE DEUDAS PERSONALES (fusionada desde deudas.js)
- * ------------------------------------------------------------
- * Antes existía un archivo separado deudas.js que duplicaba la lógica de
- * inversión con solo un filtro de diferencia (origenCapital === 'prestado_externo').
- * Ahora la vista de deudas se renderiza desde este mismo módulo, eliminando
- * el archivo deudas.js y su función eliminar() divergente con bug.
- * ============================================================ */
-
-/**
- * Render principal de la vista "Deudas personales".
- * Pinta los KPIs, la lista de deudas activas y el historial de concluidas.
- */
 // v5.13.16 (CODE-2): renderDeudas es un alias de compatibilidad que delega en
 // render.inversion() (vista unificada de inversiones + deudas + KPIs).
 // Se conserva por compatibilidad con posibles llamadas externas, pero las
@@ -901,7 +905,7 @@ RN.inversion._cardInversion = function (inv, opts) {
       + '<div class="acc-row"><span class="acc-label">Total devuelto</span><span class="acc-value"><strong style="color:var(--green)">' + RN.calc.formatCUP(totalDevuelto) + '</strong></span></div>'
       + (esConcluida
           ? '<div class="acc-row" style="font-weight:600"><span class="acc-label">Saldo final</span><span class="acc-value"><span class="badge ok">0 · Liquidado</span></span></div>'
-          : '<div class="acc-row" style="font-weight:600"><span class="acc-label">Saldo por devolver</span><span class="acc-value"><strong style="color:var(--warn)">' + RN.calc.formatCUP(saldoDevolver) + '</strong></span></div>')
+          : '<div class="acc-row" style="font-weight:600"><span class="acc-label">Saldo por devolver</span><span class="acc-value"><strong style="color:var(--warn)">' + RN.investment.fmtSaldoDeuda(inv) + '</strong></span></div>')
       + '<div class="acc-row"><span class="acc-label">% devuelto</span><span class="acc-value">' + pctDevuelto + '%</span></div>'
       + barraHtml;
   } else {
@@ -932,7 +936,7 @@ RN.inversion._cardInversion = function (inv, opts) {
         + '<button class="btn sm danger" onclick="RN.inversion.eliminar(\'' + RN.render.escAttr(inv.id) + '\')">🗑</button>';
     } else {
       accionesHtml =
-        '<button class="btn sm primary" onclick="RN.inversion.devolucionPrestamo(\'' + RN.render.escAttr(inv.id) + '\')">💨 Devolver préstamo</button>'
+        '<button class="btn sm primary" onclick="RN.inversion.devolucionPrestamo(\'' + RN.render.escAttr(inv.id) + '\')">💨 Pagar deuda</button>'
         + '<span class="badge warn" style="margin-left:4px">Saldo: ' + RN.calc.formatCUP(saldoDevolver) + '</span>'
         + '<button class="btn sm" onclick="RN.inversion.historialDevoluciones(\'' + RN.render.escAttr(inv.id) + '\')">📋 Devoluciones</button>'
         + '<button class="btn sm" onclick="RN.inversion.abrirEditar(\'' + RN.render.escAttr(inv.id) + '\')">Editar</button>'

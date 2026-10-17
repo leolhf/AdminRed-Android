@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.5 — Pago de deudas (moneda + sugerido por caja libre)
+
+- El saldo de un **préstamo externo** se lleva en la **moneda del préstamo** (USD o CUP).
+- Si la deuda es en USD y pagas con CUP, se convierte con la **tasa del día**.
+- **Sugerido automático** = % del bolsillo libre (por defecto **25 %**, config `pctLibreDeudas`).
+- Modal **Pagar deuda**: botones Usar sugerido / Liquidar saldo, preview de salida de caja y saldo restante.
+- Al crear el préstamo, si el desembolso fue en USD se marca `monedaDeuda: USD`.
+
 ## v5.55.4 — Fix submenú de la barra de grupos
 
 - El submenú no aparecía porque el `overflow-x` de la barra lo recortaba (limitación CSS).

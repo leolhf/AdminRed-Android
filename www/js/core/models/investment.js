@@ -494,6 +494,92 @@ RN.investment.saldoADevolver = function (inv) {
   return Math.max(0, +restante.toFixed(2));
 };
 
+/* ============================================================
+ * v5.55.5 — Deuda en moneda de origen + sugerido según bolsillo libre
+ * ============================================================ */
+
+/** % del bolsillo libre sugerido para devoluciones. Default 25. Config: pctLibreDeudas */
+RN.investment.pctLibreDeudas = function () {
+  var p = +(RN.state && RN.state.config && RN.state.config.pctLibreDeudas);
+  if (!(p >= 0 && p <= 100)) p = 25;
+  return p;
+};
+
+/**
+ * Moneda en la que se lleva el saldo de la deuda: 'USD' | 'CUP'.
+ * Explicit inv.monedaDeuda, o se infiere del pago al crear el préstamo.
+ */
+RN.investment.monedaDeuda = function (inv) {
+  if (!inv) return 'CUP';
+  if (inv.monedaDeuda === 'USD' || inv.monedaDeuda === 'CUP') return inv.monedaDeuda;
+  if (inv.monedaPago === 'USD') return 'USD';
+  if (inv.monedaPago === 'MIXTO' && +inv.montoPagoUSD > 0) {
+    var tasa = +inv.tasaUsdCompra || +(RN.state.config && RN.state.config.tasaUSD) || 0;
+    var cupDesdeUsd = (+inv.montoPagoUSD) * tasa;
+    var cupDirecto = +inv.montoPagoCUP || 0;
+    if (cupDesdeUsd >= cupDirecto) return 'USD';
+  }
+  return 'CUP';
+};
+
+/** Principal en moneda de la deuda (USD o CUP). */
+RN.investment.montoMonedaDeuda = function (inv) {
+  if (!inv) return 0;
+  if (+inv.montoMoneda > 0) return +inv.montoMoneda;
+  if (RN.investment.monedaDeuda(inv) === 'USD') {
+    return +inv.montoPagoUSD > 0 ? +inv.montoPagoUSD : 0;
+  }
+  return +inv.monto || 0;
+};
+
+/** Total ya devuelto en moneda de la deuda. */
+RN.investment.totalDevueltoMoneda = function (inv) {
+  return RN.investment.devolucionesInv(inv).reduce(function (s, g) {
+    if (+g.montoMonedaDeuda > 0) return s + +g.montoMonedaDeuda;
+    if (RN.investment.monedaDeuda(inv) === 'CUP') return s + (+g.monto || 0);
+    var tasa = +g.tasaUsd || +(RN.state.config && RN.state.config.tasaUSD) || 0;
+    if (tasa > 0 && +g.monto > 0) return s + (+g.monto / tasa);
+    return s;
+  }, 0);
+};
+
+/** Saldo pendiente en moneda de la deuda. */
+RN.investment.saldoADevolverMoneda = function (inv) {
+  if (RN.investment.origenCapital(inv) !== 'prestado_externo') return 0;
+  var rest = RN.investment.montoMonedaDeuda(inv) - RN.investment.totalDevueltoMoneda(inv);
+  return Math.max(0, +rest.toFixed(4));
+};
+
+/** Formato legible del saldo (ej. "80.00 USD" o CUP formateado). */
+RN.investment.fmtSaldoDeuda = function (inv) {
+  var mon = RN.investment.monedaDeuda(inv);
+  var s = RN.investment.saldoADevolverMoneda(inv);
+  if (mon === 'USD') {
+    return (typeof RN.moneda !== 'undefined' && RN.moneda.formatUSD)
+      ? RN.moneda.formatUSD(s)
+      : (Number(s).toFixed(2) + ' USD');
+  }
+  return RN.calc.formatCUP(s);
+};
+
+/**
+ * Monto sugerido a devolver en moneda de la deuda, según % del bolsillo libre.
+ * = min(saldo, libre × pct/100 convertido a moneda de la deuda).
+ */
+RN.investment.sugeridoDevolucion = function (inv) {
+  var mon = RN.investment.monedaDeuda(inv);
+  var saldo = RN.investment.saldoADevolverMoneda(inv);
+  if (saldo <= 0) return 0;
+  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0 };
+  var libreCUP = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  var pct = RN.investment.pctLibreDeudas();
+  var cupSugerido = libreCUP * (pct / 100);
+  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
+  var enMoneda = mon === 'USD' ? (tasa > 0 ? cupSugerido / tasa : 0) : cupSugerido;
+  if (!(enMoneda > 0)) enMoneda = 0;
+  return +Math.min(saldo, enMoneda).toFixed(2);
+};
+
 /**
  * Recuperado NETO de una inversión = lo que el negocio ha generado (margen de
  * clientes) MENOS lo que ya se ha devuelto al prestamista.
@@ -677,7 +763,7 @@ RN.investment.deudasActivas = function () {
   return (RN.state.investments || []).filter(function (i) {
     return RN.investment.origenCapital(i) === 'prestado_externo'
       && !i.deudaConcluida
-      && RN.investment.saldoADevolver(i) > 0;
+      && RN.investment.saldoADevolverMoneda(i) > 0.0001;
   });
 };
 
@@ -701,7 +787,10 @@ RN.investment.verificarConclusion = function (inv) {
   if (!inv) return false;
   if (RN.investment.origenCapital(inv) !== 'prestado_externo') return false;
   if (inv.deudaConcluida) return false;
-  if (RN.investment.saldoADevolver(inv) <= 0) {
+  // v5.55.5: priorizar saldo en moneda de la deuda (USD o CUP)
+  var saldoMon = RN.investment.saldoADevolverMoneda(inv);
+  var saldoCup = RN.investment.saldoADevolver(inv);
+  if (saldoMon <= 0.0001 || saldoCup <= 0) {
     inv.deudaConcluida = true;
     inv.fechaConclusion = new Date().toISOString();
     return true;
