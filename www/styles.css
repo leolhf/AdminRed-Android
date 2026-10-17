@@ -1443,3 +1443,33 @@ tr.cobranza-notificado-wa td:first-child {
 /* v5.53.2 — Avisos al abrir */
 .aviso-inicio-lista { margin: 8px 0 0; padding-left: 1.2em; }
 .aviso-inicio-lista li { margin: 4px 0; }
+
+
+/* ---------- Panel v5.55.8 — zonas Hoy / Mes / Caja ---------- */
+.panel-zone {
+  margin-top: 18px;
+  padding-top: 4px;
+}
+.panel-zone-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin: 0 0 10px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.panel-mode-toggle {
+  display: inline-flex;
+  gap: 4px;
+  margin-right: 8px;
+}
+.panel-mode-toggle .btn.active {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+body.panel-modo-operacion .panel-analisis-only {
+  display: none;
+}

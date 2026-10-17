@@ -95,61 +95,90 @@
   <div class="breadcrumb no-print" id="breadcrumb" aria-live="polite"></div>
 
   <main>
-    <!-- DASHBOARD -->
+    <!-- DASHBOARD v5.55.8 — zonas Hoy · Mes · Caja y capital -->
     <section class="view active" id="view-dashboard">
-      <div class="view-header"><h2>Panel del negocio</h2><span id="dashboard-mes" class="mes-badge muted"></span><div class="spacer"></div>
+      <div class="view-header">
+        <h2>Panel</h2>
+        <span id="dashboard-mes" class="mes-badge muted"></span>
+        <div class="spacer"></div>
+        <div class="panel-mode-toggle" role="group" aria-label="Modo del panel">
+          <button type="button" class="btn sm active" id="panel-modo-operacion" onclick="RN.panel.setModo('operacion')">Día a día</button>
+          <button type="button" class="btn sm" id="panel-modo-analisis" onclick="RN.panel.setModo('analisis')">Análisis</button>
+        </div>
         <button class="btn primary" onclick="RN.modalCobro.abrirDesdeCobros()">+ Registrar cobro</button>
       </div>
-      <div class="kpi-grid" id="kpi-dashboard"></div>
-      <!-- v5.44.0: Caja en tiempo real (saldos físicos CUP/USD + accesos rápidos) -->
-      <div class="card mt-16" id="card-caja-real">
-        <div id="panel-caja-real"></div>
+
+      <!-- ===== ZONA 1: HOY (acción) ===== -->
+      <div class="panel-zone" id="panel-zone-hoy">
+        <div class="panel-zone-label">Hoy · qué hacer</div>
+        <div class="kpi-grid" id="kpi-dashboard-hoy"></div>
+        <div class="card mt-16" id="card-bandeja">
+          <h3>Bandeja del día</h3>
+          <p class="muted" style="font-size:12px;margin:0 0 8px">Clientes, deudas y avisos priorizados. Un solo sitio para actuar.</p>
+          <div id="panel-bandeja"></div>
+          <!-- Destinos que siguen llenando los widgets (visibles dentro de la bandeja) -->
+          <div id="panel-atencion" class="mt-16"></div>
+          <div class="chips mt-16" id="atencion-chips" role="group" aria-label="Filtrar clientes que requieren atención"></div>
+          <div id="panel-atencion-clientes"></div>
+        </div>
       </div>
-      <!-- v5.16.0: Bloque "Requiere tu atención" (alertas accionables) -->
-      <div class="card mt-16" id="card-atencion">
-        <h3>⚠️ Requiere tu atención</h3>
-        <div id="panel-atencion"></div>
-        <!-- v5.44.0: chips de filtro + clientes priorizados -->
-        <div class="chips mt-16" id="atencion-chips" role="group" aria-label="Filtrar clientes que requieren atención"></div>
-        <div id="panel-atencion-clientes"></div>
+
+      <!-- ===== ZONA 2: MES (resultado) ===== -->
+      <div class="panel-zone" id="panel-zone-mes">
+        <div class="panel-zone-label">Mes · resultado</div>
+        <div class="kpi-grid" id="kpi-dashboard"></div>
+        <div style="margin:8px 0 4px">
+          <button type="button" class="btn sm" id="btn-kpi-extra" onclick="RN.panel.toggleKpiExtra()">Ver más indicadores</button>
+        </div>
+        <div class="kpi-grid" id="kpi-dashboard-extra" style="display:none"></div>
+        <div class="card mt-16">
+          <h3>Resumen rápido</h3>
+          <div id="dashboard-resumen"></div>
+        </div>
+        <div class="panel-analisis-only">
+          <div class="card mt-16" id="card-tendencia">
+            <h3>📈 Tendencia de 6 meses</h3>
+            <div id="panel-tendencia"></div>
+          </div>
+          <div class="card mt-16" id="card-cortes">
+            <h3>📅 Próximos cortes</h3>
+            <div id="panel-cortes"></div>
+          </div>
+          <div class="card mt-16" id="card-rentabilidad">
+            <h3>💰 Rentabilidad</h3>
+            <div id="panel-rentabilidad"></div>
+          </div>
+        </div>
       </div>
-      <div class="card mt-16">
-        <h3>Resumen rápido</h3>
-        <div id="dashboard-resumen"></div>
+
+      <!-- ===== ZONA 3: CAJA Y CAPITAL ===== -->
+      <div class="panel-zone" id="panel-zone-caja">
+        <div class="panel-zone-label">Caja y capital</div>
+        <div class="kpi-grid" id="kpi-dashboard-carteras"></div>
+        <div class="card mt-16" id="card-caja-unificada">
+          <h3>🏦 Caja</h3>
+          <p class="muted" style="font-size:12px;margin:0 0 8px">Libre · Reserva · Saldos físicos. Un solo bloque.</p>
+          <div id="panel-caja"></div>
+          <div id="panel-caja-real" class="mt-16"></div>
+        </div>
+        <div class="card mt-16" id="card-recuperacion">
+          <h3>Capital en red</h3>
+          <div id="dashboard-recuperacion"></div>
+        </div>
+        <div class="card mt-16" id="card-por-pagar" style="display:none">
+          <h3>Por pagar (pasivos)</h3>
+          <div id="dashboard-por-pagar"></div>
+        </div>
+        <div class="card mt-16" id="card-proveedor">
+          <div id="dashboard-proveedor"></div>
+        </div>
       </div>
-      <!-- v5.16.0: Tendencia de 6 meses (ingresos vs gastos) -->
-      <div class="card mt-16" id="card-tendencia">
-        <h3>📈 Tendencia de 6 meses</h3>
-        <div id="panel-tendencia"></div>
-      </div>
-      <!-- v5.16.0: Próximos cortes (agenda) -->
-      <div class="card mt-16" id="card-cortes">
-        <h3>📅 Próximos cortes</h3>
-        <div id="panel-cortes"></div>
-      </div>
-      <!-- v5.16.0: Rentabilidad (ganancia por mega + sobreventa) -->
-      <div class="card mt-16" id="card-rentabilidad">
-        <h3>💰 Rentabilidad</h3>
-        <div id="panel-rentabilidad"></div>
-      </div>
-      <!-- v5.52.1: Caja unificada (proyectada + dos bolsillos) -->
-      <div class="card mt-16" id="card-caja-proy">
-        <h3>🏦 Caja · Dos bolsillos</h3>
-        <div id="panel-caja"></div>
-      </div>
-      <div class="card mt-16" id="card-recuperacion">
-        <h3>Recuperación de la inversión</h3>
-        <div id="dashboard-recuperacion"></div>
-      </div>
-      <div class="card mt-16" id="card-proveedor">
-        <div id="dashboard-proveedor"></div>
-      </div>
-    
-      <div class="card mt-16" id="card-por-pagar" style="display:none">
-        <h3>Por pagar esta semana</h3>
-        <div id="dashboard-por-pagar"></div>
-      </div>
-</section>
+
+      <!-- Compat: ids antiguos por si algún script los busca -->
+      <div id="card-caja-real" style="display:none" aria-hidden="true"></div>
+      <div id="card-caja-proy" style="display:none" aria-hidden="true"></div>
+      <div id="card-atencion" style="display:none" aria-hidden="true"></div>
+    </section>
 
     <!-- CLIENTES -->
     <section class="view" id="view-clientes">

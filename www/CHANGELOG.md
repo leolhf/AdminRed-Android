@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.8 — Panel profesional (Hoy · Mes · Caja)
+
+- **3 zonas fijas:** Hoy (acción) → Mes (resultado) → Caja y capital.
+- **Bandeja del día:** cobranza, alertas, deudas y avisos en una sola lista priorizada.
+- **KPIs mínimos** arriba; “Ver más indicadores” para el detalle.
+- **Modo Día a día / Análisis:** en Día a día se ocultan tendencia, cortes y rentabilidad.
+- **Caja unificada** (libre/reserva + físicos) y **carteras:** Por cobrar · Por pagar · En caja.
+
 ## v5.55.7 — Organización profesional de dinero (pasivos vs capital)
 
 - **Por pagar** (submenú Dinero): solo préstamos a devolver; agenda ordenada por vencimiento/meta/saldo.
