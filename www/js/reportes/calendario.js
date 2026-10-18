@@ -80,79 +80,135 @@ RN.calendario.render = function () {
 
   const primerDia = new Date(y, m - 1, 1).getDay(); // 0=domingo
   const diasMes = new Date(y, m, 0).getDate();
-
-  // v5.13.10 (BUG-2): esMesActual unificado con el mes operativo.
   const esMesActual = (ym === RN.calc.mesActualStr());
-  // Solo tiene sentido resaltar "hoy" si el mes en vista es el operativo actual.
   const diaHoy = esMesActual ? RN.calc.hoy().getDate() : null;
 
-  const cortes = RN.ciclos.cortesOficiales();           // v5.13.10 (DUP-1)
-  const esCorte = {};
-  cortes.forEach((d) => { esCorte[d] = true; });
+  // Aviso mes ≠ operativo
+  var aviso = document.getElementById('cal-mes-aviso');
+  if (aviso) {
+    if (!esMesActual) {
+      aviso.style.display = '';
+      aviso.textContent = 'Estás viendo ' + RN.calc.mesTexto(ym) + ' (mes de visualización). El mes operativo es ' + RN.calc.mesTexto(RN.calc.mesActualStr()) + '.';
+    } else {
+      aviso.style.display = 'none';
+      aviso.textContent = '';
+    }
+  }
 
-  // v5.13.10 (BUG-3 + CODE-4): mapa día -> resúmenes precalculados.
-  // resumenCliente ya centraliza estado, neto, cuotaEq, mora, totalMes, totalDeuda.
+  // Agrupar clientes cobrables por día efectivo
   const porDia = {};
-  RN.calc.clientesActivos().forEach((c) => {
-    const dia = RN.calendario._diaEfectivo(c.diaPago, diasMes); // BUG-3
+  let nClientes = 0, nPendientes = 0, nPagados = 0, montoPend = 0, montoPagado = 0;
+  const listaBase = (RN.calc.clientesCobrables ? RN.calc.clientesCobrables() : RN.calc.clientesActivos());
+  listaBase.forEach(function (c) {
+    if (RN.calc.esAdmin && RN.calc.esAdmin(c)) return;
+    const dia = RN.calendario._diaEfectivo(c.diaPago, diasMes);
     if (!porDia[dia]) porDia[dia] = [];
-    porDia[dia].push({ c, r: RN.calc.resumenCliente(c, ym) }); // DUP-2 + CODE-4
+    const r = RN.calc.resumenCliente(c, ym);
+    porDia[dia].push({ c: c, r: r });
+    nClientes++;
+    if (r.estado === 'paid') {
+      nPagados++;
+      montoPagado += (r.totalMes || 0);
+    } else if (r.estado !== 'admin' && r.estado !== 'inactivo' && r.estado !== 'por-iniciar') {
+      nPendientes++;
+      montoPend += (r.totalDeuda != null ? r.totalDeuda : ((r.totalMes || 0) + (r.moraMonto || 0)));
+    } else if (r.estado === 'por-iniciar') {
+      // no suma a pendiente de cobro
+    } else if (r.estado !== 'paid') {
+      nPendientes++;
+      montoPend += (r.totalDeuda != null ? r.totalDeuda : (r.totalMes || 0));
+    }
   });
 
-  const heads = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
-  let html = heads.map((h) => `<div class="cal-head">${h}</div>`).join('');
-  for (let i = 0; i < primerDia; i++) html += '<div class="cal-day empty"></div>';
+  let diasConCarga = 0;
+  for (let d = 1; d <= diasMes; d++) {
+    if (porDia[d] && porDia[d].length) diasConCarga++;
+  }
+  const pctPag = nClientes > 0 ? Math.round((nPagados / nClientes) * 100) : 0;
+
+  // Resumen
+  var resEl = document.getElementById('cal-resumen');
+  if (resEl) {
+    resEl.innerHTML =
+      '<div class="muted" style="font-size:12px;font-weight:600">Mes visualizado · ' + RN.render.esc(RN.calc.mesTexto(ym)) + '</div>' +
+      '<div style="font-size:20px;font-weight:800;margin:4px 0">' + RN.calc.formatCUP(montoPend) + ' <span class="muted" style="font-size:13px;font-weight:500">pendiente</span></div>' +
+      '<div class="muted" style="font-size:12px">' + nPendientes + ' pendiente' + (nPendientes !== 1 ? 's' : '') +
+        ' · ' + nPagados + ' pagado' + (nPagados !== 1 ? 's' : '') +
+        ' (' + pctPag + '%) · ' + diasConCarga + ' día' + (diasConCarga !== 1 ? 's' : '') + ' con carga</div>';
+  }
+  var kpiEl = document.getElementById('kpi-calendario');
+  if (kpiEl) {
+    var kpis = [
+      { label: 'Pendiente $', value: RN.calc.formatCUP(montoPend), cls: nPendientes ? 'red' : 'green' },
+      { label: 'Clientes', value: String(nClientes), cls: 'blue' },
+      { label: '% pagado', value: pctPag + '%', cls: pctPag >= 80 ? 'green' : (pctPag >= 40 ? 'amber' : 'red') },
+      { label: 'Días carga', value: String(diasConCarga), cls: 'blue' }
+    ];
+    kpiEl.innerHTML = kpis.map(function (k) {
+      return '<div class="kpi ' + k.cls + '"><div class="label">' + k.label + '</div><div class="value" style="font-size:14px">' + k.value + '</div></div>';
+    }).join('');
+  }
+
+  const cortes = RN.ciclos.cortesOficiales ? RN.ciclos.cortesOficiales() : [];
+  const headers = ['D', 'L', 'M', 'X', 'J', 'V', 'S'];
+  let html = headers.map(function (h) {
+    return '<div class="cal-dow">' + h + '</div>';
+  }).join('');
+
+  for (let i = 0; i < primerDia; i++) {
+    html += '<div class="cal-day empty"></div>';
+  }
 
   for (let d = 1; d <= diasMes; d++) {
-    const cls = [];
-    if (esMesActual && d === diaHoy) cls.push('today');
-    const esCorteDia = !!esCorte[d];
-    if (esCorteDia) cls.push('corte');
-
     const items = porDia[d] || [];
     const hayClientes = items.length > 0;
+    const cls = ['cal-day'];
+    if (esMesActual && d === diaHoy) cls.push('today');
+    if (cortes.indexOf(d) !== -1) cls.push('corte');
 
-    // v5.13.10 (BUG-4): color dominante — 'por-iniciar' ya NO se mapea a 'ok'.
-    const estadoDom = RN.calendario._estadoDominante(items.map((it) => it.r.estado));
+    // Estados pendientes primero para color dominante
+    const estadosPend = items.filter(function (it) { return it.r.estado !== 'paid'; }).map(function (it) { return it.r.estado; });
+    const estadosAll = items.map(function (it) { return it.r.estado; });
+    const estadoDom = RN.calendario._estadoDominante(estadosPend.length ? estadosPend : estadosAll);
     if (estadoDom) cls.push(estadoDom);
+
+    const nPend = items.filter(function (it) { return it.r.estado !== 'paid' && it.r.estado !== 'por-iniciar'; }).length;
+    const nPaid = items.filter(function (it) { return it.r.estado === 'paid'; }).length;
+    if (hayClientes && nPend === 0 && nPaid > 0) cls.push('all-paid');
+
     if (hayClientes) cls.push('clickable');
 
-    // v5.13.11 (UI-movil): tag compacto con capa oculta ".cut-word"
-    // que se oculta en pantallas muy estrechas (ver CSS @media max-width:599px).
-    const corteTag = esCorteDia
-      ? '<span class="cal-corte-tag">✂<span class="cut-word"> Corte</span></span>'
-      : '';
-    const dots = RN.calendario._dotsPorEstado(items); // v5.13.10 (UI-4)
-    const attrAria = hayClientes
-      ? ' aria-label="Día ' + d + ': ' + items.length + ' cliente(s) para cobro"'
-      : '';
+    let body = '<span class="num">' + d + '</span>';
+    if (hayClientes) {
+      body += RN.calendario._dotsPorEstado(items);
+      if (nPend > 0) {
+        body += '<span class="cal-pend">' + nPend + ' pend.</span>';
+      } else {
+        body += '<span class="cal-pend">OK</span>';
+      }
+      body += '<span class="cal-count">' + items.length + '</span>';
+    }
 
-    // v5.13.10 (UI-2 + CODE-5): data-dia + delegación de eventos (sin onclick inline).
-    html += `<div class="cal-day ${cls.join(' ')}"` +
+    html += '<div class="' + cls.join(' ') + '"' +
       (hayClientes ? ' role="button" tabindex="0" data-dia="' + d + '"' : '') +
-      attrAria + '>' +
-      `<span class="num">${d}</span>` +
-      corteTag +
-      (dots ? `<span class="cal-dots">${dots}</span>` : '') +
-      (hayClientes ? `<span class="cal-count">${items.length} pago(s)</span>` : '') +
-    `</div>`;
+      '>' + body + '</div>';
   }
+
   grid.innerHTML = html;
-
-  // v5.13.10 (UI-7): aviso de mes sin cobros programados.
-  const aviso = document.getElementById('cal-empty-aviso');
-  if (aviso) {
-    aviso.style.display = Object.keys(porDia).length === 0 ? 'block' : 'none';
-  }
-
-  // v5.13.10 (UI-2 + CODE-5): delegación de eventos (click + teclado).
   RN.calendario._bindGrid(grid);
+
+  var empty = document.getElementById('cal-empty-aviso');
+  if (empty) {
+    if (!nClientes) {
+      empty.style.display = '';
+      empty.innerHTML = 'Sin clientes con día de pago en este mes. Revisa días de pago en Clientes o ve a <button type="button" class="btn sm" onclick="RN.tabs&&RN.tabs.ir(\'cobros\')">Cobros</button>.';
+    } else {
+      empty.style.display = 'none';
+      empty.textContent = '';
+    }
+  }
 };
 
-/**
- * v5.13.10 (UI-2 + CODE-5): listeners delegados en la grilla.
- * Maneja click y teclado (Enter/Space) para abrir el día.
- */
 RN.calendario._bindGrid = function (grid) {
   if (grid._rnBound) return; // evitar doble binding si render se llama varias veces
   grid._rnBound = true;
@@ -215,12 +271,22 @@ RN.calendario.abrirDia = function (dia) {
   // v5.13.10 (DUP-3 + BUG-3): clientes cuyo día efectivo coincide con 'dia'.
   // Se recorre una sola vez con resumenCliente precalculado (DUP-2 + CODE-4).
   const items = [];
-  RN.calc.clientesActivos().forEach((c) => {
+  const base = (RN.calc.clientesCobrables ? RN.calc.clientesCobrables() : RN.calc.clientesActivos());
+  base.forEach((c) => {
+    if (RN.calc.esAdmin && RN.calc.esAdmin(c)) return;
     if (RN.calendario._diaEfectivo(c.diaPago, diasMes) === dia) {
-      items.push({ c, r: RN.calc.resumenCliente(c, ym) });
+      items.push({ c: c, r: RN.calc.resumenCliente(c, ym) });
     }
   });
   if (!items.length) return;
+  // v5.55.24: pendientes primero, pagados al final
+  items.sort(function (a, b) {
+    var pa = a.r.estado === 'paid' ? 1 : 0;
+    var pb = b.r.estado === 'paid' ? 1 : 0;
+    if (pa !== pb) return pa - pb;
+    var peso = { due: 0, warn: 1, parcial: 2, ok: 3, 'por-iniciar': 4, paid: 5 };
+    return (peso[a.r.estado] != null ? peso[a.r.estado] : 3) - (peso[b.r.estado] != null ? peso[b.r.estado] : 3);
+  });
 
   const cortes = RN.ciclos.cortesOficiales();
   const esCorte = cortes.indexOf(dia) !== -1;                       // DUP-1
@@ -230,14 +296,18 @@ RN.calendario.abrirDia = function (dia) {
   const esCorteVigente = esMesActual && cv && cv.diaPago === dia;
 
   // Calcular totales (LOG-2: totalDeuda incluye mora de meses anteriores).
-  let totalACobrar = 0, totalNeto = 0, totalEquipo = 0;
+  let totalACobrar = 0, totalNeto = 0, totalEquipo = 0, totalPendiente = 0;
   let pagados = 0, pendientes = 0, conTel = 0;
   items.forEach((it) => {
-    const { r } = it;
+    const r = it.r;
     totalACobrar += r.totalDeuda;     // LOG-2: deuda real (mora + equipo)
     totalNeto += r.neto;
     totalEquipo += r.cuotaEq;
-    if (r.estado === 'paid') pagados++; else pendientes++;
+    if (r.estado === 'paid') pagados++;
+    else {
+      pendientes++;
+      totalPendiente += (r.totalDeuda != null ? r.totalDeuda : ((r.totalMes || 0) + (r.moraMonto || 0)));
+    }
     if (it.c.telefono) conTel++;
   });
   const conMora = +(totalACobrar - (totalNeto + totalEquipo)).toFixed(2);
@@ -248,7 +318,7 @@ RN.calendario.abrirDia = function (dia) {
 
   const titulo = RN.calendario._headerDia(dia, ym, { esCorte, esCorteVigente, cv, esMesActual });
   const kpi = RN.calendario._kpiDia({
-    totalACobrar, totalNeto, totalEquipo, pagados, pendientes,
+    totalACobrar, totalPendiente, totalNeto, totalEquipo, pagados, pendientes,
     total: items.length, conTel, conMora
   });
 
@@ -361,22 +431,20 @@ RN.calendario._headerDia = function (dia, ym, ctx) {
 RN.calendario._kpiDia = function (t) {
   const kpiCls = t.pendientes > 0 ? 'amber' : 'green';
   const sinTel = t.total - t.conTel;
-  let sub = t.total + ' cliente' + (t.total > 1 ? 's' : '') + ' en este corte · ' +
+  const montoMostrar = (t.totalPendiente != null && t.pendientes > 0) ? t.totalPendiente : t.totalACobrar;
+  let sub = t.total + ' cliente' + (t.total > 1 ? 's' : '') + ' · ' +
     t.pagados + ' pagado' + (t.pagados !== 1 ? 's' : '') + ' · ' +
     t.pendientes + ' pendiente' + (t.pendientes !== 1 ? 's' : '');
-  // UI-5: desglose de contactabilidad solo si hay pendientes.
   if (t.pendientes > 0) {
     sub += ' · ' + t.conTel + ' con teléfono' + (sinTel > 0 ? ' · ' + sinTel + ' sin teléfono' : '');
   }
-  // LOG-2: si hay mora acumulada, aclarar que el total la incluye.
   if (t.conMora > 0) {
-    sub += ' · incluye mora acumulada';
+    sub += ' · incluye mora';
   }
   return '<div class="kpi ' + kpiCls + '" style="margin-bottom:12px">' +
-    '<div class="label">Total a cobrar este día</div>' +
-    '<div class="value">' + RN.calc.formatCUP(t.totalACobrar) + '</div>' +
-    '<div class="sub">' + sub + '</div>' +
-  '</div>';
+    '<div class="label">' + (t.pendientes > 0 ? 'Pendiente este día' : 'Total del día') + '</div>' +
+    '<div class="value">' + RN.calc.formatCUP(montoMostrar) + '</div>' +
+    '<div class="muted" style="font-size:12px;margin-top:4px">' + sub + '</div></div>';
 };
 
 /**
@@ -415,6 +483,16 @@ RN.calendario._bindModalAcciones = function () {
 RN.calendario._cobrar = function (clienteId) {
   RN.uiComponents.cerrarModal();
   RN.modalCobro.abrir(clienteId);
+  // v5.55.24: refrescar rejilla cuando se cierre el flujo de cobro
+  var prev = RN.calendario._onCobroDone;
+  RN.calendario._onCobroDone = function () {
+    try { RN.calendario.render(); } catch (e) {}
+    if (typeof prev === 'function') prev();
+  };
+  // Re-render al volver el foco / tras un tick (modal cobro guarda y cierra)
+  setTimeout(function () {
+    try { RN.calendario.render(); } catch (e2) {}
+  }, 800);
 };
 
 /** Envía recordatorio de WhatsApp a un cliente. */

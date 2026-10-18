@@ -2,6 +2,21 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.24 — Calendario profesional
+
+- Resumen del mes: pendiente $, clientes, % pagado, días con carga.
+- Celdas: N pendientes (o OK si todos pagados); color por peor pendiente.
+- Aviso si el mes visualizado ≠ mes operativo.
+- Modal del día: pendientes primero; KPI “Pendiente este día”.
+- Leyenda colapsable; empty state con enlace a Cobros.
+- Refresco de la rejilla tras abrir cobro desde el día.
+
+## v5.55.23 — Realizados + fix nodos
+
+- Realizados: resumen del filtro, chips Este mes / Anterior / Todos, origen servicio/inventario.
+- Recibo a un toque; KPIs etiquetados; contador; empty state a Cobros.
+- **Fix:** `nodos` no se serializaba en localStorage → se perdían al cerrar la app.
+
 ## v5.55.22 — Cobros profesional
 
 - Héroe del mes: % avance, cobrado vs esperado, pendientes/pagados.

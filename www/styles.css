@@ -1806,3 +1806,38 @@ body.panel-modo-operacion .panel-analisis-only {
 @media (max-width: 600px) {
   .acc-summary-cob-actions { width: 100%; flex-direction: row; justify-content: flex-end; margin-top: 4px; }
 }
+
+
+/* ---------- Realizados v5.55.23 ---------- */
+.real-zone { margin-top: 16px; }
+.real-zone-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.real-hero .real-total {
+  font-size: 22px; font-weight: 800; line-height: 1.2; margin: 4px 0 2px;
+}
+.real-hero .real-sub { font-size: 13px; color: var(--text-muted); }
+.acc-summary-real-actions {
+  display: flex; flex-direction: column; align-items: flex-end; gap: 4px;
+  flex-shrink: 0; margin-left: 6px;
+}
+.acc-summary-real-actions .btn { min-height: 32px; padding: 4px 8px; font-size: 11px; }
+
+
+/* ---------- Calendario v5.55.24 ---------- */
+.cal-zone { margin-top: 16px; }
+.cal-zone-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.cal-day .cal-pend {
+  font-size: 10px; font-weight: 700; line-height: 1.2;
+  color: var(--danger, #dc2626);
+}
+.cal-day.all-paid .cal-pend { color: var(--success, #16a34a); }
+.cal-day .cal-count { font-size: 10px; color: var(--text-muted); }
+.cal-legend-details summary { list-style: none; }
+.cal-legend-details summary::-webkit-details-marker { display: none; }

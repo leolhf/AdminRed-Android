@@ -86,7 +86,7 @@ RN.export._validarEstructura = function (data) {
     }
   });
   // Las claves que deben ser arrays
-  var clavesArray = ['clients', 'history', 'gastos', 'depositos', 'retiros', 'inventario', 'investments', 'planes', 'descuentos', 'snapshots'];
+  var clavesArray = ['clients', 'history', 'gastos', 'depositos', 'retiros', 'inventario', 'investments', 'planes', 'equiposRed', 'nodos', 'descuentos', 'snapshots'];
   clavesArray.forEach(function (k) {
     if (k in data && !Array.isArray(data[k])) {
       errores.push('La clave "' + k + '" debe ser un array, no ' + typeof data[k]);

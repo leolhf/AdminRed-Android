@@ -281,23 +281,50 @@
     </section>
 
     <!-- REALIZADOS -->
+    <!-- REALIZADOS v5.55.23 — Resumen · Filtros · Historial -->
     <section class="view" id="view-realizados">
-      <div class="view-header"><h2>Cobros realizados</h2><div class="spacer"></div></div>
-      <div class="kpi-grid" id="kpi-realizados"></div>
-      <div class="toolbar">
-        <input class="search" type="search" id="search-realizados" placeholder="Buscar por cliente, recibo, concepto o mes..." oninput="RN.render.realizados()" spellcheck="false" autocorrect="off" autocapitalize="off">
-        <select id="filtro-realizados-mes" onchange="RN.render.realizados()">
-          <option value="">Todos los meses</option>
-        </select>
-        <select id="filtro-realizados-tipo" onchange="RN.render.realizados()">
-          <option value="">Todos los tipos</option>
-          <option value="completo">Completos</option>
-          <option value="parcial">Parciales</option>
-          <option value="excedente">Con excedente</option>
-        </select>
-        <button class="btn sm" onclick="RN.historial.exportCSV({ mes: (document.getElementById('filtro-realizados-mes')||{}).value||'', tipoPago: (document.getElementById('filtro-realizados-tipo')||{}).value||'', q: (document.getElementById('search-realizados')||{}).value||'' })">⬇️ Exportar CSV</button>
+      <div class="view-header">
+        <h2>Realizados</h2>
+        <span id="realizados-periodo" class="mes-badge muted"></span>
+        <div class="spacer"></div>
+        <button type="button" class="btn" onclick="RN.historial.exportCSV(RN.realizadosUI.filtroActual())">Exportar CSV</button>
       </div>
-      <div class="accordion-list" id="lista-realizados"></div>
+
+      <div class="real-zone">
+        <div class="real-zone-label">Resumen del filtro</div>
+        <div id="realizados-hero" class="card"></div>
+        <div class="kpi-grid mt-16" id="kpi-realizados"></div>
+      </div>
+
+      <div class="real-zone">
+        <div class="real-zone-label">Filtros</div>
+        <div class="chips" id="realizados-chips" role="group" aria-label="Periodo"></div>
+        <div class="card" style="margin-top:10px">
+          <div class="toolbar" style="margin:0;padding:0;border:0">
+            <input class="search" type="search" id="search-realizados" placeholder="Cliente, recibo, concepto…" oninput="RN.render.realizados()" spellcheck="false" autocorrect="off" autocapitalize="off">
+            <select id="filtro-realizados-mes" onchange="RN.realizadosUI.onMesChange()">
+              <option value="">Todos los meses</option>
+            </select>
+            <select id="filtro-realizados-tipo" onchange="RN.render.realizados()">
+              <option value="">Todos los tipos</option>
+              <option value="completo">Completos</option>
+              <option value="parcial">Parciales</option>
+              <option value="excedente">Con excedente</option>
+            </select>
+            <select id="filtro-realizados-origen" onchange="RN.render.realizados()">
+              <option value="">Todo origen</option>
+              <option value="servicio">Servicio</option>
+              <option value="inventario">Inventario</option>
+            </select>
+          </div>
+          <p class="muted" id="realizados-contador" style="font-size:12px;margin:8px 0 0"></p>
+        </div>
+      </div>
+
+      <div class="real-zone">
+        <div class="real-zone-label">Historial</div>
+        <div class="accordion-list" id="lista-realizados"></div>
+      </div>
     </section>
 
     <!-- INVERSION + DEUDAS (v5.13.2: fusion visual) -->
@@ -553,27 +580,42 @@
     </section>
 
     <!-- CALENDARIO -->
+    <!-- CALENDARIO v5.55.24 — Resumen mes · Rejilla · Leyenda compacta -->
     <section class="view" id="view-calendario">
-      <div class="view-header"><h2>Calendario de cobros</h2><div class="spacer"></div>
-        <button class="btn" onclick="RN.calendario.mesAnterior()">‹</button>
-        <span id="cal-mes-label" class="cal-mes-label">Julio 2026</span>
-        <button class="btn" onclick="RN.calendario.mesSiguiente()">›</button>
-        <button class="btn sm" onclick="RN.calendario.irHoy()" title="Volver al mes en curso">Hoy</button>
+      <div class="view-header">
+        <h2>Calendario</h2>
+        <div class="spacer"></div>
+        <button type="button" class="btn" onclick="RN.calendario.mesAnterior()" aria-label="Mes anterior">‹</button>
+        <span id="cal-mes-label" class="cal-mes-label">—</span>
+        <button type="button" class="btn" onclick="RN.calendario.mesSiguiente()" aria-label="Mes siguiente">›</button>
+        <button type="button" class="btn sm" onclick="RN.calendario.irHoy()" title="Mes en curso">Hoy</button>
       </div>
-      <div class="card">
-        <div class="cal-grid" id="cal-grid"></div>
-        <p id="cal-empty-aviso">Sin cobros programados para este mes.</p>
-        <!-- v5.13.11 (UI-movil): leyenda con clase propia .cal-legend para wrap limpio -->
-        <div class="cal-legend mt-16">
-          <span class="cal-legend-item"><span class="badge ok">●</span> Al día</span>
-          <span class="cal-legend-item"><span class="badge warn">●</span> Por vencer</span>
-          <span class="cal-legend-item"><span class="badge due">●</span> Atrasado</span>
-          <span class="cal-legend-item"><span class="badge parcial">●</span> Pago parcial</span>
-          <span class="cal-legend-item"><span class="badge paid">●</span> Pagado</span>
-          <span class="cal-legend-item"><span class="badge por-iniciar">⏭</span> Por iniciar</span>
-          <span class="cal-legend-item"><span class="cal-corte-tag">✂ Corte</span> Día de corte</span>
+      <p id="cal-mes-aviso" class="muted" style="font-size:12px;margin:0 0 8px;display:none"></p>
+
+      <div class="cal-zone">
+        <div class="cal-zone-label">Resumen del mes</div>
+        <div id="cal-resumen" class="card"></div>
+        <div class="kpi-grid mt-16" id="kpi-calendario"></div>
+      </div>
+
+      <div class="cal-zone">
+        <div class="cal-zone-label">Mes</div>
+        <div class="card">
+          <div class="cal-grid" id="cal-grid"></div>
+          <p id="cal-empty-aviso" class="muted" style="font-size:13px;margin:10px 0 0;display:none"></p>
         </div>
-        <p class="muted mt-8" style="font-size:12px">Toca un día con clientes (o usa Enter/Espacio con el teclado) para ver el detalle, el total a cobrar y cobrar o enviar recordatorios.</p>
+        <details class="cal-legend-details mt-16">
+          <summary class="muted" style="font-size:12px;cursor:pointer">Leyenda de colores</summary>
+          <div class="cal-legend mt-8">
+            <span class="cal-legend-item"><span class="badge due">●</span> Atrasado</span>
+            <span class="cal-legend-item"><span class="badge warn">●</span> Por vencer</span>
+            <span class="cal-legend-item"><span class="badge parcial">●</span> Parcial</span>
+            <span class="cal-legend-item"><span class="badge paid">●</span> Pagado</span>
+            <span class="cal-legend-item"><span class="badge ok">●</span> Al día</span>
+            <span class="cal-legend-item"><span class="cal-corte-tag">Corte</span> Día de corte</span>
+          </div>
+        </details>
+        <p class="muted mt-8" style="font-size:12px">Toca un día con carga para ver pendientes, cobrar o enviar recordatorios.</p>
       </div>
     </section>
 

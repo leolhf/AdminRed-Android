@@ -18,6 +18,7 @@ RN.storageLocal.serializar = function () {
     investments: RN.state.investments,
     planes: RN.state.planes,
     equiposRed: RN.state.equiposRed,
+    nodos: RN.state.nodos || [],
     descuentos: RN.state.descuentos,
     eventos: RN.state.eventos,
     snapshots: RN.state.snapshots,
@@ -48,6 +49,7 @@ RN.storageLocal.cargar = function () {
     RN.state.investments = data.investments || [];
     RN.state.planes = data.planes || [];
     RN.state.equiposRed = data.equiposRed || [];
+    RN.state.nodos = data.nodos || [];
     RN.state.descuentos = data.descuentos || [];
     // v5.15 — eventos de trazabilidad (fallback: [] en backups previos)
     RN.state.eventos = data.eventos || [];
@@ -87,6 +89,7 @@ RN.storageLocal._aplicarData = function (data) {
   RN.state.investments = data.investments || [];
   RN.state.planes = data.planes || [];
   RN.state.equiposRed = data.equiposRed || [];
+  RN.state.nodos = data.nodos || [];
   RN.state.descuentos = data.descuentos || [];
   // v5.15 — eventos de trazabilidad (fallback: [] en backups previos)
   RN.state.eventos = data.eventos || [];
