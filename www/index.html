@@ -86,7 +86,6 @@
     </div>
     <div class="subtabs" data-group="analisis">
       <div class="subtab" data-view="reportes">Reportes</div>
-      <div class="subtab" data-view="salud">Salud</div>
       <div class="subtab" data-view="margen">Margen</div>
       <div class="subtab" data-view="morosos">Morosos / bajas</div>
       <div class="subtab" data-view="incidencias">Incidencias</div>
@@ -97,92 +96,75 @@
 
   <main>
     <!-- DASHBOARD v5.55.8 — zonas Hoy · Mes · Caja y capital -->
+        <!-- PANEL v5.55.29 — Hoy · Mes compacto · Dinero señales -->
     <section class="view active" id="view-dashboard">
       <div class="view-header">
         <h2>Panel</h2>
         <span id="dashboard-mes" class="mes-badge muted"></span>
         <div class="spacer"></div>
-        <div class="panel-mode-toggle" role="group" aria-label="Modo del panel">
-          <button type="button" class="btn sm active" id="panel-modo-operacion" onclick="RN.panel.setModo('operacion')">Día a día</button>
-          <button type="button" class="btn sm" id="panel-modo-analisis" onclick="RN.panel.setModo('analisis')">Análisis</button>
-        </div>
-        <button class="btn primary" onclick="RN.modalCobro.abrirDesdeCobros()">+ Registrar cobro</button>
+        <button type="button" class="btn primary" onclick="RN.modalCobro.abrirDesdeCobros()">+ Cobro</button>
       </div>
 
-      <!-- ===== ZONA 1: HOY (acción) ===== -->
       <div class="panel-zone" id="panel-zone-hoy">
-        <div class="panel-zone-label">Hoy · qué hacer</div>
-        <div class="kpi-grid" id="kpi-dashboard-hoy"></div>
+        <div class="panel-zone-label">Hoy</div>
+        <div id="panel-hero-hoy" class="card"></div>
+        <div class="kpi-grid mt-16" id="kpi-dashboard-hoy"></div>
         <div class="card mt-16" id="card-bandeja">
-          <h3>Bandeja del día</h3>
-          <p class="muted" style="font-size:12px;margin:0 0 8px">Clientes, deudas y avisos priorizados. Un solo sitio para actuar.</p>
+          <h3 style="margin-top:0">Bandeja</h3>
+          <p class="muted" style="font-size:12px;margin:0 0 8px">Prioridades del día. Máximo 7 avisos.</p>
           <div id="panel-bandeja"></div>
-          <!-- Alertas van en la bandeja; aquí solo filtro + lista de clientes -->
-          <div id="panel-atencion" style="display:none" aria-hidden="true"></div>
-          <div class="chips mt-16" id="atencion-chips" role="group" aria-label="Filtrar clientes que requieren atención"></div>
+        </div>
+        <div class="card mt-16" id="card-atencion-cli">
+          <h3 style="margin-top:0">Clientes a atender</h3>
+          <div class="chips" id="atencion-chips" role="group" aria-label="Filtrar atención"></div>
           <div id="panel-atencion-clientes"></div>
         </div>
       </div>
 
-      <!-- ===== ZONA 2: MES (resultado) ===== -->
       <div class="panel-zone" id="panel-zone-mes">
-        <div class="panel-zone-label">Mes · resultado</div>
+        <div class="panel-zone-label">Mes</div>
         <div class="kpi-grid" id="kpi-dashboard"></div>
-        <div style="margin:8px 0 4px">
-          <button type="button" class="btn sm" id="btn-kpi-extra" onclick="RN.panel.toggleKpiExtra()">Ver más indicadores</button>
-        </div>
-        <div class="kpi-grid" id="kpi-dashboard-extra" style="display:none"></div>
-        <div class="card mt-16">
-          <h3>Resumen rápido</h3>
-          <div id="dashboard-resumen"></div>
-        </div>
-        <div class="panel-analisis-only">
-          <div class="card mt-16" id="card-tendencia">
-            <h3>📈 Tendencia de 6 meses</h3>
-            <div id="panel-tendencia"></div>
-          </div>
-          <div class="card mt-16" id="card-cortes">
-            <h3>📅 Próximos cortes</h3>
-            <div id="panel-cortes"></div>
-          </div>
-          <div class="card mt-16" id="card-rentabilidad">
-            <h3>💰 Rentabilidad</h3>
-            <div id="panel-rentabilidad"></div>
-          </div>
+        <div class="flex wrap mt-16" style="gap:8px">
+          <button type="button" class="btn sm" onclick="RN.tabs&&RN.tabs.ir('cobros')">Cobros</button>
+          <button type="button" class="btn sm" onclick="RN.tabs&&RN.tabs.ir('reportes')">Reportes</button>
+          <button type="button" class="btn sm" onclick="RN.tabs&&RN.tabs.ir('calendario')">Calendario</button>
         </div>
       </div>
 
-      <!-- ===== ZONA 3: RESUMEN DINERO (detalle de caja en Dinero → Caja) ===== -->
       <div class="panel-zone" id="panel-zone-caja">
-        <div class="panel-zone-label">Dinero · acceso rápido</div>
+        <div class="panel-zone-label">Dinero</div>
         <div class="kpi-grid" id="kpi-dashboard-carteras"></div>
         <div class="card mt-16" id="card-acceso-caja">
           <div class="flex wrap" style="align-items:center;gap:10px;justify-content:space-between">
             <div>
               <strong>Caja</strong>
-              <div class="muted" style="font-size:12px">Libre, reserva, proyección y saldos físicos</div>
+              <div class="muted" style="font-size:12px">Libre, reserva y movimientos</div>
             </div>
             <button type="button" class="btn primary sm" onclick="RN.tabs.ir('caja')">Abrir caja</button>
           </div>
         </div>
-        <div class="card mt-16" id="card-recuperacion" style="display:none">
-          <h3>Capital en red</h3>
-          <div id="dashboard-recuperacion"></div>
-          <div style="margin-top:8px"><button type="button" class="btn sm" onclick="RN.tabs.ir('inversion')">Ver capital en red</button></div>
-        </div>
         <div class="card mt-16" id="card-por-pagar" style="display:none">
-          <h3>Por pagar</h3>
+          <h3 style="margin-top:0">Por pagar (urgente)</h3>
           <div id="dashboard-por-pagar"></div>
         </div>
-        <div class="card mt-16" id="card-proveedor">
+        <div class="card mt-16" id="card-proveedor" style="display:none">
           <div id="dashboard-proveedor"></div>
         </div>
       </div>
 
+      <!-- Contenedores residuales (widgets legados; ocultos) -->
+      <div id="panel-atencion" style="display:none" aria-hidden="true"></div>
+      <div id="dashboard-resumen" style="display:none" aria-hidden="true"></div>
+      <div id="kpi-dashboard-extra" style="display:none" aria-hidden="true"></div>
+      <div id="panel-tendencia" style="display:none" aria-hidden="true"></div>
+      <div id="panel-cortes" style="display:none" aria-hidden="true"></div>
+      <div id="panel-rentabilidad" style="display:none" aria-hidden="true"></div>
+      <div id="dashboard-recuperacion" style="display:none" aria-hidden="true"></div>
       <div id="card-caja-real" style="display:none" aria-hidden="true"></div>
       <div id="card-caja-proy" style="display:none" aria-hidden="true"></div>
       <div id="card-atencion" style="display:none" aria-hidden="true"></div>
     </section>
+
 
     <!-- CLIENTES -->
     <!-- CLIENTES v5.55.21 — Parque · Filtros · Lista -->
@@ -557,25 +539,65 @@
     </section>
 
     <!-- REPORTES -->
+    <!-- REPORTES v5.55.25 — Periodo · Tendencia · Ejecutivo · Accesos -->
     <section class="view" id="view-reportes">
-      <div class="view-header"><h2>Reportes y estadísticas</h2></div>
-      <div class="kpi-grid" id="kpi-reportes"></div>
-      <div class="card"><h3>Historial de cobros</h3>
-        <div class="flex mb-16" style="gap:8px;flex-wrap:wrap;align-items:center">
-          <input class="search" type="search" id="search-historial-rep" placeholder="Buscar por cliente, recibo, concepto o mes..." oninput="RN.render.reportes()" spellcheck="false" autocorrect="off" autocapitalize="off">
-          <select id="filtro-historial-rep-mes" onchange="RN.render.reportes()"></select>
-          <button class="btn sm" onclick="RN.historial.exportCSV({ mes: (document.getElementById('filtro-historial-rep-mes')||{}).value||'', q: (document.getElementById('search-historial-rep')||{}).value||'' })">⬇️ Exportar CSV</button>
-        </div>
-        <div class="accordion-list" id="lista-historial-reportes"></div>
-        <p class="muted" id="historial-limite-aviso" style="font-size:12px;margin-top:8px;display:none"></p>
+      <div class="view-header">
+        <h2>Reportes</h2>
+        <span id="reportes-periodo-badge" class="mes-badge muted"></span>
+        <div class="spacer"></div>
+        <select id="select-mes-reporte" aria-label="Mes del reporte" onchange="RN.reportesUI.onMes()" style="max-width:160px"></select>
+        <button type="button" class="btn sm" onclick="RN.reportesUI.mesActual()">Mes actual</button>
       </div>
-      <div class="card"><h3>Tendencia mensual de ingresos</h3><div id="tendencia-chart"></div></div>
-      <div class="card"><h3>Reporte mensual ejecutivo</h3>
-        <div class="flex mb-16"><label>Mes</label>
-          <select id="select-mes-reporte" style="max-width:200px"></select>
-          <button class="btn" onclick="RN.reporteMensual.generar()">Generar</button>
+
+      <div class="rep-zone">
+        <div class="rep-zone-label">Periodo</div>
+        <div id="reportes-hero" class="card"></div>
+        <div class="kpi-grid mt-16" id="kpi-reportes"></div>
+        <div class="flex wrap mt-16" style="gap:8px">
+          <button type="button" class="btn sm" onclick="RN.estadisticas.ver()">Estadísticas</button>
+          <button type="button" class="btn sm" onclick="RN.prediccion.ver()">Predicción</button>
+          <button type="button" class="btn sm" onclick="RN.reportesUI.exportarResumen()">Exportar resumen</button>
+          <button type="button" class="btn sm" onclick="RN.reportesUI.copiarResumen()">Copiar</button>
         </div>
-        <div id="reporte-mensual-out"></div>
+      </div>
+
+      <div class="rep-zone">
+        <div class="rep-zone-label">Diagnóstico</div>
+        <div id="reportes-diagnostico"></div>
+      </div>
+
+      <div class="rep-zone">
+        <div class="rep-zone-label">Tendencia</div>
+        <div class="card">
+          <p class="muted" style="font-size:12px;margin:0 0 10px">Ingresos y gastos de los últimos meses</p>
+          <div id="tendencia-chart"></div>
+        </div>
+      </div>
+
+      <div class="rep-zone">
+        <div class="rep-zone-label">Reporte ejecutivo</div>
+        <div class="card" id="reporte-mensual-out"></div>
+      </div>
+
+      <div class="rep-zone">
+        <div class="rep-zone-label">Más análisis</div>
+        <div class="card">
+          <div class="flex wrap" style="gap:8px">
+            <button type="button" class="btn" onclick="RN.tabs&&RN.tabs.ir('margen')">Margen</button>
+            <button type="button" class="btn" onclick="RN.tabs&&RN.tabs.ir('morosos')">Morosos</button>
+            <button type="button" class="btn" onclick="RN.tabs&&RN.tabs.ir('incidencias')">Incidencias</button>
+            <button type="button" class="btn" onclick="RN.tabs&&RN.tabs.ir('realizados')">Realizados</button>
+          </div>
+          <p class="muted" style="font-size:12px;margin:10px 0 0">El historial detallado de cobros está en <strong>Operación → Realizados</strong>.</p>
+        </div>
+      </div>
+
+      <div class="rep-zone">
+        <div class="rep-zone-label">Últimos cobros</div>
+        <div class="card">
+          <div class="accordion-list" id="lista-historial-reportes"></div>
+          <button type="button" class="btn sm mt-8" onclick="RN.tabs&&RN.tabs.ir('realizados')">Ver todo en Realizados</button>
+        </div>
       </div>
     </section>
 
@@ -664,24 +686,44 @@
     </section>
 
     <!-- SALUD -->
+    <!-- Salud integrada en Reportes (v5.55.26); vista residual por si queda un enlace viejo -->
     <section class="view" id="view-salud">
-      <div class="view-header"><h2>Salud del negocio</h2></div>
-      <div id="salud-out"></div>
+      <div class="view-header"><h2>Diagnóstico</h2></div>
+      <div class="card">
+        <p class="muted">El diagnóstico del negocio está en <strong>Análisis → Reportes</strong>.</p>
+        <button type="button" class="btn primary" onclick="RN.tabs&&RN.tabs.ir('reportes')">Ir a Reportes</button>
+      </div>
     </section>
 
   
+    <!-- MARGEN v5.55.27 -->
     <section class="view" id="view-margen">
-      <div class="view-header"><h2>Margen por cliente</h2></div>
+      <div class="view-header">
+        <h2>Margen</h2>
+        <span id="margen-mes-badge" class="mes-badge muted"></span>
+        <div class="spacer"></div>
+        <select id="margen-mes" aria-label="Mes" onchange="RN.margenClientes.render()" style="max-width:150px"></select>
+      </div>
       <div id="margen-clientes-out"></div>
     </section>
 
+    <!-- MOROSOS / BAJAS v5.55.27 -->
     <section class="view" id="view-morosos">
-      <div class="view-header"><h2>Morosos y bajas</h2></div>
+      <div class="view-header">
+        <h2>Morosos y bajas</h2>
+        <div class="spacer"></div>
+        <button type="button" class="btn sm" onclick="RN.tabs&&RN.tabs.ir('cobros')">Ir a Cobros</button>
+      </div>
       <div id="lifecycle-out"></div>
     </section>
 
+    <!-- INCIDENCIAS v5.55.27 -->
     <section class="view" id="view-incidencias">
-      <div class="view-header"><h2>Incidencias</h2></div>
+      <div class="view-header">
+        <h2>Incidencias</h2>
+        <div class="spacer"></div>
+        <button type="button" class="btn primary" onclick="RN.incidencias.abrirNueva()">+ Nueva</button>
+      </div>
       <div id="incidencias-out"></div>
     </section>
 
@@ -734,49 +776,25 @@
   <!-- Notify container -->
   <div id="notify-container"></div>
 
-  <!-- v5.52.0: AJUSTES como modal (se abre desde ⚡ Acciones rápidas → ⚙️ Ajustes: RN.ajustes.abrir()).
-       Los elementos siguen siempre en el DOM, así que sus ids y funciones no cambian. -->
+    <!-- v5.55.28: Ajustes modal con pestañas -->
   <div class="modal-overlay" id="ajustes-overlay" aria-hidden="true">
     <div class="modal lg" role="dialog" aria-modal="true" aria-labelledby="ajustes-titulo">
-      <div class="modal-header"><h3 id="ajustes-titulo">⚙️ Ajustes</h3><button class="close" aria-label="Cerrar" onclick="RN.ajustes.cerrar()">×</button></div>
+      <div class="modal-header">
+        <h3 id="ajustes-titulo">Ajustes</h3>
+        <button type="button" class="close" aria-label="Cerrar" onclick="RN.ajustes.cerrar()">×</button>
+      </div>
       <div class="modal-body">
-      <div class="card">
-        <h3>Archivo de datos</h3>
-        <p class="muted mb-16" id="archivo-desc">Los datos se guardan localmente. Puedes vincular un archivo real (File System Access API) o usar el almacenamiento local del navegador.</p>
-        <div class="flex wrap" style="gap:10px">
-          <button class="btn primary" onclick="RN.storageFile.vincular()">📁 Vincular / crear archivo</button>
-          <button class="btn" onclick="RN.storageFile.guardarAhora()">💾 Guardar en archivo</button>
-          <button class="btn" onclick="RN.storageFile.abrir()">📂 Abrir archivo</button>
-          <button class="btn danger" onclick="RN.storageFile.desvincular()">🔓 Desvincular archivo</button>
-          <button class="btn" onclick="RN.export.exportarBackup()">⬇️ Exportar respaldo JSON</button>
-          <button class="btn" onclick="RN.export.importarBackup()">⬆️ Importar respaldo</button>
-          <button class="btn" onclick="RN.autoBackup.restaurarUltimo()" title="Restaura la última copia automática guardada en este navegador">♻️ Restaurar respaldo automático</button>
+        <div class="chips aj-tabs" role="tablist" style="margin-bottom:12px">
+          <button type="button" class="chip active" data-aj-tab="negocio" onclick="RN.ajustes.tab('negocio')">Negocio</button>
+          <button type="button" class="chip" data-aj-tab="datos" onclick="RN.ajustes.tab('datos')">Datos</button>
+          <button type="button" class="chip" data-aj-tab="com" onclick="RN.ajustes.tab('com')">Comunicación</button>
+          <button type="button" class="chip" data-aj-tab="sistema" onclick="RN.ajustes.tab('sistema')">Sistema</button>
         </div>
-        <p class="mt-16 muted" id="archivo-status"></p>
-        <p class="mt-8 muted" id="autobackup-status" style="font-size:12px"></p>
-      </div>
-      <div class="card">
-        <h3>📡 Cola MikroTik y capacidad</h3>
-        <p class="muted mb-16">Reglas de Limit At y prioridad por plan, cola padre y reserva. La app no se conecta al router: genera comandos para pegar en la terminal de Winbox.</p>
-        <div class="flex wrap" style="gap:10px">
-          <button class="btn primary" onclick="RN.cola.abrirResumen()">📊 Resumen de capacidad</button>
-          <button class="btn" onclick="RN.cola.abrirAjustes()">⚙️ Reglas de Limit At</button>
-        </div>
-      </div>
-      <div class="card">
-        <h3>☁️ Copia en Google Drive</h3>
-        <p class="muted mb-16">Respaldo automático en Google Drive vía Apps Script. Al detectar diferencias entre este equipo y la nube, se muestra una comparación sección por sección con opción de fusionar sin perder ningún registro.</p>
-        <div class="flex wrap" style="gap:10px">
-          <button class="btn primary" id="drive-btn-conectar" onclick="RN.drive.conectar()">☁️ Activar copia en Drive</button>
-          <button class="btn danger" id="drive-btn-desconectar" style="display:none" onclick="RN.drive.desconectar()">🔓 Desconectar en este equipo</button>
-          <button class="btn" onclick="RN.drive.configurar()">🔑 Configurar URL y token</button>
-          <button class="btn" onclick="RN.drive.sincronizarAhora()">⬆️ Sincronizar ahora</button>
-          <button class="btn" onclick="RN.drive.compararAhora()">🔍 Comparar con la nube</button>
-        </div>
-        <p class="mt-16 muted" id="drive-estado" style="font-size:12px"></p>
-      </div>
-      <div class="card">
-        <h3>Configuración</h3>
+
+        <div class="aj-pane" data-aj-pane="negocio" style="display:block">
+          <p class="muted" style="font-size:12px;margin:0 0 10px">Parámetros que afectan cobros, caja y deudas. La tasa USD es la más importante del día a día.</p>
+          <div class="card">
+        <h3>Parámetros de negocio</h3><p class="muted" id="cfg-tasa-fecha" style="font-size:12px;margin:0 0 8px"></p>
         <div class="form-row cols-2">
           <div><label>Tasa de cambio USD (CUP por 1 USD)</label><input type="number" id="cfg-tasa-usd" step="0.01" spellcheck="false" autocorrect="off" autocapitalize="off">
             <!-- v5.12.7: indicador visual de estado de la tasa (🟢🟡🔴) -->
@@ -829,9 +847,57 @@
             </select>
           </div>
         </div>
-        <button class="btn primary" onclick="RN.config.guardar()">Guardar configuración</button>
       </div>
-      <div class="card">
+          <div class="flex wrap" style="gap:8px;margin-top:12px">
+            <button type="button" class="btn primary" onclick="RN.config.guardar(); RN.ajustes.markClean();">Guardar configuración</button>
+          </div>
+          <div class="card" style="margin-top:12px">
+            <h3>Red / MikroTik</h3>
+            <p class="muted" style="font-size:12px;margin:0 0 8px">La capacidad y Limit At se gestionan en Red. Aquí solo el acceso rápido.</p>
+            <button type="button" class="btn" onclick="RN.ajustes.cerrar(); RN.tabs&&RN.tabs.ir('red');">Abrir Capacidad y MikroTik</button>
+          </div>
+        </div>
+
+        <div class="aj-pane" data-aj-pane="datos" style="display:none">
+          <p class="muted" style="font-size:12px;margin:0 0 10px">Estado del almacenamiento local y copias de seguridad.</p>
+          <div class="card">
+        <h3>Archivo de datos</h3>
+        <p class="muted mb-16" id="archivo-desc">Los datos se guardan localmente. Puedes vincular un archivo real (File System Access API) o usar el almacenamiento local del navegador.</p>
+        <div class="flex wrap" style="gap:10px">
+          <button class="btn primary" onclick="RN.storageFile.vincular()">📁 Vincular / crear archivo</button>
+          <button class="btn" onclick="RN.storageFile.guardarAhora()">💾 Guardar en archivo</button>
+          <button class="btn" onclick="RN.storageFile.abrir()">📂 Abrir archivo</button>
+          <button class="btn danger" onclick="RN.storageFile.desvincular()">🔓 Desvincular archivo</button>
+          <button class="btn" onclick="RN.export.exportarBackup()">⬇️ Exportar respaldo JSON</button>
+          <button class="btn" onclick="RN.export.importarBackup()">⬆️ Importar respaldo</button>
+          <button class="btn" onclick="RN.autoBackup.restaurarUltimo()" title="Restaura la última copia automática guardada en este navegador">♻️ Restaurar respaldo automático</button>
+        </div>
+        <p class="mt-16 muted" id="archivo-status"></p>
+        <p class="mt-8 muted" id="autobackup-status" style="font-size:12px"></p>
+      </div>
+          <div class="card">
+        <h3>☁️ Copia en Google Drive</h3>
+        <p class="muted mb-16">Respaldo automático en Google Drive vía Apps Script. Al detectar diferencias entre este equipo y la nube, se muestra una comparación sección por sección con opción de fusionar sin perder ningún registro.</p>
+        <div class="flex wrap" style="gap:10px">
+          <button class="btn primary" id="drive-btn-conectar" onclick="RN.drive.conectar()">☁️ Activar copia en Drive</button>
+          <button class="btn danger" id="drive-btn-desconectar" style="display:none" onclick="RN.drive.desconectar()">🔓 Desconectar en este equipo</button>
+          <button class="btn" onclick="RN.drive.configurar()">🔑 Configurar URL y token</button>
+          <button class="btn" onclick="RN.drive.sincronizarAhora()">⬆️ Sincronizar ahora</button>
+          <button class="btn" onclick="RN.drive.compararAhora()">🔍 Comparar con la nube</button>
+        </div>
+        <p class="mt-16 muted" id="drive-estado" style="font-size:12px"></p>
+      </div>
+        </div>
+
+        <div class="aj-pane" data-aj-pane="com" style="display:none">
+          <div class="card">
+        <h3>WhatsApp</h3>
+        <button class="btn" onclick="RN.waTemplates.abrir()">✏️ Editar plantillas de mensajes</button>
+      </div>
+        </div>
+
+        <div class="aj-pane" data-aj-pane="sistema" style="display:none">
+          <div class="card">
         <h3>Seguridad</h3>
         <div class="flex wrap" style="gap:10px">
           <button class="btn" onclick="RN.pin.configurar()">🔑 Configurar PIN</button>
@@ -839,7 +905,7 @@
           <button class="btn" onclick="RN.notify.requestPermiso()">🔔 Activar notificaciones</button>
         </div>
       </div>
-      <div class="card">
+          <div class="card">
         <h3>🔄 Actualizaciones</h3>
         <p class="muted mb-16">Cuando hay conexión a internet, la app comprueba si existe una versión nueva y te avisa con una notificación. Puedes desactivar esta comprobación automática.</p>
         <div class="form-row cols-2">
@@ -853,20 +919,7 @@
         </div>
         <div class="mt-16 muted" id="update-status" style="font-size:12px"></div>
       </div>
-      <div class="card">
-        <h3>WhatsApp</h3>
-        <button class="btn" onclick="RN.waTemplates.abrir()">✏️ Editar plantillas de mensajes</button>
-      </div>
-      <div class="card">
-        <h3>Diagnóstico</h3>
-        <p class="muted mb-16">Verifica la coherencia interna de los datos financieros: montos negativos, deudas de equipo incoherentes, ingresos por mes, cobros duplicados, snapshots vs datos reales y tasa USD válida.</p>
-        <div class="flex wrap" style="gap:10px">
-          <button class="btn" onclick="RN.auditoria.mostrar()">🔍 Auditoría financiera</button>
-          <button class="btn" onclick="RN.validacion.verificar()">🧪 Validar integridad de datos</button>
-          <button class="btn" onclick="RN.tests.ejecutar()" title="Ejecuta los tests unitarios de cálculo">⚙️ Ejecutar tests de cálculo</button>
-        </div>
-      </div>
-      <div class="card" id="card-apk">
+          <div class="card" id="card-apk">
         <h3>📲 App Android (APK)</h3>
         <p class="muted mb-16">Instala AdminRed como app nativa en tu teléfono Android. La app funciona sin conexión y guarda los datos cifrados en el propio dispositivo.</p>
         <div class="flex wrap" style="gap:10px">
@@ -875,14 +928,19 @@
         </div>
         <p class="mt-16 muted" id="apk-status" style="font-size:12px"></p>
       </div>
-      <div class="card">
-        <h3>Zona de peligro</h3>
-        <button class="btn danger" onclick="RN.resetApp.confirmar()">⚠️ Resetear toda la app</button>
+          <div class="card aj-danger-card">
+            <h3>Zona de peligro</h3>
+            <p class="muted" style="font-size:12px;margin:0 0 10px">Estas acciones pueden borrar datos. No las uses salvo que sepas el efecto.</p>
+            <button type="button" class="btn danger" onclick="RN.resetApp.confirmar()">Resetear toda la app</button>
+          </div>
+        </div>
       </div>
+      <div class="modal-footer">
+        <button type="button" class="btn ghost" onclick="RN.ajustes.cerrar()">Cerrar</button>
       </div>
-      <div class="modal-footer"><button class="btn ghost" onclick="RN.ajustes.cerrar()">Cerrar</button></div>
     </div>
   </div>
+
 
   <!-- Modal genérico -->
   <div class="modal-overlay" id="modal-overlay"><div class="modal" id="modal-box"></div></div>

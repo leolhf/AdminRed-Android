@@ -182,4 +182,27 @@ RN.config.rellenarForm = function () {
   t('cfg-politica-reserva-deudas', c.politicaReservaDeudas || 'con_meta');
   // v5.24.0: comprobación automática de actualizaciones (default true).
   t('cfg-auto-updates', String(c.autoCheckUpdates !== false));
+
+  // v5.55.28: mostrar antigüedad de la tasa
+  var fechaEl = document.getElementById('cfg-tasa-fecha');
+  if (fechaEl) {
+    if (c.fechaTasaUsd) {
+      try {
+        var d = new Date(c.fechaTasaUsd);
+        var hrs = (Date.now() - d.getTime()) / 3600000;
+        var txt = 'Última actualización: ' + d.toLocaleString('es-CU');
+        if (hrs > 72) txt += ' · conviene actualizar (más de 72 h)';
+        else if (hrs > 24) txt += ' · tiene más de 24 h';
+        fechaEl.textContent = txt;
+        fechaEl.style.color = hrs > 72 ? 'var(--danger)' : (hrs > 24 ? 'var(--warn)' : 'var(--text-muted)');
+      } catch (eFecha) {
+        fechaEl.textContent = '';
+      }
+    } else if (c.tasaUsd) {
+      fechaEl.textContent = 'Sin fecha de actualización — conviene registrar la tasa de nuevo';
+      fechaEl.style.color = 'var(--warn)';
+    } else {
+      fechaEl.textContent = 'Define la tasa USD para cobros mixtos';
+    }
+  }
 };

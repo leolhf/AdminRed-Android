@@ -1,29 +1,15 @@
 /**
- * reportes/salud.js — Dashboard de salud del negocio con KPIs tipo semáforo.
- *
- * v5.14.2 (Auditoría Reportes):
- *   BUG-3: 'esperado' e 'ingresos' ya no son código muerto — se usan en el
- *          nuevo KPI "Cobranza real vs esperado".
- *   BUG-5: umbrales del semáforo renombrados y reordenados para que se lean
- *          en el mismo sentido que el resultado (verde/ámbar/rojo).
- *   CODE-3: _semaforo y _card se movieron fuera de render() para no
- *           recrearse como closures en cada llamada.
- *   UI-3: se muestra el mes operativo al que corresponden las métricas.
+ * reportes/salud.js — Diagnóstico del negocio (semáforos).
+ * v5.55.26: integrado en Reportes; la subpestaña Salud ya no es el destino principal.
  */
 RN.salud = RN.salud || {};
 
 /**
- * invertir=false (mayor es mejor, ej. cobranza, recuperación de inversión):
- *   valor >= umbralVerde  -> verde
- *   valor >= umbralAmbar  -> ámbar
- *   si no                 -> rojo
- * invertir=true (menor es mejor, ej. % morosos):
- *   valor <= umbralVerde  -> verde
- *   valor <= umbralAmbar  -> ámbar
- *   si no                 -> rojo
+ * invertir=false (mayor es mejor): >= verde, >= ámbar, si no rojo
+ * invertir=true (menor es mejor): <= verde, <= ámbar, si no rojo
  */
 RN.salud._semaforo = function (valor, umbralVerde, umbralAmbar, invertir) {
-  let cls, txt;
+  var cls, txt;
   if (invertir) {
     if (valor <= umbralVerde) { cls = 'green'; txt = 'Saludable'; }
     else if (valor <= umbralAmbar) { cls = 'amber'; txt = 'Atención'; }
@@ -33,66 +19,130 @@ RN.salud._semaforo = function (valor, umbralVerde, umbralAmbar, invertir) {
     else if (valor >= umbralAmbar) { cls = 'amber'; txt = 'Atención'; }
     else { cls = 'red'; txt = 'Crítico'; }
   }
-  return { cls, txt };
+  return { cls: cls, txt: txt };
 };
 
-RN.salud._card = function (titulo, valor, s, desc) {
-  return `
-    <div class="card">
-      <div class="flex" style="justify-content:space-between;align-items:center">
-        <h3 style="margin:0">${titulo}</h3>
-        <span class="badge ${s.cls === 'green' ? 'ok' : (s.cls === 'amber' ? 'warn' : 'due')}">${s.txt}</span>
-      </div>
-      <div class="value" style="font-size:28px;font-weight:800;color:var(--${s.cls === 'green' ? 'success' : (s.cls === 'amber' ? 'warn' : 'danger')});margin-top:8px">${valor}</div>
-      <p class="muted" style="font-size:13px;margin-top:4px">${desc}</p>
-    </div>`;
+RN.salud._badgeClass = function (cls) {
+  return cls === 'green' ? 'ok' : (cls === 'amber' ? 'warn' : 'due');
 };
 
+RN.salud._colorVar = function (cls) {
+  return cls === 'green' ? 'var(--success)' : (cls === 'amber' ? 'var(--warn)' : 'var(--danger)');
+};
+
+/**
+ * Calcula indicadores del mes y HTML de diagnóstico con acciones.
+ * @param {string} [mes]
+ * @returns {{ html: string, general: object }}
+ */
+RN.salud.diagnostico = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  var cob = { total: 0, pagaron: 0, faltan: 0 };
+  try { cob = RN.calc.cobranzaMes(mes) || cob; } catch (e) {}
+  var tasaCob = cob.total ? Math.round(cob.pagaron / cob.total * 100) : 0;
+
+  var ingresos = 0, gastos = 0, utilidad = 0, esperado = 0;
+  try { ingresos = RN.calc.ingresosMes(mes) || 0; } catch (e2) {}
+  try {
+    gastos = (RN.calc.gastosOperativosMes ? RN.calc.gastosOperativosMes(mes) : RN.calc.gastosMes(mes)) || 0;
+  } catch (e3) {
+    try { gastos = RN.calc.gastosMes(mes) || 0; } catch (e4) { gastos = 0; }
+  }
+  utilidad = ingresos - gastos;
+  try { esperado = RN.calc.ingresoEsperadoMes ? RN.calc.ingresoEsperadoMes(mes) : 0; } catch (e5) { esperado = 0; }
+
+  var morosos = 0;
+  try {
+    morosos = (RN.calc.clientesCobrables ? RN.calc.clientesCobrables() : RN.calc.clientesActivos())
+      .filter(function (c) { return RN.calc.getStatus(c, mes) === 'due'; }).length;
+  } catch (e6) { morosos = 0; }
+  var pctMorosos = cob.total ? Math.round(morosos / cob.total * 100) : 0;
+
+  var recInv = 0;
+  try {
+    if (RN.investment && RN.investment.porcentajeRecuperacion) {
+      recInv = RN.investment.porcentajeRecuperacion() || 0;
+    }
+  } catch (e7) { recInv = 0; }
+
+  var ratioCobranza = esperado > 0 ? Math.round((ingresos / esperado) * 100) : (ingresos > 0 ? 100 : 0);
+
+  // Umbrales: cobranza, utilidad (>0), morosos (invertir), recuperación inv, real vs esperado
+  var s1 = RN.salud._semaforo(tasaCob, 70, 50, false);
+  var s2 = RN.salud._semaforo(utilidad, 1, 0, false);
+  var s3 = RN.salud._semaforo(pctMorosos, 15, 30, true);
+  var s4 = RN.salud._semaforo(recInv, 60, 30, false);
+  var s5 = RN.salud._semaforo(ratioCobranza, 90, 70, false);
+
+  var puntos = [s1.cls, s2.cls, s3.cls, s4.cls, s5.cls];
+  var general;
+  if (puntos.indexOf('red') >= 0) {
+    general = { cls: 'due', txt: 'Crítico — requiere atención prioritaria' };
+  } else if (puntos.indexOf('amber') >= 0) {
+    general = { cls: 'warn', txt: 'Atención — hay puntos a mejorar' };
+  } else {
+    general = { cls: 'ok', txt: 'Saludable — el periodo marcha bien' };
+  }
+
+  function card(titulo, valor, s, desc, accionesHtml) {
+    return '<div class="diag-card">' +
+      '<div class="diag-title"><span>' + titulo + '</span>' +
+        '<span class="badge ' + RN.salud._badgeClass(s.cls) + '">' + s.txt + '</span></div>' +
+      '<div class="diag-value" style="color:' + RN.salud._colorVar(s.cls) + '">' + valor + '</div>' +
+      '<p class="diag-desc">' + desc + '</p>' +
+      (accionesHtml ? '<div class="diag-actions">' + accionesHtml + '</div>' : '') +
+      '</div>';
+  }
+
+  var actCobros = '<button type="button" class="btn sm primary" onclick="RN.tabs&&RN.tabs.ir(\'cobros\')">Ir a Cobros</button>';
+  var actMorosos = '<button type="button" class="btn sm primary" onclick="RN.tabs&&RN.tabs.ir(\'morosos\')">Ver morosos</button>';
+  var actGastos = '<button type="button" class="btn sm" onclick="RN.tabs&&RN.tabs.ir(\'gastos\')">Ver gastos</button>';
+  var actInv = '<button type="button" class="btn sm" onclick="RN.tabs&&RN.tabs.ir(\'inversion\')">Capital / inversión</button>';
+
+  var cards =
+    card('Tasa de cobranza', tasaCob + '%', s1,
+      cob.pagaron + ' de ' + cob.total + ' clientes pagaron en el periodo',
+      s1.cls !== 'green' ? actCobros : '') +
+    card('Utilidad del periodo', RN.calc.formatCUP(utilidad), s2,
+      'Ingresos − gastos operativos',
+      s2.cls === 'red' ? actGastos : '') +
+    card('% Clientes morosos', pctMorosos + '%', s3,
+      morosos + ' atrasado(s) de ' + cob.total,
+      s3.cls !== 'green' ? actMorosos : '') +
+    card('Cobranza vs esperado', ratioCobranza + '%', s5,
+      RN.calc.formatCUP(ingresos) + ' de ' + RN.calc.formatCUP(esperado) + ' esperados',
+      s5.cls !== 'green' ? actCobros : '') +
+    card('Recuperación de inversión', recInv + '%', s4,
+      'Progreso sobre el capital invertido',
+      s4.cls !== 'green' ? actInv : '');
+
+  var html =
+    '<div class="card">' +
+      '<div class="diag-status">' +
+        '<div class="muted" style="font-size:12px">Periodo · ' + RN.render.esc(RN.calc.mesTexto ? RN.calc.mesTexto(mes) : mes) + '</div>' +
+        '<p class="diag-label"><span class="badge ' + general.cls + '">' + general.txt + '</span></p>' +
+      '</div>' +
+      '<div class="diag-grid">' + cards + '</div>' +
+    '</div>';
+
+  return { html: html, general: general, mes: mes };
+};
+
+/** Pinta diagnóstico en un contenedor (Reportes). */
+RN.salud.renderInto = function (el, mes) {
+  if (!el) return;
+  try {
+    el.innerHTML = RN.salud.diagnostico(mes).html;
+  } catch (e) {
+    el.innerHTML = '<p class="muted">No se pudo calcular el diagnóstico.</p>';
+  }
+};
+
+/** Vista residual: redirige mentalmente a Reportes. */
 RN.salud.render = function () {
-  const out = document.getElementById('salud-out');
-  if (!out) return;
-
-  const mes = RN.calc.mesActualStr();
-  const cob = RN.calc.cobranzaMes(mes);
-  const tasaCob = cob.total ? Math.round(cob.pagaron / cob.total * 100) : 0;
-  const utilidad = RN.calc.utilidadMes(mes);
-  // BUG-3: antes se calculaban y nunca se usaban. Ahora alimentan el KPI
-  // "Cobranza real vs esperado" (cuánto de lo que se esperaba cobrar este
-  // mes realmente entró, incluyendo mora y equipo — distinto de tasaCob,
-  // que solo cuenta clientes que pagaron algo).
-  const esperado = RN.calc.ingresoEsperadoMes(mes);
-  const ingresos = RN.calc.ingresosMes(mes);
-  const ratioCobranza = esperado > 0 ? Math.round(ingresos / esperado * 100) : 0;
-  const morosos = RN.calc.clientesActivos().filter(c => RN.calc.getStatus(c, mes) === 'due').length;
-  const pctMorosos = cob.total ? Math.round(morosos / cob.total * 100) : 0;
-  const recInv = RN.investment.porcentajeRecuperacion();
-
-  // BUG-5: umbrales renombrados (verde/ámbar) y en el orden en que se leen.
-  const s1 = RN.salud._semaforo(tasaCob, 70, 50, false);       // >=70% verde, 50-69% ámbar, <50% rojo
-  const s2 = RN.salud._semaforo(utilidad, 1, 0, false);         // >0 verde, 0 ámbar, <0 rojo
-  const s3 = RN.salud._semaforo(pctMorosos, 15, 30, true);      // <=15% verde, 16-30% ámbar, >30% rojo
-  const s4 = RN.salud._semaforo(recInv, 60, 30, false);         // >=60% verde, 30-59% ámbar, <30% rojo
-  const s5 = RN.salud._semaforo(ratioCobranza, 90, 70, false);  // >=90% verde, 70-89% ámbar, <70% rojo
-
-  const saludGeneral = (() => {
-    const puntos = [s1.cls, s2.cls, s3.cls, s4.cls, s5.cls];
-    if (puntos.includes('red')) return { cls: 'due', txt: 'Crítico — requiere acción inmediata' };
-    if (puntos.includes('amber')) return { cls: 'warn', txt: 'Atención — hay puntos a mejorar' };
-    return { cls: 'ok', txt: 'Saludable — el negocio marcha bien' };
-  })();
-
-  out.innerHTML = `
-    <div class="card" style="text-align:center">
-      <h3>Estado general del negocio</h3>
-      <p class="muted" style="font-size:12px">Mes operativo: ${RN.calc.mesTexto(mes)}</p>
-      <div style="font-size:36px;margin:10px 0">${saludGeneral.cls === 'ok' ? '🟢' : (saludGeneral.cls === 'warn' ? '🟡' : '🔴')}</div>
-      <p style="font-weight:700">${saludGeneral.txt}</p>
-    </div>
-    <div class="kpi-grid" style="grid-template-columns:repeat(auto-fill,minmax(220px,1fr))">
-      ${RN.salud._card('Tasa de cobranza', tasaCob + '%', s1, `${cob.pagaron} de ${cob.total} clientes han pagado este mes`)}
-      ${RN.salud._card('Utilidad del mes', RN.calc.formatCUP(utilidad), s2, 'Ingresos − gastos del mes')}
-      ${RN.salud._card('% Clientes morosos', pctMorosos + '%', s3, `${morosos} cliente(s) atrasado(s) de ${cob.total}`)}
-      ${RN.salud._card('Recuperación de inversión', recInv + '%', s4, 'Cuánto se ha recuperado de lo invertido')}
-      ${RN.salud._card('Cobranza real vs esperado', ratioCobranza + '%', s5, `${RN.calc.formatCUP(ingresos)} cobrados de ${RN.calc.formatCUP(esperado)} esperados`)}
-    </div>`;
+  var out = document.getElementById('salud-out');
+  if (out) {
+    out.innerHTML = '<div class="card"><p class="muted">El diagnóstico está en Análisis → Reportes.</p>' +
+      '<button type="button" class="btn primary" onclick="RN.tabs&&RN.tabs.ir(\'reportes\')">Ir a Reportes</button></div>';
+  }
 };

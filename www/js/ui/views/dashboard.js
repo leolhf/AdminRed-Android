@@ -1,38 +1,18 @@
 /**
- * ui/views/dashboard.js — Panel (Inicio) v5.55.8
- * Zonas: Hoy (acción) · Mes (resultado) · Caja y capital.
- * Modo Día a día / Análisis. KPIs mínimos + detalle. Bandeja unificada.
+ * ui/views/dashboard.js — Panel (Inicio) v5.55.29
+ * Hoy (acción) · Mes compacto · Dinero (señales). Sin modo Análisis.
  */
 RN.panel = RN.panel || {};
 
-RN.panel.getModo = function () {
+/** Compat: el modo análisis ya no se usa; siempre operación. */
+RN.panel.getModo = function () { return 'operacion'; };
+RN.panel.setModo = function () {
   try {
-    var m = localStorage.getItem('RN_panel_modo');
-    if (m === 'analisis' || m === 'operacion') return m;
+    document.body.classList.add('panel-modo-operacion');
+    document.body.classList.remove('panel-modo-analisis');
   } catch (e) {}
-  return 'operacion';
 };
-
-RN.panel.setModo = function (modo) {
-  if (modo !== 'analisis' && modo !== 'operacion') modo = 'operacion';
-  try { localStorage.setItem('RN_panel_modo', modo); } catch (e) {}
-  document.body.classList.toggle('panel-modo-operacion', modo === 'operacion');
-  document.body.classList.toggle('panel-modo-analisis', modo === 'analisis');
-  var bOp = document.getElementById('panel-modo-operacion');
-  var bAn = document.getElementById('panel-modo-analisis');
-  if (bOp) bOp.classList.toggle('active', modo === 'operacion');
-  if (bAn) bAn.classList.toggle('active', modo === 'analisis');
-  if (RN.render && RN.render.dashboard) RN.render.dashboard();
-};
-
-RN.panel.toggleKpiExtra = function () {
-  var el = document.getElementById('kpi-dashboard-extra');
-  var btn = document.getElementById('btn-kpi-extra');
-  if (!el) return;
-  RN.panel._kpiExtraOpen = !RN.panel._kpiExtraOpen;
-  el.style.display = RN.panel._kpiExtraOpen ? '' : 'none';
-  if (btn) btn.textContent = RN.panel._kpiExtraOpen ? 'Ocultar indicadores' : 'Ver más indicadores';
-};
+RN.panel.toggleKpiExtra = function () {};
 
 RN.panel._kpiHtml = function (kpis) {
   return (kpis || []).map(function (k) {
@@ -44,56 +24,122 @@ RN.panel._kpiHtml = function (kpis) {
   }).join('');
 };
 
-/** Bandeja del día: alertas + deudas + resumen cobranza. */
+/** Clientes que cobran hoy (día de pago = hoy). */
+RN.panel._cobranHoy = function () {
+  var lista = [];
+  try {
+    var hoy = RN.ciclos && RN.ciclos.diaHoyNum ? RN.ciclos.diaHoyNum() : new Date().getDate();
+    var mes = RN.calc.mesActualStr();
+    var base = RN.calc.clientesCobrables ? RN.calc.clientesCobrables() : RN.calc.clientesActivos();
+    base.forEach(function (c) {
+      if (RN.calc.esAdmin && RN.calc.esAdmin(c)) return;
+      var dp = c.diaPago || 1;
+      if (dp !== hoy) return;
+      var st = RN.calc.getStatus(c, mes);
+      if (st === 'paid') return;
+      lista.push(c);
+    });
+  } catch (e) {}
+  return lista;
+};
+
+/** Bandeja priorizada (máx. 7). */
 RN.panel.renderBandeja = function () {
   var box = document.getElementById('panel-bandeja');
   if (!box) return;
   var items = [];
+  var mes = RN.calc.mesActualStr();
 
+  // Cobran hoy
   try {
-    var cob = RN.calc.cobranzaMes();
+    var hoyCli = RN.panel._cobranHoy();
+    if (hoyCli.length) {
+      items.push({
+        nivel: 'amber',
+        texto: hoyCli.length + ' cobran hoy',
+        accion: 'RN.tabs.ir(\'cobros\');setTimeout(function(){RN.cobros&&RN.cobros.setFiltro&&RN.cobros.setFiltro(\'hoy\');},80)',
+        accionTxt: 'Cobros hoy'
+      });
+    }
+  } catch (e0) {}
+
+  // Cobranza mes
+  try {
+    var cob = RN.calc.cobranzaMes(mes);
     if (cob && cob.faltan > 0) {
       items.push({
         nivel: cob.faltan > cob.total * 0.5 ? 'red' : 'amber',
-        texto: 'Cobranza: faltan ' + cob.faltan + ' de ' + cob.total + ' clientes'
-          + (cob.parciales ? ' · ' + cob.parciales + ' parcial' : ''),
-        accion: 'RN.cobranza.abrir()',
-        accionTxt: 'Ver cobranza'
+        texto: 'Pendientes del mes: ' + cob.faltan + ' de ' + cob.total,
+        accion: 'RN.tabs.ir(\'cobros\');setTimeout(function(){RN.cobros&&RN.cobros.setFiltro&&RN.cobros.setFiltro(\'pendientes\');},80)',
+        accionTxt: 'Ver pendientes'
       });
     }
-  } catch (e) {}
+  } catch (e1) {}
 
+  // Alertas de widgets (tasa, etc.)
   try {
     if (RN.panelWidgets && RN.panelWidgets._alertas) {
       (RN.panelWidgets._alertas() || []).forEach(function (a) { items.push(a); });
     }
-  } catch (e) {}
+  } catch (e2) {}
 
+  // Deudas urgentes
   try {
     if (RN.investment && RN.investment.colaDeudasOrdenada) {
-      var hoy = new Date(); hoy.setHours(0, 0, 0, 0);
-      var en7 = new Date(hoy.getTime() + 7 * 86400000);
-      RN.investment.colaDeudasOrdenada().slice(0, 4).forEach(function (inv) {
-        var plan = RN.investment.planDevolucion(inv);
+      var hoyD = new Date(); hoyD.setHours(0, 0, 0, 0);
+      var en7 = new Date(hoyD.getTime() + 7 * 86400000);
+      RN.investment.colaDeudasOrdenada().slice(0, 3).forEach(function (inv) {
+        var plan = RN.investment.planDevolucion ? RN.investment.planDevolucion(inv) : {};
         var fo = plan.fechaObjetivo || '';
         var tag = 'Por pagar';
         var nivel = 'amber';
         if (fo) {
           var d = new Date(fo + 'T00:00:00');
           if (!isNaN(d.getTime())) {
-            if (d < hoy) { tag = 'Deuda vencida'; nivel = 'red'; }
+            if (d < hoyD) { tag = 'Deuda vencida'; nivel = 'red'; }
             else if (d <= en7) { tag = 'Pagar esta semana'; nivel = 'amber'; }
+            else return; // no urgente: no llenar bandeja
           }
         }
         items.push({
           nivel: nivel,
-          texto: tag + ': ' + (inv.concepto || 'Préstamo') + ' · ' + RN.investment.fmtSaldoDeuda(inv),
-          accion: 'RN.tabs.ir(\'deudas\');setTimeout(function(){RN.inversion.devolucionPrestamo(\'' + inv.id + '\');},120)',
+          texto: tag + ': ' + (inv.concepto || 'Préstamo') + ' · ' + (RN.investment.fmtSaldoDeuda ? RN.investment.fmtSaldoDeuda(inv) : ''),
+          accion: 'RN.tabs.ir(\'deudas\');setTimeout(function(){RN.inversion&&RN.inversion.devolucionPrestamo&&RN.inversion.devolucionPrestamo(\'' + inv.id + '\');},120)',
           accionTxt: 'Pagar'
         });
       });
     }
-  } catch (e) {}
+  } catch (e3) {}
+
+  // Morosos 2+
+  try {
+    if (RN.lifecycle && RN.lifecycle.morosos) {
+      var m2 = RN.lifecycle.morosos().filter(function (c) { return (RN.calc.getMora(c) || 0) >= 2; });
+      if (m2.length) {
+        items.push({
+          nivel: 'red',
+          texto: m2.length + ' moroso' + (m2.length !== 1 ? 's' : '') + ' con 2+ meses',
+          accion: 'RN.tabs.ir(\'morosos\')',
+          accionTxt: 'Morosos'
+        });
+      }
+    }
+  } catch (e4) {}
+
+  // Incidencias abiertas
+  try {
+    if (RN.state.incidencias && RN.state.incidencias.length) {
+      var ab = RN.state.incidencias.filter(function (i) { return i.estado !== 'cerrada'; });
+      if (ab.length) {
+        items.push({
+          nivel: ab.some(function (i) { return i.prioridad === 'alta'; }) ? 'red' : 'amber',
+          texto: ab.length + ' incidencia' + (ab.length !== 1 ? 's' : '') + ' abierta' + (ab.length !== 1 ? 's' : ''),
+          accion: 'RN.tabs.ir(\'incidencias\')',
+          accionTxt: 'Ver'
+        });
+      }
+    }
+  } catch (e5) {}
 
   if (!items.length) {
     box.innerHTML = '<div class="acc-empty" style="padding:12px"><div class="icon">✓</div>Nada urgente por ahora.</div>';
@@ -106,182 +152,168 @@ RN.panel.renderBandeja = function () {
     return wb - wa;
   });
 
-  box.innerHTML = items.slice(0, 10).map(function (a) {
+  box.innerHTML = items.slice(0, 7).map(function (a) {
     var cls = a.nivel === 'red' ? 'due' : (a.nivel === 'amber' ? 'warn' : 'ok');
+    var btn = a.accion
+      ? ' <button type="button" class="btn sm primary" onclick="' + a.accion + '">' + RN.render.esc(a.accionTxt || 'Ir') + '</button>'
+      : '';
     return '<div class="acc-row" style="align-items:center;gap:8px">'
       + '<span class="acc-label"><span class="badge ' + cls + '">' + (a.nivel === 'red' ? 'Urgente' : (a.nivel === 'amber' ? 'Atención' : 'Info')) + '</span> '
       + RN.render.esc(a.texto) + '</span>'
-      + (a.accion
-        ? '<span class="acc-value"><button type="button" class="btn sm primary" onclick="' + a.accion + '">' + RN.render.esc(a.accionTxt || 'Ver') + '</button></span>'
-        : '')
-      + '</div>';
+      + '<span class="acc-value">' + btn + '</span></div>';
   }).join('');
 };
 
 RN.render.dashboard = function () {
-  var modo = RN.panel.getModo();
-  document.body.classList.toggle('panel-modo-operacion', modo === 'operacion');
-  document.body.classList.toggle('panel-modo-analisis', modo === 'analisis');
-  var bOp = document.getElementById('panel-modo-operacion');
-  var bAn = document.getElementById('panel-modo-analisis');
-  if (bOp) bOp.classList.toggle('active', modo === 'operacion');
-  if (bAn) bAn.classList.toggle('active', modo === 'analisis');
+  var mes = RN.calc.mesActualStr();
+  var mesEl = document.getElementById('dashboard-mes');
+  if (mesEl) mesEl.textContent = RN.calc.mesTexto ? RN.calc.mesTexto(mes) : mes;
 
-  var mesOper = document.getElementById('dashboard-mes');
-  if (mesOper) {
-    var mesAct = RN.calc.mesActualStr();
-    mesOper.innerHTML = 'Mes: <strong>' + RN.calc.mesTexto(mesAct) + '</strong>';
-    mesOper.className = 'mes-badge muted';
+  RN.panel.setModo();
+
+  // —— Hero hoy ——
+  var cobranHoy = RN.panel._cobranHoy();
+  var montoHoy = 0;
+  cobranHoy.forEach(function (c) {
+    try {
+      var r = RN.calc.resumenCliente(c, mes);
+      if (r.estado !== 'paid') montoHoy += (r.totalDeuda != null ? r.totalDeuda : (r.totalMes || 0));
+    } catch (e) {}
+  });
+
+  var hero = document.getElementById('panel-hero-hoy');
+  if (hero) {
+    hero.innerHTML =
+      '<div class="muted" style="font-size:12px;font-weight:600">Hoy · qué hacer</div>' +
+      '<div style="font-size:20px;font-weight:800;margin:4px 0">' +
+        (cobranHoy.length
+          ? (cobranHoy.length + ' cobran hoy · ' + RN.calc.formatCUP(montoHoy))
+          : 'Nadie con día de pago hoy') +
+      '</div>' +
+      '<div class="flex wrap" style="gap:8px;margin-top:10px">' +
+        '<button type="button" class="btn primary sm" onclick="RN.tabs.ir(\'cobros\')">Ir a Cobros</button>' +
+        '<button type="button" class="btn sm" onclick="RN.tabs.ir(\'calendario\')">Calendario</button>' +
+      '</div>';
   }
-
-  var cob = RN.calc.cobranzaMes();
-  var ingresos = RN.calc.ingresosMes();
-  var gastos = RN.calc.gastosMes();
-  var utilidad = ingresos - gastos;
-  var esperado = RN.calc.ingresoEsperadoMes();
-  var ingresoServMes = RN.calc.ingresosServicioMes();
-  var tasaCob = esperado ? Math.round(ingresoServMes / esperado * 100) : 0;
-  var activos = RN.calc.clientesActivos();
-  var morosos = activos.filter(function (c) { return RN.calc.getMora(c) > 0; }).length;
-  var parciales = cob.parciales || 0;
-  var fondoCaja = RN.calc.fondoCaja();
-  var costoPaquete = RN.calc.montoPaqueteProveedor();
-  var gananciaBruta = ingresos - costoPaquete;
-  var gananciaProyectada = esperado - costoPaquete;
-
-  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0, reserva: 0 };
-  var libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
-
-  var mesAnt = RN.calc.mesAnterior(RN.calc.mesActualStr());
-  var ingresosAnt = RN.calc.ingresosMes(mesAnt);
-  var gastosAnt = RN.calc.gastosMes(mesAnt);
-  var utilidadAnt = ingresosAnt - gastosAnt;
-  var delta = (RN.panelWidgets && RN.panelWidgets.deltaHTML) ? RN.panelWidgets.deltaHTML : function () { return ''; };
 
   var kpiHoy = document.getElementById('kpi-dashboard-hoy');
   if (kpiHoy) {
+    var cob = { total: 0, pagaron: 0, faltan: 0 };
+    try { cob = RN.calc.cobranzaMes(mes) || cob; } catch (e2) {}
     kpiHoy.innerHTML = RN.panel._kpiHtml([
-      { label: 'Cobranza', value: cob.pagaron + '/' + cob.total, sub: 'Faltan ' + cob.faltan + (parciales ? ' · ' + parciales + ' parcial' : '') + ' — toca', cls: 'blue', click: 'RN.cobranza.abrir()' },
-      { label: 'Tasa de cobro', value: tasaCob + '%', sub: 'Servicio cobrado sobre esperado', cls: tasaCob >= 70 ? 'green' : (tasaCob >= 40 ? 'amber' : 'red') },
-      { label: 'Clientes morosos', value: String(morosos), sub: morosos ? 'Atrasados — toca' : 'Ninguno atrasado', cls: morosos ? 'red' : 'green', click: 'RN.mora.abrir()' },
-      { label: 'Libre en caja', value: RN.calc.formatCUP(libre), sub: (RN.render.subUSD ? RN.render.subUSD(libre, 'Toca para abrir caja') : 'Toca para abrir caja'), cls: libre > 0 ? 'green' : 'red', click: 'RN.tabs.ir(\'caja\')' }
+      { label: 'Cobran hoy', value: String(cobranHoy.length), cls: cobranHoy.length ? 'amber' : 'green', click: 'RN.tabs.ir(\'cobros\')' },
+      { label: 'Pend. mes', value: String(cob.faltan || 0), cls: (cob.faltan || 0) ? 'red' : 'green', click: 'RN.tabs.ir(\'cobros\')' },
+      { label: 'Pagaron', value: String(cob.pagaron || 0), cls: 'green' }
     ]);
   }
+
+  // —— Mes compacto ——
+  var ingresos = 0, gastos = 0, utilidad = 0, tasaCob = 0;
+  try { ingresos = RN.calc.ingresosMes(mes) || 0; } catch (e3) {}
+  try {
+    gastos = (RN.calc.gastosOperativosMes ? RN.calc.gastosOperativosMes(mes) : RN.calc.gastosMes(mes)) || 0;
+  } catch (e4) {
+    try { gastos = RN.calc.gastosMes(mes) || 0; } catch (e5) { gastos = 0; }
+  }
+  utilidad = ingresos - gastos;
+  try {
+    var cob2 = RN.calc.cobranzaMes(mes);
+    tasaCob = cob2.total ? Math.round(cob2.pagaron / cob2.total * 100) : 0;
+  } catch (e6) {}
 
   var cont = document.getElementById('kpi-dashboard');
   if (cont) {
     cont.innerHTML = RN.panel._kpiHtml([
-      { label: 'Ingresos del mes', value: RN.calc.formatCUP(ingresos), sub: (RN.render.subUSD ? RN.render.subUSD(ingresos, 'Toca para resumen') : '') + delta(ingresos, ingresosAnt), cls: 'green', click: 'RN.ingresosMes.abrir()' },
-      { label: 'Ganancia del mes', value: RN.calc.formatCUP(gananciaBruta), sub: (RN.render.subUSD ? RN.render.subUSD(gananciaBruta, 'Cobrado − paquete') : ''), cls: gananciaBruta >= 0 ? 'blue' : 'red', click: 'if(RN.gananciaCortes)RN.gananciaCortes.abrirReal()' },
-      { label: 'Utilidad neta', value: RN.calc.formatCUP(utilidad), sub: (RN.render.subUSD ? RN.render.subUSD(utilidad, 'Ingresos − Gastos') : '') + delta(utilidad, utilidadAnt), cls: utilidad >= 0 ? 'blue' : 'red', click: 'RN.utilidadMes.abrir()' },
-      { label: 'Gastos del mes', value: RN.calc.formatCUP(gastos), sub: (RN.render.subUSD ? RN.render.subUSD(gastos, 'Toca para ver') : '') + delta(gastos, gastosAnt, { invertido: true }), cls: 'amber', click: 'RN.tabs.ir(\'gastos\')' }
+      { label: '% cobranza', value: tasaCob + '%', cls: tasaCob >= 80 ? 'green' : (tasaCob >= 50 ? 'amber' : 'red'), click: 'RN.tabs.ir(\'cobros\')' },
+      { label: 'Utilidad', value: RN.calc.formatCUP(utilidad), cls: utilidad >= 0 ? 'green' : 'red', click: 'RN.tabs.ir(\'reportes\')' },
+      { label: 'Ingresos', value: RN.calc.formatCUP(ingresos), cls: 'green' },
+      { label: 'Gastos', value: RN.calc.formatCUP(gastos), cls: 'red' }
     ]);
   }
 
-  var contExtra = document.getElementById('kpi-dashboard-extra');
-  if (contExtra) {
-    contExtra.innerHTML = RN.panel._kpiHtml([
-      { label: 'Costo del paquete', value: RN.calc.formatCUP(costoPaquete), sub: costoPaquete > 0 ? 'Proveedor' : 'Sin paquete', cls: 'amber', click: 'RN.paqueteProveedor.abrir()' },
-      { label: 'Ganancia proyectada', value: RN.calc.formatCUP(gananciaProyectada), sub: 'Esperado − paquete', cls: gananciaProyectada >= 0 ? 'green' : 'red', click: 'if(RN.gananciaCortes)RN.gananciaCortes.abrirProyectada()' },
-      { label: 'Ingreso esperado', value: RN.calc.formatCUP(esperado), sub: 'Si cobran todos', cls: 'blue' },
-      { label: 'Fondo de caja', value: RN.calc.formatCUP(fondoCaja), sub: 'Total (reserva + libre)', cls: fondoCaja >= 0 ? 'green' : 'red', click: 'RN.tabs.ir(\'caja\')' }
-    ]);
-    // Respetar si el usuario abrió el detalle (no cerrar en cada re-render)
-    contExtra.style.display = RN.panel._kpiExtraOpen ? '' : 'none';
-    var btnEx = document.getElementById('btn-kpi-extra');
-    if (btnEx) btnEx.textContent = RN.panel._kpiExtraOpen ? 'Ocultar indicadores' : 'Ver más indicadores';
-  }
+  // —— Dinero señales ——
+  var libre = 0, reserva = 0, porCobrar = 0, saldoDeudas = 0;
+  try {
+    var bol = RN.calc.bolsillos ? RN.calc.bolsillos(mes) : null;
+    if (bol) { libre = bol.libre || 0; reserva = bol.reserva || 0; }
+  } catch (e7) {}
+  try {
+    if (RN.calc.porCobrarMes) porCobrar = RN.calc.porCobrarMes(mes) || 0;
+  } catch (e8) {}
+  try {
+    if (RN.investment && RN.investment.deudasActivas) {
+      (RN.investment.deudasActivas() || []).forEach(function (i) {
+        saldoDeudas += RN.investment.saldoADevolver ? RN.investment.saldoADevolver(i) : 0;
+      });
+    }
+  } catch (e9) {}
 
   var contCart = document.getElementById('kpi-dashboard-carteras');
   if (contCart) {
-    var porCobrar = 0;
-    try {
-      if (RN.investment && RN.investment.porCobrarTotal) porCobrar = RN.investment.porCobrarTotal();
-      else {
-        var mes = RN.calc.mesActualStr();
-        (RN.state.clients || []).forEach(function (c) {
-          porCobrar += RN.calc.deudaTotalCliente ? RN.calc.deudaTotalCliente(c, mes) : 0;
-        });
-      }
-    } catch (e) {}
-    var saldoDeudas = 0;
-    try {
-      (RN.investment.deudasActivas() || []).forEach(function (i) {
-        saldoDeudas += RN.investment.saldoADevolver(i);
-      });
-    } catch (e) {}
     contCart.innerHTML = RN.panel._kpiHtml([
-      { label: 'Por cobrar', value: RN.calc.formatCUP(porCobrar), sub: 'Cartera de clientes', cls: 'blue', click: 'RN.tabs.ir(\'cobros\')' },
-      { label: 'Por pagar', value: RN.calc.formatCUP(saldoDeudas), sub: 'Préstamos externos', cls: saldoDeudas > 0 ? 'red' : 'green', click: 'RN.tabs.ir(\'deudas\')' },
-      { label: 'En caja (libre)', value: RN.calc.formatCUP(libre), sub: 'Reserva ' + RN.calc.formatCUP(b.reserva || 0) + ' · abrir caja', cls: 'green', click: 'RN.tabs.ir(\'caja\')' }
+      { label: 'Libre', value: RN.calc.formatCUP(libre), sub: 'En caja', cls: 'green', click: 'RN.tabs.ir(\'caja\')' },
+      { label: 'Reserva', value: RN.calc.formatCUP(reserva), cls: 'blue', click: 'RN.tabs.ir(\'caja\')' },
+      { label: 'Por cobrar', value: RN.calc.formatCUP(porCobrar), cls: 'blue', click: 'RN.tabs.ir(\'cobros\')' },
+      { label: 'Por pagar', value: RN.calc.formatCUP(saldoDeudas), cls: saldoDeudas > 0 ? 'red' : 'green', click: 'RN.tabs.ir(\'deudas\')' }
     ]);
   }
 
-  var totalInv = RN.investment.totalInvertido();
-  var recInv = RN.investment.totalRecuperado();
-  var pctRecup = totalInv ? +(recInv / totalInv * 100).toFixed(1) : 0;
-  var res = document.getElementById('dashboard-resumen');
-  if (res) {
-    res.innerHTML = '<div class="flex wrap" style="gap:24px">'
-      + '<div><strong>Clientes activos:</strong> ' + activos.length + '</div>'
-      + '<div><strong>Planes:</strong> ' + (RN.state.planes || []).length + '</div>'
-      + '<div><strong>Capital en red recuperado:</strong> ' + pctRecup + '%</div>'
-      + '<div><strong>Predicción próximo mes:</strong> ' + RN.calc.formatCUP(RN.calc.prediccionIngresos()) + '</div>'
-      + '</div>';
-  }
-
-  var recupEl = document.getElementById('dashboard-recuperacion');
-  var recupCard = document.getElementById('card-recuperacion');
-  if (recupEl && recupCard) {
-    if (totalInv > 0 && RN.render.barraRecuperacion) {
-      recupCard.style.display = '';
-      recupEl.innerHTML = RN.render.barraRecuperacion();
-    } else {
-      recupCard.style.display = 'none';
-    }
-  }
-
-  var prov = document.getElementById('dashboard-proveedor');
-  if (prov) {
-    var htmlP = '<h3 style="margin-top:0">Proveedor / paquete</h3>';
-    if (costoPaquete > 0) {
-      htmlP += '<div class="acc-row"><span class="acc-label">Costo del mes</span><span class="acc-value">' + RN.calc.formatCUP(costoPaquete) + '</span></div>';
-      htmlP += '<div style="margin-top:8px"><button class="btn sm" onclick="RN.paqueteProveedor.abrir()">Gestionar servicio</button></div>';
-    } else {
-      htmlP += '<div class="muted">Sin paquete configurado.</div>';
-      htmlP += '<div style="margin-top:8px"><button class="btn sm primary" onclick="RN.paqueteProveedor.abrir()">Configurar</button></div>';
-    }
-    prov.innerHTML = htmlP;
-  }
-
+  // Por pagar solo urgentes
   (function () {
     var card = document.getElementById('card-por-pagar');
     var box = document.getElementById('dashboard-por-pagar');
     if (!card || !box || !RN.investment || !RN.investment.colaDeudasOrdenada) return;
-    var cola = RN.investment.colaDeudasOrdenada();
+    var hoyD = new Date(); hoyD.setHours(0, 0, 0, 0);
+    var en7 = new Date(hoyD.getTime() + 7 * 86400000);
+    var cola = (RN.investment.colaDeudasOrdenada() || []).filter(function (inv) {
+      var plan = RN.investment.planDevolucion ? RN.investment.planDevolucion(inv) : {};
+      var fo = plan.fechaObjetivo || '';
+      if (!fo) return true;
+      var d = new Date(fo + 'T00:00:00');
+      if (isNaN(d.getTime())) return true;
+      return d <= en7;
+    });
     if (!cola.length) { card.style.display = 'none'; box.innerHTML = ''; return; }
     card.style.display = '';
-    box.innerHTML = cola.slice(0, 5).map(function (inv) {
-      var plan = RN.investment.planDevolucion(inv);
+    box.innerHTML = cola.slice(0, 3).map(function (inv) {
+      var plan = RN.investment.planDevolucion ? RN.investment.planDevolucion(inv) : {};
       return '<div class="acc-row" style="align-items:center">'
         + '<span class="acc-label">' + RN.render.esc(inv.concepto || 'Deuda')
         + (plan.tiempoTxt ? ' <span class="muted">· ' + plan.tiempoTxt + '</span>' : '') + '</span>'
-        + '<span class="acc-value"><strong>' + RN.investment.fmtSaldoDeuda(inv) + '</strong> '
-        + '<button class="btn sm primary" onclick="RN.tabs.ir(\'deudas\');setTimeout(function(){RN.inversion.devolucionPrestamo(\'' + inv.id + '\');},120)">Pagar</button></span></div>';
-    }).join('') + '<div style="margin-top:10px"><button class="btn sm" onclick="RN.tabs.ir(\'deudas\')">Agenda completa</button></div>';
+        + '<span class="acc-value"><strong>' + (RN.investment.fmtSaldoDeuda ? RN.investment.fmtSaldoDeuda(inv) : '') + '</strong> '
+        + '<button type="button" class="btn sm primary" onclick="RN.tabs.ir(\'deudas\');setTimeout(function(){RN.inversion&&RN.inversion.devolucionPrestamo&&RN.inversion.devolucionPrestamo(\'' + inv.id + '\');},120)">Pagar</button></span></div>';
+    }).join('') + '<div style="margin-top:8px"><button type="button" class="btn sm" onclick="RN.tabs.ir(\'deudas\')">Agenda completa</button></div>';
+  })();
+
+  // Proveedor solo si hay costo / pendiente
+  (function () {
+    var card = document.getElementById('card-proveedor');
+    var prov = document.getElementById('dashboard-proveedor');
+    if (!card || !prov) return;
+    var costo = 0;
+    try {
+      costo = RN.calc.montoPaqueteProveedor ? RN.calc.montoPaqueteProveedor() : (+(RN.state.config.proveedorMonto) || 0);
+    } catch (e10) { costo = +(RN.state.config && RN.state.config.proveedorMonto) || 0; }
+    var pendiente = false;
+    try {
+      if (RN.calc.saldoProveedorMes) pendiente = RN.calc.saldoProveedorMes(mes) > 0;
+    } catch (e11) {}
+    if (!costo && !pendiente) {
+      card.style.display = 'none';
+      return;
+    }
+    card.style.display = '';
+    prov.innerHTML = '<h3 style="margin-top:0">Proveedor</h3>'
+      + (costo ? '<div class="acc-row"><span class="acc-label">Costo mes</span><span class="acc-value">' + RN.calc.formatCUP(costo) + '</span></div>' : '')
+      + '<div style="margin-top:8px"><button type="button" class="btn sm" onclick="RN.paqueteProveedor&&RN.paqueteProveedor.abrir&&RN.paqueteProveedor.abrir()">Gestionar</button></div>';
   })();
 
   RN.panel.renderBandeja();
 
-  if (typeof requestAnimationFrame === 'function') {
-    requestAnimationFrame(function () {
-      if (RN.render.animarBarrasRecuperacion) RN.render.animarBarrasRecuperacion();
-    });
-  } else if (RN.render.animarBarrasRecuperacion) {
-    RN.render.animarBarrasRecuperacion();
-  }
-
-  if (RN.panelWidgets && RN.panelWidgets.renderAll) {
-    RN.panelWidgets.renderAll();
+  // Solo atención clientes (no análisis / caja embebida)
+  if (RN.panelWidgets) {
+    try {
+      if (RN.panelWidgets.renderAtencionClientes) RN.panelWidgets.renderAtencionClientes();
+    } catch (e12) {}
   }
 };

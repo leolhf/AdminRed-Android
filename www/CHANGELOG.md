@@ -2,6 +2,44 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.29 — Panel operativo
+
+- Sin modo Análisis (análisis en Reportes).
+- Hero de hoy: cobran hoy + monto; atajos Cobros / Calendario.
+- Bandeja priorizada (máx. 7): hoy, pendientes, deudas urgentes, morosos, incidencias, alertas.
+- Mes compacto: % cobranza, utilidad, ingresos, gastos + enlaces.
+- Dinero: libre/reserva/por cobrar/por pagar; Caja; por pagar y proveedor solo si urgencia.
+- Limpieza de widgets de tendencia/caja embebida en el Panel.
+
+## v5.55.28 — Ajustes profesional
+
+- Modal con pestañas: **Negocio · Datos · Comunicación · Sistema**.
+- Negocio: parámetros + Guardar configuración; antigüedad de tasa USD; enlace a Capacidad (no bloque MikroTik completo).
+- Datos: archivo local + Google Drive.
+- Sistema: seguridad, updates, diagnóstico, APK, zona de peligro reforzada.
+- Aviso al cerrar con cambios sin guardar.
+
+## v5.55.27 — Margen, Morosos e Incidencias
+
+- **Margen:** resumen, mes seleccionable, ranking móvil, mejor/peor, nodo real, editar cliente.
+- **Morosos/bajas:** KPIs, chips (1 mes / 2+ / sin tel), Cobrar · WhatsApp · Baja; bajas con motivos y reactivar.
+- **Incidencias:** KPIs, prioridad, cards, historial cerradas, reabrir.
+
+## v5.55.26 — Diagnóstico en Reportes (Salud)
+
+- Subpestaña **Salud** retirada del menú Análisis.
+- Bloque **Diagnóstico** en Reportes: semáforos + acciones (Cobros, Morosos, Gastos, Inversión).
+- Respeta el mes seleccionado en Reportes.
+- Vista residual solo redirige a Reportes.
+
+## v5.55.25 — Reportes profesional
+
+- Tablero del periodo: utilidad, ingresos, gastos, % cobranza, ticket, pendientes.
+- Selector de mes global; reporte ejecutivo automático al cambiar mes.
+- Tendencia; accesos a Salud, Margen, Morosos, Incidencias, Realizados.
+- Historial completo eliminado de Reportes (solo últimos 8 cobros del periodo).
+- Exportar / copiar resumen ejecutivo.
+
 ## v5.55.24 — Calendario profesional
 
 - Resumen del mes: pendiente $, clientes, % pagado, días con carga.

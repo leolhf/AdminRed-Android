@@ -634,20 +634,8 @@ RN.panelWidgets.renderCajaReal = function () {
  * ============================================================ */
 
 RN.panelWidgets.renderAll = function () {
-  // v5.55.11: Caja vive en Dinero → Caja (#panel-caja / #panel-caja-real).
-  // Panel: bandeja sin duplicar alertas; widgets de análisis solo si existen nodos.
-  var panelNuevo = !!document.getElementById('panel-bandeja');
-  RN.panelWidgets.renderCajaProyectada();
-  RN.panelWidgets.renderCajaReal();
-  if (panelNuevo) {
-    var at = document.getElementById('panel-atencion');
-    if (at) at.innerHTML = '';
-    RN.panelWidgets.renderAtencionClientes();
-  } else {
-    RN.panelWidgets.renderAtencion();
-    RN.panelWidgets.renderAtencionClientes();
-  }
-  RN.panelWidgets.renderTendencia();
-  RN.panelWidgets.renderCortes();
-  RN.panelWidgets.renderRentabilidad();
-};
+  // v5.55.29: el Panel ya no pinta tendencia/caja embebida; solo atención a clientes.
+  try {
+    if (RN.panelWidgets.renderAtencionClientes) RN.panelWidgets.renderAtencionClientes();
+  } catch (e) {}
+}

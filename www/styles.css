@@ -1841,3 +1841,85 @@ body.panel-modo-operacion .panel-analisis-only {
 .cal-day .cal-count { font-size: 10px; color: var(--text-muted); }
 .cal-legend-details summary { list-style: none; }
 .cal-legend-details summary::-webkit-details-marker { display: none; }
+
+
+/* ---------- Reportes v5.55.25 ---------- */
+.rep-zone { margin-top: 16px; }
+.rep-zone-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.rep-hero .rep-util {
+  font-size: 22px; font-weight: 800; line-height: 1.2; margin: 4px 0 2px;
+}
+.rep-hero .rep-sub { font-size: 13px; color: var(--text-muted); }
+#reporte-mensual-out pre.rep-exec {
+  white-space: pre-wrap; font-family: ui-monospace, monospace; font-size: 12px;
+  margin: 0; line-height: 1.45;
+}
+
+
+/* ---------- Diagnóstico (ex Salud) v5.55.26 ---------- */
+.diag-status {
+  text-align: center; padding: 12px 8px 4px;
+}
+.diag-status .diag-label {
+  font-size: 15px; font-weight: 700; margin: 6px 0 0;
+}
+.diag-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  margin-top: 12px;
+}
+@media (min-width: 600px) {
+  .diag-grid { grid-template-columns: 1fr 1fr; }
+}
+.diag-card {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  padding: 12px;
+  background: var(--bg, var(--surface-2));
+}
+.diag-card .diag-title {
+  display: flex; justify-content: space-between; align-items: center; gap: 8px;
+  font-size: 13px; font-weight: 600;
+}
+.diag-card .diag-value {
+  font-size: 22px; font-weight: 800; margin: 6px 0 4px;
+}
+.diag-card .diag-desc { font-size: 12px; color: var(--text-muted); margin: 0 0 8px; }
+.diag-card .diag-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+
+
+/* ---------- Análisis: Margen / Morosos / Incidencias v5.55.27 ---------- */
+.ana-zone { margin-top: 16px; }
+.ana-zone-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.06em;
+  text-transform: uppercase; color: var(--text-muted);
+  margin: 0 0 8px; padding-bottom: 6px; border-bottom: 1px solid var(--border);
+}
+.ana-row {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm, 8px);
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  background: var(--bg, var(--surface-2));
+}
+.ana-row-head {
+  display: flex; justify-content: space-between; align-items: flex-start; gap: 8px;
+}
+.ana-row-head .amt { font-weight: 800; font-size: 15px; white-space: nowrap; }
+.ana-row-sub { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.ana-row-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+
+
+/* ---------- Ajustes modal v5.55.28 ---------- */
+#ajustes-overlay .aj-tabs { flex-wrap: wrap; }
+#ajustes-overlay .aj-pane { min-height: 120px; }
+#ajustes-overlay .aj-danger-card {
+  border-color: var(--danger, #dc2626);
+  background: color-mix(in srgb, var(--danger, #dc2626) 8%, transparent);
+}
+#ajustes-overlay .aj-danger-card h3 { color: var(--danger, #dc2626); }
