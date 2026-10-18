@@ -80,8 +80,6 @@ RN.init.arrancar = async function () {
       if (btnSave) btnSave.addEventListener('click', function () { RN.storageFile.guardarAhora(); });
       var btnUndo = document.getElementById('btn-undo');
       if (btnUndo) btnUndo.addEventListener('click', function () { RN.undo.deshacer(); });
-      var btnTheme = document.getElementById('btn-theme');
-      if (btnTheme) btnTheme.addEventListener('click', function () { RN.theme.toggle(); });
       var btnInstall = document.getElementById('btn-install');
       if (btnInstall) btnInstall.addEventListener('click', function () { RN.pwa.instalar(); });
       var btnMenu = document.getElementById('btn-menu');

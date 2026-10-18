@@ -2,6 +2,11 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.30 — Tema oscuro fijo
+
+- Eliminado el botón de tema del header (más espacio en la barra).
+- La app fuerza siempre `data-theme="dark"` (Neo Glass).
+
 ## v5.55.29 — Panel operativo
 
 - Sin modo Análisis (análisis en Reportes).
