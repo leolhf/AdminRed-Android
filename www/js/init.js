@@ -156,7 +156,10 @@ RN.init.arrancar = async function () {
   var searchTimerCli;
   if (sc) sc.addEventListener('input', () => { clearTimeout(searchTimerCli); searchTimerCli = setTimeout(() => RN.render.clientes(), 200); });
   const fe = document.getElementById('filter-estado');
-  if (fe) fe.addEventListener('change', () => RN.render.clientes());
+  if (fe) fe.addEventListener('change', function () {
+    if (RN.clientesUI) RN.clientesUI.chip = fe.value || '';
+    RN.render.clientes();
+  });
   const sCo = document.getElementById('search-cobros');
   if (sCo) sCo.addEventListener('input', () => RN.render.cobros());
 

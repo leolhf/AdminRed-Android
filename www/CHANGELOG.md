@@ -2,6 +2,48 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.22 — Cobros profesional
+
+- Héroe del mes: % avance, cobrado vs esperado, pendientes/pagados.
+- Chips: Pendientes (default), Hoy, En ciclo, Vencidos, Pagados, Notificados WA, Todos.
+- Orden: urgencia · monto · día de pago · nombre.
+- **Cobrar / Completar** visible sin expandir.
+- Cerrar mes fuera del header (zona Cierre al final).
+
+## v5.55.21 — Clientes profesional
+
+- KPIs del parque: activos, atrasados, al día/pagados, sin IP.
+- Chips rápidos: atrasados, por vencer, al día, pagados, sin IP, sin nodo, admin, inactivos.
+- Orden: IP · nombre · deuda · día de pago.
+- Tarjeta: plan · megas · IP · nodo; **Cobrar** visible sin expandir.
+- Contador “Mostrando X de Y”.
+
+## v5.55.20 — Nodos de red (jerarquía y equipo)
+
+- Entidad **nodos** con padre/hijo (principal → APs/sectores).
+- Por nodo: clientes, megas vendidos, Limit At **directo y de la rama**.
+- Recomendación de puerto **100M vs 1G** según carga de la rama.
+- Zona **Nodos** en Capacidad y colas; cliente con campo nodo opcional.
+- Esquema de datos v12.
+
+## v5.55.19 — Capacidad y colas profesional
+
+- Héroe: % uso del tope, comprometido/margen, barra de estado.
+- KPIs: comprometido, margen libre, clientes en cola, estado.
+- Alertas: excedido, sin Limit At, omitidos de script, top Limit At.
+- Planificación: cuántos clientes más caben por plan.
+- MikroTik: copiar script upsert/export con toast fiable; lista de omitidos.
+- Eliminada tarjeta de equipos vacía y acciones duplicadas.
+
+## v5.55.18 — Descuentos profesionales
+
+- Hero **Este mes**: impacto estimado + acciones.
+- KPIs: impacto, activas, vencen este mes, pendientes próximo cobro.
+- Bloque **Urgente** (vencen / un pago pendiente).
+- Etiquetas en español (tipo y cálculo); botón **+ Nuevo descuento**.
+- Alta con selector de tipo (Bonificación / Afectación / Ajuste).
+- Texto de ayuda y listado más legible.
+
 ## v5.55.17 — Inventario profesional
 
 - **KPIs visibles:** valor en stock, unidades, agotados, margen potencial (antes se calculaban y no se mostraban).

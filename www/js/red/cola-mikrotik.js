@@ -396,6 +396,45 @@ RN.cola.copiar = function (texto) {
   }
 };
 
+/** v5.55.19 — Copia el script completo desde la vista Red (toast fiable). */
+RN.cola.copiarScriptVista = function (estilo) {
+  estilo = estilo || (RN.state.config && RN.state.config.colaEstiloComando) || 'upsert';
+  var r = RN.cola.scriptCompleto({ estilo: estilo });
+  if (!r || !r.script) {
+    RN.notifyUI.toast('No hay script que copiar', 'warn');
+    return;
+  }
+  RN.cola._ultimoScript = r.script;
+  var msgExtra = r.omitidos && r.omitidos.length
+    ? ' (' + r.omitidos.length + ' omitidos)'
+    : '';
+  // Reutilizar copiar + mensaje enriquecido
+  var texto = r.script;
+  var ok = function () {
+    RN.notifyUI.toast('Script copiado: ' + r.incluidos + ' colas' + msgExtra + '. Pégalo en Winbox (haz backup antes)', 'success');
+  };
+  var fallback = function () {
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = texto;
+      ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      var done = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (done) ok();
+      else RN.notifyUI.toast('No se pudo copiar. Abre Resumen y copia a mano', 'error');
+    } catch (e) {
+      RN.notifyUI.toast('No se pudo copiar. Abre Resumen y copia a mano', 'error');
+    }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(texto).then(ok, fallback);
+  } else {
+    fallback();
+  }
+};
+
 /** Copia el comando de un cliente de la lista. */
 RN.cola.copiarDeCliente = function (id, estilo) {
   var c = RN.state.clients.find(function (x) { return x.id === id; });

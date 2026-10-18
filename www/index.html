@@ -185,29 +185,99 @@
     </section>
 
     <!-- CLIENTES -->
+    <!-- CLIENTES v5.55.21 — Parque · Filtros · Lista -->
     <section class="view" id="view-clientes">
-      <div class="view-header"><h2>Clientes</h2><div class="spacer"></div>
-        <button class="btn" onclick="RN.modalPaquete.abrir()">🧩 Planes</button>
-        <button class="btn primary" onclick="RN.modalCliente.abrir()">+ Nuevo cliente</button>
+      <div class="view-header">
+        <h2>Clientes</h2>
+        <div class="spacer"></div>
+        <button type="button" class="btn" onclick="RN.modalPaquete.abrir()">Planes</button>
+        <button type="button" class="btn primary" onclick="RN.modalCliente.abrir()">+ Nuevo</button>
       </div>
-      <div class="toolbar">
-        <input class="search" type="search" id="search-clientes" placeholder="Nombre, teléfono, plan o deuda&gt;500..." inputmode="search" title="Puedes combinar: ana plan10 deuda&gt;500" spellcheck="false" autocorrect="off" autocapitalize="off">
-        <select id="filter-estado"><option value="">Todos los estados</option><option value="ok">Al día</option><option value="warn">Por vencer</option><option value="due">Atrasado</option><option value="paid">Pagado</option><option value="parcial">Pago parcial</option><option value="por-iniciar">Por iniciar</option><option value="inactivo">Inactivo</option><option value="admin">Administrador</option></select>
+
+      <div class="cli-zone">
+        <div class="cli-zone-label">Parque</div>
+        <div id="cli-parque" class="kpi-grid"></div>
       </div>
-      <div class="accordion-list" id="lista-clientes"></div>
+
+      <div class="cli-zone">
+        <div class="cli-zone-label">Filtros</div>
+        <div class="chips" id="cli-chips" role="group" aria-label="Filtro rápido"></div>
+        <div class="card" style="margin-top:10px">
+          <div class="toolbar" style="margin:0;padding:0;border:0">
+            <input class="search" type="search" id="search-clientes" placeholder="Nombre, IP, plan, deuda&gt;500…" inputmode="search" title="Puedes combinar: ana plan10 deuda&gt;500" spellcheck="false" autocorrect="off" autocapitalize="off">
+            <select id="filter-estado" aria-label="Estado">
+              <option value="">Todos los estados</option>
+              <option value="ok">Al día</option>
+              <option value="warn">Por vencer</option>
+              <option value="due">Atrasado</option>
+              <option value="paid">Pagado</option>
+              <option value="parcial">Pago parcial</option>
+              <option value="por-iniciar">Por iniciar</option>
+              <option value="inactivo">Inactivo</option>
+              <option value="admin">Administrador</option>
+            </select>
+            <select id="cli-orden" aria-label="Orden" onchange="RN.clientesUI.onOrden()">
+              <option value="ip">Orden: IP</option>
+              <option value="nombre">Orden: Nombre</option>
+              <option value="deuda">Orden: Deuda</option>
+              <option value="dia">Orden: Día de pago</option>
+            </select>
+          </div>
+          <p class="muted" id="cli-contador" style="font-size:12px;margin:8px 0 0"></p>
+        </div>
+      </div>
+
+      <div class="cli-zone">
+        <div class="cli-zone-label">Lista</div>
+        <div class="accordion-list" id="lista-clientes"></div>
+      </div>
     </section>
 
     <!-- COBROS -->
+    <!-- COBROS v5.55.22 — Mes · Cola · Lista -->
     <section class="view" id="view-cobros">
-      <div class="view-header"><h2>Cobros del mes</h2><div class="spacer"></div>
-        <button class="btn danger" onclick="RN.monthReset.confirmar()">🔄 Cerrar mes</button>
+      <div class="view-header">
+        <h2>Cobros</h2>
+        <span id="cobros-mes-badge" class="mes-badge muted"></span>
+        <div class="spacer"></div>
+        <button type="button" class="btn primary" onclick="RN.modalCobro.abrirDesdeCobros ? RN.modalCobro.abrirDesdeCobros() : RN.modalCobro.abrir()">+ Cobro</button>
       </div>
-      <div class="toolbar">
-        <input class="search" type="search" id="search-cobros" placeholder="Cliente, teléfono, plan o deuda&gt;500..." inputmode="search" spellcheck="false" autocorrect="off" autocapitalize="off">
+
+      <div class="cob-zone">
+        <div class="cob-zone-label">Mes en curso</div>
+        <div id="cobros-hero" class="card"></div>
+        <div class="kpi-grid mt-16" id="kpi-cobros"></div>
       </div>
-      <!-- v5.52.8 Fase 2: recordatorios / filtros de cobranza -->
-      <div id="cobros-recordatorios" class="cobros-rec-bar" style="display:none"></div>
-      <div class="accordion-list" id="lista-cobros"></div>
+
+      <div class="cob-zone">
+        <div class="cob-zone-label">Cola de cobro</div>
+        <div id="cobros-recordatorios" class="cobros-rec-bar"></div>
+        <div class="card" style="margin-top:10px">
+          <div class="toolbar" style="margin:0;padding:0;border:0">
+            <input class="search" type="search" id="search-cobros" placeholder="Cliente, plan, deuda&gt;500…" inputmode="search" spellcheck="false" autocorrect="off" autocapitalize="off">
+            <select id="cobros-orden" aria-label="Orden" onchange="RN.cobros.onOrden()">
+              <option value="urgencia">Orden: Urgencia</option>
+              <option value="monto">Orden: Monto</option>
+              <option value="dia">Orden: Día de pago</option>
+              <option value="nombre">Orden: Nombre</option>
+            </select>
+          </div>
+          <p class="muted" id="cobros-contador" style="font-size:12px;margin:8px 0 0"></p>
+        </div>
+      </div>
+
+      <div class="cob-zone">
+        <div class="cob-zone-label">Lista</div>
+        <div class="accordion-list" id="lista-cobros"></div>
+      </div>
+
+      <div class="cob-zone" style="margin-bottom:24px">
+        <div class="cob-zone-label">Cierre</div>
+        <div class="card">
+          <p class="muted" style="font-size:13px;margin:0 0 10px">Al cerrar el mes se genera el snapshot y se prepara el ciclo siguiente. Revisa pendientes antes.</p>
+          <button type="button" class="btn danger" onclick="RN.monthReset.confirmar()">Cerrar mes</button>
+        </div>
+      </div>
     </section>
 
     <!-- REALIZADOS -->
@@ -508,24 +578,47 @@
     </section>
 
     <!-- DESCUENTOS -->
+    <!-- DESCUENTOS v5.55.18 — Este mes · Urgente · Lista -->
     <section class="view" id="view-descuentos">
-      <div class="view-header"><h2>Gestión de descuentos y bonificaciones</h2><div class="spacer"></div>
-        <button class="btn" onclick="RN.descuentosView.exportCSV()">⬇️ Exportar CSV</button>
-        <button class="btn" onclick="RN.descuentos.abrirLote()">🏷️ Por lote</button>
-        <button class="btn primary" onclick="RN.descuentos.abrirNuevoSelector()">🎁 + Nueva bonificación</button>
+      <div class="view-header">
+        <h2>Descuentos</h2>
+        <div class="spacer"></div>
+        <button type="button" class="btn" onclick="RN.descuentosView.exportCSV()">CSV</button>
+        <button type="button" class="btn" onclick="RN.descuentos.abrirLote()">Por lote</button>
+        <button type="button" class="btn primary" onclick="RN.descuentos.abrirNuevoSelector()">+ Nuevo descuento</button>
       </div>
-      <div id="descuentos-resumen" class="kpi-grid" style="margin-bottom:16px"></div>
-      <!-- v5.47.0: chips de filtro rápido con contador (Activas por defecto) -->
-      <div class="chips" id="desc-chips" style="margin-bottom:12px"></div>
-      <div class="toolbar">
-        <input id="filter-desc-buscar" type="search" placeholder="🔍 Buscar cliente o motivo…" style="flex:1;min-width:160px" spellcheck="false" autocorrect="off" autocapitalize="off">
-        <select id="filter-desc-mes"><option value="">Todos los meses</option></select>
-        <select id="filter-desc-tipo"><option value="">Todos los tipos</option><option value="afectacion">Afectación</option><option value="bonificacion">Bonificación</option><option value="ajuste">Ajuste</option></select>
-        <select id="filter-desc-estado"><option value="">Todos</option><option value="aplicado">Aplicado</option><option value="pendiente">Pendiente</option><option value="anulado">Anulado</option></select>
+      <p class="muted" style="margin:0 0 12px;font-size:13px">Reducen el cobro del cliente: <strong>bonificación</strong> (promo), <strong>afectación</strong> (falla de servicio) o <strong>ajuste</strong> puntual.</p>
+
+      <div class="desc-zone">
+        <div class="desc-zone-label">Este mes</div>
+        <div id="desc-estado" class="card"></div>
+        <div id="descuentos-resumen" class="kpi-grid mt-16"></div>
       </div>
-      <div class="table-wrap responsive"><table id="tabla-descuentos"><thead><tr>
-        <th>Cliente</th><th>Tipo</th><th>Motivo</th><th>Modo</th><th>Valor</th><th>Vigencia</th><th>Estado</th><th>Acciones</th>
-      </tr></thead><tbody></tbody></table></div>
+
+      <div class="desc-zone" id="desc-urgente-zone" style="display:none">
+        <div class="desc-zone-label">Urgente</div>
+        <div class="card" id="desc-urgente"></div>
+      </div>
+
+      <div class="desc-zone">
+        <div class="desc-zone-label">Filtros</div>
+        <div class="chips" id="desc-chips" style="margin-bottom:12px"></div>
+        <div class="card">
+          <div class="toolbar" style="margin:0;padding:0;border:0">
+            <input id="filter-desc-buscar" type="search" placeholder="Buscar cliente o motivo…" style="flex:1;min-width:140px" spellcheck="false" autocorrect="off" autocapitalize="off">
+            <select id="filter-desc-mes"><option value="">Todos los meses</option></select>
+            <select id="filter-desc-tipo"><option value="">Todos los tipos</option><option value="afectacion">Afectación</option><option value="bonificacion">Bonificación</option><option value="ajuste">Ajuste</option></select>
+            <select id="filter-desc-estado"><option value="">Todos los estados</option><option value="aplicado">Aplicado</option><option value="pendiente">Pendiente</option><option value="anulado">Anulado</option></select>
+          </div>
+        </div>
+      </div>
+
+      <div class="desc-zone">
+        <div class="desc-zone-label">Listado</div>
+        <div class="table-wrap responsive"><table id="tabla-descuentos"><thead><tr>
+          <th>Cliente</th><th>Tipo</th><th>Motivo</th><th>Cálculo</th><th>Valor</th><th>Vigencia</th><th>Estado</th><th></th>
+        </tr></thead><tbody></tbody></table></div>
+      </div>
     </section>
 
     <!-- SALUD -->
@@ -551,30 +644,44 @@
     </section>
 
     <!-- RED — Capacidad Limit At + comandos MikroTik (v5.54 estructura) -->
+    <!-- RED v5.55.19 — Estado · Alertas · Planificación · MikroTik -->
     <section class="view" id="view-red">
       <div class="view-header">
-        <h2>📡 Red · Capacidad y MikroTik</h2>
+        <h2>Capacidad y colas</h2>
         <div class="spacer"></div>
-        <button class="btn" onclick="RN.cola.abrirAjustes()">⚙️ Reglas Limit At</button>
-        <button class="btn primary" onclick="RN.cola.abrirResumen()">📊 Resumen</button>
+        <button type="button" class="btn" onclick="RN.cola.abrirAjustes()">Reglas Limit At</button>
+        <button type="button" class="btn primary" onclick="RN.cola.abrirResumen()">Resumen</button>
       </div>
-      <p class="muted mb-16">La app no se conecta al router: calcula capacidad (Limit At) y genera comandos para pegar en Winbox / terminal.</p>
-      <div class="card mt-16" id="card-red-capacidad">
-        <h3>Capacidad de red</h3>
-        <div id="panel-red-capacidad"></div>
+      <p class="muted" style="margin:0 0 12px;font-size:13px">No se conecta al router: calcula <strong>Limit At</strong> y genera comandos para Winbox / terminal.</p>
+
+      <div class="red-zone">
+        <div class="red-zone-label">Estado del enlace</div>
+        <div id="red-estado" class="card"></div>
+        <div class="kpi-grid mt-16" id="kpi-red"></div>
       </div>
-      <div class="card mt-16">
-        <h3>Acciones rápidas</h3>
-        <div class="flex wrap" style="gap:10px">
-          <button class="btn primary" onclick="RN.cola.abrirResumen()">📊 Resumen de capacidad</button>
-          <button class="btn" onclick="RN.cola.abrirAjustes()">⚙️ Reglas de Limit At</button>
-          <button class="btn" onclick="if(RN.cola.scriptCompleto){ var s=RN.cola.scriptCompleto(); if(s){ navigator.clipboard&&navigator.clipboard.writeText(s).then(function(){RN.notify&&RN.notify.ok('Script copiado');}); }}">📋 Copiar script completo</button>
-        </div>
+
+      <div class="red-zone" id="red-alertas-zone" style="display:none">
+        <div class="red-zone-label">Alertas</div>
+        <div class="card" id="red-alertas"></div>
       </div>
-      <div class="card mt-16" id="card-red-equipos" style="display:none">
-        <h3>Equipos de red</h3>
-        <div id="panel-red-equipos"></div>
+
+      <div class="red-zone">
+        <div class="red-zone-label">Planificación</div>
+        <div class="card" id="red-planificacion"></div>
       </div>
+
+      <div class="red-zone">
+        <div class="red-zone-label">Nodos</div>
+        <div class="card" id="red-nodos"></div>
+      </div>
+
+      <div class="red-zone">
+        <div class="red-zone-label">MikroTik</div>
+        <div class="card" id="red-mikrotik"></div>
+      </div>
+
+      <!-- legacy mount point for capacidad bar (filled inside red-estado) -->
+      <div id="panel-red-capacidad" style="display:none" aria-hidden="true"></div>
     </section>
 
 </main>
@@ -843,6 +950,7 @@
   <!-- 8. OTROS -->
   <script src="js/red/equipos-red.js"></script>
   <script src="js/red/cola-mikrotik.js"></script>
+  <script src="js/red/nodos.js"></script>
   <script src="js/paquete/modal-paquete.js"></script>
   <script src="js/paquete/modal-paquete-proveedor.js"></script>
   <script src="js/gastos.js"></script>

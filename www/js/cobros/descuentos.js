@@ -26,6 +26,14 @@ RN.descuentos.MODOS = {
   dias: 'Proporcional a días sin servicio'
 };
 
+/** v5.55.18 — Etiquetas cortas para UI */
+RN.descuentos.tipoLabelCorto = function (tipo) {
+  return ({ bonificacion: 'Bonificación', afectacion: 'Afectación', ajuste: 'Ajuste' })[tipo] || tipo || '—';
+};
+RN.descuentos.modoLabelCorto = function (modo) {
+  return ({ fijo: 'Monto fijo', porcentaje: '% del plan', dias: 'Días sin servicio' })[modo] || modo || '—';
+};
+
 /* v5.14.4 — D5: el modo 'dias' solo es coherente con vigencia puntual
  * (una afectación proporcional a días sin servicio no puede ser permanente). */
 RN.descuentos._modoPermiteDuracion = function (modo) {
@@ -122,16 +130,48 @@ RN.descuentos.abrirNuevoSelector = function () {
     return '<option value="' + c.id + '">' + RN.render.esc(c.nombre) + '</option>';
   }).join('');
   var html =
-    '<div class="modal-header"><h3>Nueva bonificación / descuento</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>' +
-    '<div class="modal-body"><label>Selecciona cliente</label>' +
-    '<select id="desc-select-cliente">' + opts + '</select></div>' +
+    '<div class="modal-header"><h3>Nuevo descuento</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>' +
+    '<div class="modal-body">' +
+      '<p class="muted" style="font-size:13px;margin:0 0 10px">Elige el tipo y el cliente. Luego defines monto y vigencia.</p>' +
+      '<div class="desc-tipo-grid" id="desc-tipo-grid">' +
+        '<button type="button" class="desc-tipo-card" data-tipo="bonificacion"><strong>Bonificación</strong><span>Promo o fidelización</span></button>' +
+        '<button type="button" class="desc-tipo-card" data-tipo="afectacion"><strong>Afectación</strong><span>Falla o degradación del servicio</span></button>' +
+        '<button type="button" class="desc-tipo-card" data-tipo="ajuste"><strong>Ajuste</strong><span>Corrección administrativa</span></button>' +
+      '</div>' +
+      '<label>Cliente</label>' +
+      '<select id="desc-select-cliente">' + opts + '</select>' +
+      '<input type="hidden" id="desc-select-tipo" value="bonificacion">' +
+    '</div>' +
     '<div class="modal-footer"><button class="btn ghost" id="desc-select-cancel">Cancelar</button>' +
     '<button class="btn primary" id="desc-select-ok">Continuar</button></div>';
   RN.uiComponents.modal(html);
+  var tipoHidden = document.getElementById('desc-select-tipo');
+  document.querySelectorAll('#desc-tipo-grid .desc-tipo-card').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      document.querySelectorAll('#desc-tipo-grid .desc-tipo-card').forEach(function (b) {
+        b.style.borderColor = '';
+      });
+      btn.style.borderColor = 'var(--primary, #2563eb)';
+      tipoHidden.value = btn.getAttribute('data-tipo') || 'bonificacion';
+    });
+  });
+  // highlight default
+  var first = document.querySelector('#desc-tipo-grid .desc-tipo-card[data-tipo="bonificacion"]');
+  if (first) first.style.borderColor = 'var(--primary, #2563eb)';
   document.getElementById('desc-select-ok').onclick = function () {
     var v = document.getElementById('desc-select-cliente').value;
+    var tipoPref = (document.getElementById('desc-select-tipo') || {}).value || 'bonificacion';
     RN.uiComponents.cerrarModal();
-    if (v) RN.descuentos.abrirNuevo(v, RN.calc.mesActualStr());
+    if (v) {
+      RN.descuentos.abrirNuevo(v, RN.calc.mesActualStr());
+      setTimeout(function () {
+        var sel = document.getElementById('dc-tipo');
+        if (sel) {
+          sel.value = tipoPref;
+          if (typeof RN.descuentos._actualizarDuracionUI === 'function') RN.descuentos._actualizarDuracionUI();
+        }
+      }, 40);
+    }
   };
   document.getElementById('desc-select-cancel').onclick = function () {
     RN.uiComponents.cerrarModal();
@@ -154,27 +194,89 @@ RN.descuentos.abrirParaCliente = function (clienteId) {
 RN.descuentos.resumenGestion = function () {
   var mes = RN.calc.mesActualStr();
   var cont = document.getElementById('descuentos-resumen');
-  if (!cont) return;
-  var activas = 0, pendientesMes = 0, impactoCUP = 0;
-  RN.state.descuentos.forEach(function (d) {
+  var hero = document.getElementById('desc-estado');
+  var urgZone = document.getElementById('desc-urgente-zone');
+  var urgBox = document.getElementById('desc-urgente');
+
+  var activas = 0, pendientesMes = 0, impactoCUP = 0, vencEsteMes = 0, unPagoPend = 0;
+  var urgentes = [];
+
+  (RN.state.descuentos || []).forEach(function (d) {
     if (d.estado === 'anulado') return;
     if (!RN.descuentos.vigenteEnMes(d, mes)) return;
-    if (RN.descuentos.vigenciaDe(d) === 'permanente' ||
-        (RN.descuentos.vigenciaDe(d) === 'meses' && (parseInt(d.durMeses, 10) || 1) > 1)) {
+    var vig = RN.descuentos.vigenciaDe(d);
+    if (vig === 'permanente' || (vig === 'meses' && (parseInt(d.durMeses, 10) || 1) > 1)) {
       activas++;
     } else {
       pendientesMes++;
     }
+    if (vig === 'unPago' && d.estado === 'pendiente') unPagoPend++;
+    if (vig === 'meses') {
+      var vence = RN.descuentos.venceEnMes(d);
+      if (vence === mes) {
+        vencEsteMes++;
+        urgentes.push({ d: d, motivo: 'Vence este mes' });
+      }
+    }
+    if (vig === 'unPago' && d.estado === 'pendiente') {
+      urgentes.push({ d: d, motivo: 'Próximo cobro' });
+    }
     impactoCUP += (RN.calc.valorDescuento(d, d.clienteId) || 0);
   });
-  var kpis = [
-    { label: 'Bonificaciones activas', value: String(activas), cls: 'green' },
-    { label: 'Pendientes de este mes', value: String(pendientesMes), cls: 'amber' },
-    { label: 'Impacto total este mes', value: RN.calc.formatCUP(impactoCUP), cls: 'blue' }
-  ];
-  cont.innerHTML = kpis.map(function (k) {
-    return '<div class="kpi ' + k.cls + '"><div class="label">' + k.label + '</div><div class="value">' + k.value + '</div></div>';
-  }).join('');
+
+  if (hero) {
+    hero.innerHTML =
+      '<div class="desc-hero">' +
+        '<div class="muted" style="font-size:12px;font-weight:600">Impacto estimado · ' + RN.render.esc(mes) + '</div>' +
+        '<div class="desc-impacto">' + RN.calc.formatCUP(impactoCUP) + '</div>' +
+        '<div class="desc-sub">Lo que dejan de pagar los clientes este mes por descuentos vigentes</div>' +
+        '<div class="desc-hero-actions">' +
+          '<button type="button" class="btn primary" onclick="RN.descuentos.abrirNuevoSelector()">+ Nuevo descuento</button>' +
+          '<button type="button" class="btn" onclick="RN.descuentos.abrirLote()">Por lote</button>' +
+        '</div>' +
+      '</div>';
+  }
+
+  if (cont) {
+    var kpis = [
+      { label: 'Impacto del mes', value: RN.calc.formatCUP(impactoCUP), cls: 'blue' },
+      { label: 'Activas', value: String(activas), cls: 'green' },
+      { label: 'Vencen este mes', value: String(vencEsteMes), cls: vencEsteMes ? 'amber' : 'green' },
+      { label: 'Pend. próximo cobro', value: String(unPagoPend), cls: unPagoPend ? 'amber' : 'green' }
+    ];
+    cont.innerHTML = kpis.map(function (k) {
+      return '<div class="kpi ' + k.cls + '"><div class="label">' + k.label + '</div><div class="value">' + k.value + '</div></div>';
+    }).join('');
+  }
+
+  if (urgZone && urgBox) {
+    if (!urgentes.length) {
+      urgZone.style.display = 'none';
+      urgBox.innerHTML = '';
+    } else {
+      urgZone.style.display = '';
+      // dedupe by id
+      var seen = {};
+      urgentes = urgentes.filter(function (u) {
+        if (seen[u.d.id]) return false;
+        seen[u.d.id] = true;
+        return true;
+      });
+      urgBox.innerHTML = urgentes.slice(0, 8).map(function (u) {
+        var d = u.d;
+        var c = RN.calc.clientePorId ? RN.calc.clientePorId(d.clienteId) : null;
+        var nom = c ? c.nombre : '—';
+        var val = d.modo === 'porcentaje' ? (d.valor + '%') : (d.modo === 'dias' ? (d.valor + ' d') : RN.calc.formatCUP(d.valor));
+        return '<div class="acc-row" style="padding:8px 0;border-bottom:1px solid var(--border)">'
+          + '<span class="acc-label"><strong>' + RN.render.esc(nom) + '</strong> · '
+          + RN.render.esc(RN.descuentos.tipoLabelCorto(d.tipo)) + ' · ' + RN.render.esc(val)
+          + ' <span class="badge warn" style="font-size:10px">' + RN.render.esc(u.motivo) + '</span></span>'
+          + '<span class="acc-value">'
+          + (RN.descuentos.puedeEditar(d) ? '<button type="button" class="btn sm" onclick="RN.descuentos.abrirEditar(\'' + d.id + '\')">Editar</button> ' : '')
+          + '</span></div>';
+      }).join('');
+    }
+  }
 };
 
 /** Abre el modal para crear un descuento puntual. */

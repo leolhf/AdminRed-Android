@@ -5,7 +5,7 @@
 
 RN.migration = RN.migration || {};
 
-RN.migration.VERSION_ESQUEMA = 11;
+RN.migration.VERSION_ESQUEMA = 12;
 
 /** Aplica migraciones al blob de datos cargado. */
 RN.migration.migrar = function (data) {
@@ -288,6 +288,12 @@ RN.migration.migrar = function (data) {
     data.config = data.config || {};
     if (RN.cola && RN.cola.asegurarConfig) RN.cola.asegurarConfig(data.config);
     v = 11;
+  }
+
+  // v11→v12 (v5.55.20): nodos de red con jerarquía padre/hijo
+  if (v < 12) {
+    data.nodos = data.nodos || [];
+    v = 12;
   }
 
   data.esquema = RN.migration.VERSION_ESQUEMA;

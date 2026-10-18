@@ -38,6 +38,8 @@ RN.state = {
   planes: [],
   /** Array de equipos de red asociados a clientes */
   equiposRed: [],
+  /** v5.55.20 — Nodos de red (AP/router/switch) con jerarquía */
+  nodos: [],
   /** Array de descuentos puntuales */
   descuentos: [],
   /**

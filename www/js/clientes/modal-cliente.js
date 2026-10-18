@@ -340,6 +340,10 @@ RN.modalCliente.abrir = function (id) {
         </div>
         <div><label>Direcci\u00f3n</label><input id="cl-dir" value="${RN.render.esc(c ? c.direccion : '')}" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>
         <div><label>IP / Direcci\u00f3n de red <span class="muted" style="font-size:11px">(ej: 192.168.1.10)</span></label><input id="cl-ip" inputmode="decimal" pattern="[0-9.]*" maxlength="15" value="${RN.render.esc(c ? c.ip : '')}" placeholder="Ej: 192.168.1.10" oninput="this.value=this.value.replace(/[^0-9.]/g,'')" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
+        <div><label>Nodo de red <span class="muted" style="font-size:11px">(opcional)</span></label>
+          <select id="cl-nodo"><option value="">— Sin asignar —</option>${(RN.nodos && RN.nodos.lista ? RN.nodos.lista() : []).slice().sort(function(a,b){return (a.nombre||'').localeCompare(b.nombre||'','es');}).map(function(n){return '<option value="'+n.id+'"'+(c&&c.nodoId===n.id?' selected':'')+'>'+RN.render.esc(n.nombre)+(n.tipo?' · '+n.tipo:'')+'</option>';}).join('')}</select>
+          <span class="muted" style="font-size:11px">Carga por AP/router (100M vs 1G)</span>
+        </div>
       </div>
       <div class="form-row cols-2">
         <div><label>Plan de servicio</label>
@@ -520,6 +524,7 @@ RN.modalCliente.guardar = function () {
     telefono: telRes.valorNormalizado,
     direccion: document.getElementById('cl-dir').value.trim(),
     ip: ipRaw,
+    nodoId: (document.getElementById('cl-nodo') && document.getElementById('cl-nodo').value) || null,
     planId,
     precio,
     diaPago: dia,

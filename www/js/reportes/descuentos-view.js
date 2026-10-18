@@ -103,7 +103,7 @@ RN.descuentosView.render = function () {
   else if (modo === 'finalizadas') lista = base.filter(d => !esViva(d));
 
   if (!lista.length) {
-    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="icon">🏷️</div>No hay descuentos ni bonificaciones que apliquen a la selección. Créalos aquí mismo con <strong>"🎁 + Nueva bonificación"</strong> o en la lista de Cobros con el botón 🎁 de cada cliente.</div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty"><div class="icon">🏷️</div>No hay descuentos con estos filtros. Usa <strong>"+ Nuevo descuento"</strong> o créalo desde Cobros en el cliente.</div></td></tr>`;
     return;
   }
 
@@ -150,15 +150,17 @@ RN.descuentosView.render = function () {
     const _ed = _estadoDesc(d);
     const _vig = RN.descuentos.vigenciaDe(d);
     const _vence = _vig === 'meses' ? RN.descuentos.venceEnMes(d) : '';
+    var tipoTxt = (RN.descuentos.tipoLabelCorto && RN.descuentos.tipoLabelCorto(d.tipo)) || d.tipo;
+    var modoTxt = (RN.descuentos.modoLabelCorto && RN.descuentos.modoLabelCorto(d.modo)) || d.modo;
     return `<tr${!esViva(d) ? ' class="fila-finalizada"' : ''}>
       <td data-label="Cliente">${RN.render.esc(c ? c.nombre : '—')}</td>
-      <td data-label="Tipo">${d.tipo}${RN.descuentos._badgeVigencia(d)}</td>
+      <td data-label="Tipo">${RN.render.esc(tipoTxt)}${RN.descuentos._badgeVigencia(d)}</td>
       <td data-label="Motivo">${RN.render.esc(d.motivo)}</td>
-      <td data-label="Modo">${d.modo}</td>
+      <td data-label="Cálculo">${RN.render.esc(modoTxt)}</td>
       <td data-label="Valor">${d.modo === 'porcentaje' ? d.valor + '%' : (d.modo === 'dias' ? d.valor + ' días' : RN.calc.formatCUP(d.valor))}</td>
       <td data-label="Vigencia">${RN.descuentos.rangoVigencia(d)}${_alertaVenc(d)}</td>
       <td data-label="Estado"><span class="badge ${_ed[0]}">${_ed[1]}</span></td>
-      <td data-label="Acciones">${RN.descuentos.puedeEditar(d) ? `<button class="btn sm" title="Editar" onclick="RN.descuentos.abrirEditar('${d.id}')">✏️</button> ` : ''}${d.estado !== 'anulado' ? `<button class="btn sm danger" onclick="RN.descuentos.eliminar('${d.id}')">🗑</button>` : ''}</td>
+      <td data-label="Acciones">${RN.descuentos.puedeEditar(d) ? `<button class="btn sm" title="Editar" onclick="RN.descuentos.abrirEditar('${d.id}')">Editar</button> ` : ''}${d.estado !== 'anulado' ? `<button class="btn sm danger" onclick="RN.descuentos.eliminar('${d.id}')">Anular</button>` : ''}</td>
     </tr>`;
   };
 
@@ -170,12 +172,12 @@ RN.descuentosView.render = function () {
   // Finalizadas quedan colapsadas por defecto (tocar la cabecera las despliega).
   let html = '';
   if (modo !== 'finalizadas' && vig.length) {
-    html += `<tr class="desc-grupo-head"><td colspan="8">🏷️ Vigentes y pendientes (${vig.length})</td></tr>`;
+    html += `<tr class="desc-grupo-head"><td colspan="8">Vigentes y pendientes (${vig.length})</td></tr>`;
     html += vig.map(_fila).join('');
   }
   if (fin.length && (modo === 'finalizadas' || modo === 'todas')) {
     const abierta = modo === 'finalizadas' || RN.descuentosView.finAbierto;
-    html += `<tr class="desc-grupo-head ${abierta ? 'abierta' : ''}" onclick="RN.descuentosView.toggleFin()" title="Toca para ${abierta ? 'ocultar' : 'ver'} el histórico"><td colspan="8"><span class="chev">▶</span> 🗄️ Finalizadas (${fin.length})${abierta ? '' : ' — toca para ver'}</td></tr>`;
+    html += `<tr class="desc-grupo-head ${abierta ? 'abierta' : ''}" onclick="RN.descuentosView.toggleFin()" title="Toca para ${abierta ? 'ocultar' : 'ver'} el histórico"><td colspan="8"><span class="chev">▶</span> Finalizadas (${fin.length})${abierta ? '' : ' — toca para ver'}</td></tr>`;
     if (abierta) html += fin.map(_fila).join('');
   }
   if (!html) {
