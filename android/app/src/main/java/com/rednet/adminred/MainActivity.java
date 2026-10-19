@@ -43,6 +43,7 @@ public class MainActivity extends BridgeActivity {
     // guard porque RN.platform.plugin('GoogleDrive') devolvía null).
     registerPlugin(KeepAlivePlugin.class);
     registerPlugin(GoogleDrivePlugin.class);
+    registerPlugin(ElToquePlugin.class);
     super.onCreate(savedInstanceState);
     // El bridge se crea durante super.onCreate(); guardamos la referencia.
     puente = getBridge();

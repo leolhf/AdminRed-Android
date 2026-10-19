@@ -2,6 +2,13 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.31 — Tasa vía el Toque (APK / web)
+
+- **Android APK:** al consultar tasa se abre la app `com.elToque.tasas` si está instalada (plugin ElToque).
+- Si no está instalada o falla → respaldo `https://eltoque.com/`.
+- **Navegador / Windows:** abre `https://eltoque.com/`.
+- Nota: Android no permite leer la base de datos de otra app; el usuario anota e ingresa la tasa.
+
 ## v5.55.30 — Tema oscuro fijo
 
 - Eliminado el botón de tema del header (más espacio en la barra).

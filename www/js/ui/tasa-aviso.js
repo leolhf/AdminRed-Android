@@ -12,7 +12,7 @@
  * El botón flotante abre un modal con 3 opciones:
  *   1. Posponer 24 h  — guarda fechaPosponerTasa; el aviso reaparece pasadas 24 h
  *   2. Ingresar tasa  — prompt numérico; al guardar registra fechaTasaUsd y persiste
- *   3. Visitar elToque — abre https://tasa-cambio-cuba.vercel.app (proxy sin Cloudflare, con aviso si no hay conexión)
+ *   3. Consultar el Toque — APK: app com.elToque.tasas; web: https://eltoque.com/
  *
  * Además, RN.tasaAviso.estadoTasa() devuelve 'ok'|'aviso'|'urgente'|'sintasa'
  * y RN.tasaAviso.indicadorHTML() devuelve el punto de color para mostrar en Ajustes.
@@ -157,7 +157,7 @@ RN.tasaAviso.abrirModal = function () {
       '<button class="btn primary" onclick="RN.tasaAviso.ingresarTasa()">' +
         '✏️ Ingresar tasa nueva</button>' +
       '<button class="btn" onclick="RN.tasaAviso.visitarElToque()">' +
-        '🌐 Ver tasa de cambio en elToque (TRMI)</button>' +
+        '🌐 Consultar tasa (el Toque)</button>' +
       '<button class="btn ghost" onclick="RN.tasaAviso.posponer24h()">' +
         '⏰ Recordar más tarde (en 24 h)</button>' +
     '</div>' +
@@ -199,20 +199,80 @@ RN.tasaAviso.ingresarTasa = function () {
 };
 
 /**
- * Opción 2: Visitar elToque.com. Abre en pestaña nueva.
- * Si no hay conexión, avisa en lugar de fallar silenciosamente.
- *
- * NOTA: eltoque.com está protegido por Cloudflare con verificación anti-bot
- * que bloquea el acceso cuando se abre vía window.open() desde otro sitio
- * (status 403/404). Se usa un proxy alternativo (tasa-cambio-cuba.vercel.app)
- * que muestra las mismas tasas del TRMI de elToque sin bloqueo.
+ * Opción 2: Consultar tasa en el Toque.
+ * v5.55.31:
+ *  - APK Android: intenta abrir la app instalada com.elToque.tasas
+ *    (no se puede leer su base de datos por seguridad de Android).
+ *  - Navegador / Windows / sin app: abre https://eltoque.com/
+ * Tras consultar, el usuario vuelve e ingresa la tasa manualmente.
  */
+RN.tasaAviso.URL_ELTOQUE = 'https://eltoque.com/';
+RN.tasaAviso.PKG_ELTOQUE = 'com.elToque.tasas';
+
+RN.tasaAviso._abrirUrl = function (url) {
+  url = url || RN.tasaAviso.URL_ELTOQUE;
+  try {
+    var App = RN.platform && RN.platform.plugin ? RN.platform.plugin('App') : null;
+    if (App && typeof App.openUrl === 'function') {
+      App.openUrl({ url: url });
+      return true;
+    }
+  } catch (e) {}
+  try {
+    window.open(url, '_blank', 'noopener');
+    return true;
+  } catch (e2) {
+    try { window.location.href = url; return true; } catch (e3) { return false; }
+  }
+};
+
 RN.tasaAviso.visitarElToque = function () {
-  if (navigator.onLine) {
-    window.open('https://tasa-cambio-cuba.vercel.app', '_blank', 'noopener');
-    RN.notifyUI.toast('Abriendo tasas de cambio — vuelve e ingresa la tasa', 'info', 5000);
-  } else {
+  var esAndroidNativo = false;
+  try {
+    esAndroidNativo = !!(RN.platform && RN.platform.esNativo && RN.platform.esNativo() &&
+      window.Capacitor && window.Capacitor.getPlatform && window.Capacitor.getPlatform() === 'android');
+  } catch (e) { esAndroidNativo = false; }
+
+  // —— Android APK: abrir com.elToque.tasas ——
+  if (esAndroidNativo) {
+    var plugin = RN.platform.plugin('ElToque');
+    if (plugin && typeof plugin.abrir === 'function') {
+      Promise.resolve(plugin.abrir()).then(function (r) {
+        if (r && r.ok) {
+          RN.notifyUI.toast('Abriendo el Toque — anota la tasa e ingrésala aquí', 'info', 5500);
+          return;
+        }
+        if (r && r.installed === false) {
+          RN.notifyUI.toast('el Toque no está instalado. Abriendo eltoque.com', 'warn', 4500);
+        } else {
+          RN.notifyUI.toast('No se pudo abrir el Toque. Abriendo eltoque.com', 'warn', 4500);
+        }
+        RN.tasaAviso._abrirUrl(RN.tasaAviso.URL_ELTOQUE);
+      }).catch(function () {
+        RN.notifyUI.toast('No se pudo abrir el Toque. Abriendo eltoque.com', 'warn', 4500);
+        RN.tasaAviso._abrirUrl(RN.tasaAviso.URL_ELTOQUE);
+      });
+      return;
+    }
+    // Sin plugin (APK antigua): intentar intent por URL
+    try {
+      var intentUrl = 'intent:#Intent;action=android.intent.action.MAIN;category=android.intent.category.LAUNCHER;package=' +
+        RN.tasaAviso.PKG_ELTOQUE + ';end';
+      window.location.href = intentUrl;
+      RN.notifyUI.toast('Intentando abrir el Toque — anota la tasa e ingrésala aquí', 'info', 5500);
+      return;
+    } catch (eIntent) { /* caer a web */ }
+  }
+
+  // —— Navegador / Windows / fallback ——
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) {
     RN.notifyUI.toast('Sin conexión a internet. Conéctate y vuelve a intentarlo', 'warn', 5000);
+    return;
+  }
+  if (RN.tasaAviso._abrirUrl(RN.tasaAviso.URL_ELTOQUE)) {
+    RN.notifyUI.toast('Abriendo eltoque.com — vuelve e ingresa la tasa', 'info', 5000);
+  } else {
+    RN.notifyUI.toast('No se pudo abrir el enlace de el Toque', 'error', 4000);
   }
 };
 
