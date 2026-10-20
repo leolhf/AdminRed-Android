@@ -1080,7 +1080,13 @@ RN.calc.usdEnCaja = function () {
   var deRetiros = (RN.state.retiros || []).reduce(function (s, r) { return s + RN.calc.desgloseMovimiento(r).usd; }, 0);
   // v5.31.0: un cuadre de caja hecho en dólares también mueve la gaveta de USD.
   var deCuadres = RN.calc.usdCuadreAjuste();
-  return +(deCobros + deDepositos - deRetiros - deCuadres).toFixed(2);
+  // v5.55.32: gastos pagados en USD (compra inventario, proveedor, etc.) también sacan dólares físicos.
+  // Los cuadres ya se restan arriba; aquí solo gastos normales con montoPagadoUSD.
+  var deGastosUSD = (RN.state.gastos || []).reduce(function (s, g) {
+    if (!g || g.esCuadreCaja) return s;
+    return s + (+(g.montoPagadoUSD || 0));
+  }, 0);
+  return +(deCobros + deDepositos - deRetiros - deCuadres - deGastosUSD).toFixed(2);
 };
 
 /**

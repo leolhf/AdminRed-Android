@@ -29,8 +29,145 @@ RN.inventario._recalcCostoLote = function () {
   var total = +(cant * costoU).toFixed(2);
   var elTot = document.getElementById('lot-costo-tot');
   if (elTot) elTot.value = total ? RN.calc.formatCUP(total) : '';
-  // Recalcular el bloque de pago (el monto a pagar = costo total)
   RN.moneda.recalcBloquePago('lot-pago');
+  RN.inventario._actualizarAvisoCaja();
+};
+
+/** Muestra saldos de caja y aviso si no alcanza (propuesta mixto). */
+RN.inventario._actualizarAvisoCaja = function () {
+  var box = document.getElementById('lot-caja-aviso');
+  if (!box) return;
+  var credito = !!(document.getElementById('lot-a-credito') || {}).checked;
+  if (credito) {
+    box.innerHTML = '<div class="muted" style="font-size:12px">A crédito: el stock entra y <strong>no sale dinero de caja</strong> hasta que registres el pago.</div>';
+    box.style.display = 'block';
+    return;
+  }
+  var cant = parseFloat((document.getElementById('lot-cant') || {}).value) || 0;
+  var costoU = parseFloat((document.getElementById('lot-costo-u') || {}).value) || 0;
+  var total = +(cant * costoU).toFixed(2);
+  var s = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0, tasa: RN.moneda.tasa() };
+  var pago = RN.moneda.leerBloquePago('lot-pago', total);
+  var html = '<div class="muted" style="font-size:12px;margin-bottom:6px">En caja ahora: <strong>' +
+    RN.calc.formatCUP(s.cup || 0) + '</strong> CUP · <strong>$' + (+(s.usd || 0)).toFixed(2) + '</strong> USD</div>';
+  if (total <= 0) {
+    box.innerHTML = html;
+    box.style.display = 'block';
+    return;
+  }
+  var falta = +(total - (pago.totalRecibidoCUP || 0)).toFixed(2);
+  if (falta > 0.01) {
+    var tasa = pago.tasaUsd || RN.moneda.tasa() || 0;
+    html += '<div style="font-size:12px;color:var(--amber)">Falta cubrir ' + RN.calc.formatCUP(falta);
+    if (tasa > 0) {
+      html += ' · ≈ $' + (falta / tasa).toFixed(2) + ' USD a tasa ' + tasa;
+      html += ' <button type="button" class="btn sm" style="margin-left:6px" onclick="RN.inventario.completarConOtraMoneda()">Completar con otra moneda</button>';
+    }
+    html += '</div>';
+  }
+  // Validación física
+  var val = RN.inventario._validarSalidaCaja(pago, total);
+  if (!val.ok && val.motivo) {
+    html += '<div style="font-size:12px;color:var(--danger);margin-top:4px">' + RN.render.esc(val.motivo) + '</div>';
+    if (val.sugerencia) {
+      html += '<div style="font-size:12px;margin-top:4px">' + val.sugerencia +
+        ' <button type="button" class="btn sm primary" onclick="RN.inventario.completarConOtraMoneda()">Aplicar sugerencia</button></div>';
+    }
+  } else if (falta <= 0.01) {
+    html += '<div style="font-size:12px;color:var(--success)">✓ Pago cubierto; al guardar <strong>sale de caja</strong>.</div>';
+  }
+  box.innerHTML = html;
+  box.style.display = 'block';
+};
+
+/**
+ * Valida que haya billetes suficientes de cada moneda para la salida.
+ * @returns {{ok:boolean, motivo:string, sugerencia:string, faltaCUP:number, sugerir:string}}
+ */
+RN.inventario._validarSalidaCaja = function (pago, totalCUP) {
+  pago = pago || {};
+  var usd = +(pago.montoUSD || 0);
+  var cup = +(pago.montoCUP || 0);
+  var s = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0, tasa: 0 };
+  var tasa = pago.tasaUsd || s.tasa || RN.moneda.tasa() || 0;
+  var res = { ok: true, motivo: '', sugerencia: '', faltaCUP: 0, sugerir: '' };
+
+  if (usd > (s.usd || 0) + 0.01) {
+    res.ok = false;
+    res.motivo = 'Solo hay $' + (+(s.usd || 0)).toFixed(2) + ' USD en caja y quieres usar $' + usd.toFixed(2) + ' USD.';
+    var faltanU = +(usd - (s.usd || 0)).toFixed(2);
+    if (tasa > 0) {
+      var costo = +(faltanU * tasa).toFixed(2);
+      if (cup + costo <= (s.cup || 0) + 0.01) {
+        res.sugerencia = 'Puedes bajar a $' + (+(s.usd || 0)).toFixed(2) + ' USD y completar ' + RN.calc.formatCUP(costo) + ' en CUP.';
+        res.sugerir = 'CUP';
+        res.faltaCUP = costo;
+      }
+    }
+    return res;
+  }
+  if (cup > (s.cup || 0) + 0.01) {
+    res.ok = false;
+    res.motivo = 'Solo hay ' + RN.calc.formatCUP(s.cup || 0) + ' CUP en caja y quieres usar ' + RN.calc.formatCUP(cup) + '.';
+    var faltanC = +(cup - (s.cup || 0)).toFixed(2);
+    if (tasa > 0) {
+      var usdNec = +(faltanC / tasa).toFixed(2);
+      if (usd + usdNec <= (s.usd || 0) + 0.01) {
+        res.sugerencia = 'Puedes usar todo el CUP disponible (' + RN.calc.formatCUP(s.cup || 0) +
+          ') y completar ≈ $' + usdNec + ' USD.';
+        res.sugerir = 'USD';
+        res.faltaCUP = faltanC;
+      }
+    }
+    return res;
+  }
+  // Cubrir total en equivalente
+  var pagado = +(pago.totalRecibidoCUP || 0);
+  if (totalCUP > 0 && pagado + 0.01 < totalCUP) {
+    res.ok = false;
+    res.motivo = 'El pago no cubre el total de la compra (' + RN.calc.formatCUP(totalCUP) + ').';
+    res.faltaCUP = +(totalCUP - pagado).toFixed(2);
+    res.sugerir = (cup >= (s.cup || 0) - 0.01 && tasa > 0) ? 'USD' : 'CUP';
+  }
+  return res;
+};
+
+/** Pasa a MIXTO y precarga la otra moneda con el faltante. */
+RN.inventario.completarConOtraMoneda = function () {
+  var cant = parseFloat((document.getElementById('lot-cant') || {}).value) || 0;
+  var costoU = parseFloat((document.getElementById('lot-costo-u') || {}).value) || 0;
+  var total = +(cant * costoU).toFixed(2);
+  var s = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0, tasa: 0 };
+  var tasa = RN.moneda.tasa() || 0;
+  if (tasa <= 0) {
+    RN.notifyUI.toast('Configura la tasa USD en Ajustes para completar en la otra moneda', 'warn');
+    return;
+  }
+  var cupDisp = Math.max(0, +(s.cup || 0));
+  var usdDisp = Math.max(0, +(s.usd || 0));
+
+  // Mostrar botón Mixto del bloque (viene oculto por defecto)
+  var mixBtn = document.querySelector('#lot-pago-moneda-toggle [data-moneda="MIXTO"]');
+  if (mixBtn) mixBtn.style.display = '';
+
+  RN.moneda.setMonedaBloque('lot-pago', 'MIXTO');
+
+  // Estrategia: usar CUP disponible hasta el total; resto en USD
+  var cupUsar = Math.min(cupDisp, total);
+  var falta = +(total - cupUsar).toFixed(2);
+  var usdUsar = falta > 0 ? +(falta / tasa).toFixed(2) : 0;
+  if (usdUsar > usdDisp + 0.01) {
+    usdUsar = Math.min(usdDisp, +(total / tasa).toFixed(2));
+    cupUsar = Math.min(cupDisp, Math.max(0, +(total - usdUsar * tasa).toFixed(2)));
+  }
+
+  var cupIn = document.getElementById('lot-pago-monto-cup');
+  var usdIn = document.getElementById('lot-pago-monto-usd');
+  if (cupIn) cupIn.value = cupUsar > 0 ? cupUsar : '';
+  if (usdIn) usdIn.value = usdUsar > 0 ? usdUsar : '';
+  RN.moneda.recalcBloquePago('lot-pago');
+  RN.inventario._actualizarAvisoCaja();
+  RN.notifyUI.toast('Pago mixto según lo disponible en caja', 'info', 4000);
 };
 
 /**
@@ -39,16 +176,12 @@ RN.inventario._recalcCostoLote = function () {
  */
 RN.inventario.abrirNuevoLote = function (materialExistente) {
   var precargarMat = materialExistente || '';
-  var precioSugerido = '';
-  if (precargarMat) {
-    // No sugerimos el costo anterior (cada lote tiene su propio costo)
-    precioSugerido = '';
-  }
+  var s = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0 };
   var html = '\
     <div class="modal-header"><h3>Compra de inventario</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>\
     <div class="modal-body">\
       <div class="form-row"><div><label>Material / Producto *</label><input id="lot-material" placeholder="Ej: Cable UTP cat6, Router TP-Link..." value="' + RN.render.esc(precargarMat) + '" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div></div>\
-      ' + (precargarMat ? '<div class="cobro-desglose" style="background:var(--bg-alt);padding:10px 12px;border-radius:8px;margin-bottom:12px"><span class="muted">📋 Comprando más del producto <strong>' + RN.render.esc(precargarMat) + '</strong>. Se creará un nuevo lote que se añadirá al producto existente. El stock se vende por FIFO (lote más antiguo primero).</span></div>' : '') + '\
+      ' + (precargarMat ? '<div class="cobro-desglose" style="background:var(--bg-alt);padding:10px 12px;border-radius:8px;margin-bottom:12px"><span class="muted">Comprando más de <strong>' + RN.render.esc(precargarMat) + '</strong>. Nuevo lote (FIFO).</span></div>' : '') + '\
       <div class="form-row cols-2">\
         <div><label>Cantidad comprada *</label><input id="lot-cant" type="number" min="1" step="1" value="1" oninput="RN.inventario._recalcCostoLote()"></div>\
         <div><label>Notas</label><input id="lot-notas" placeholder="proveedor, factura..." spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>\
@@ -58,21 +191,34 @@ RN.inventario.abrirNuevoLote = function (materialExistente) {
         <div><label>Costo total de la compra</label><input id="lot-costo-tot" readonly placeholder="0.00 CUP" style="font-weight:700"></div>\
       </div>\
       <div class="divider"></div>\
-      <div class="muted" style="font-size:13px;margin-bottom:8px">¿Cómo se pagó esta compra?</div>\
+      <label class="flex" style="align-items:center;gap:8px;margin-bottom:10px;font-size:13px">\
+        <input type="checkbox" id="lot-a-credito" onchange="RN.inventario._actualizarAvisoCaja()">\
+        <span>A crédito (no sale de caja ahora)</span>\
+      </label>\
+      <div class="muted" style="font-size:13px;margin-bottom:8px">¿Cómo se paga esta compra? (sale de caja)</div>\
       ' + RN.moneda.bloquePagoHTML('lot-pago', { titulo: 'Pago de la compra', autoCUP: true }) + '\
+      <div id="lot-caja-aviso" class="cobro-desglose" style="margin-top:10px;display:none"></div>\
     </div>\
     <div class="modal-footer"><button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>\
       <button class="btn primary" onclick="RN.inventario.guardarLote()">Guardar compra</button></div>';
   RN.uiComponents.modal(html);
   RN.inventario._recalcCostoLote();
-  // Inicializar bloque de moneda: monto a pagar = costo total
-  RN.moneda.initBloquePago('lot-pago');
   RN.moneda.configBloquePago('lot-pago', function () {
     var cant = parseFloat((document.getElementById('lot-cant') || {}).value) || 0;
     var costoU = parseFloat((document.getElementById('lot-costo-u') || {}).value) || 0;
     return +(cant * costoU).toFixed(2);
   }, true);
+  // Recalcular aviso al cambiar montos
+  ['lot-pago-monto-cup', 'lot-pago-monto-usd'].forEach(function (id) {
+    var el = document.getElementById(id);
+    if (el) {
+      el.addEventListener('input', function () { RN.inventario._actualizarAvisoCaja(); });
+    }
+  });
+  var mixBtn = document.querySelector('#lot-pago-moneda-toggle [data-moneda="MIXTO"]');
+  if (mixBtn) mixBtn.style.display = '';
   RN.moneda.recalcBloquePago('lot-pago');
+  RN.inventario._actualizarAvisoCaja();
 };
 
 RN.inventario.guardarLote = function () {
@@ -83,10 +229,24 @@ RN.inventario.guardarLote = function () {
   const costoU = parseFloat(document.getElementById('lot-costo-u').value) || 0;
   if (costoU < 0) { RN.notifyUI.toast('El costo unitario no es válido', 'error'); return; }
   const costoTotal = +(cant * costoU).toFixed(2);
+  const aCredito = !!(document.getElementById('lot-a-credito') || {}).checked;
 
-  // v5.12.0: leer los campos de pago del bloque de moneda (metadata)
   const pago = RN.moneda.leerBloquePago('lot-pago', costoTotal);
-  var registrarGasto = !!(document.getElementById('lot-registrar-gasto') || {}).checked;
+
+  // Pagado desde caja: validar cobertura y saldos físicos
+  if (!aCredito && costoTotal > 0) {
+    if (!(pago.totalRecibidoCUP > 0) || (pago.totalRecibidoCUP + 0.01 < costoTotal)) {
+      RN.inventario._actualizarAvisoCaja();
+      RN.notifyUI.toast('El pago no cubre el total. Completa con la otra moneda o marca a crédito.', 'warn');
+      return;
+    }
+    var val = RN.inventario._validarSalidaCaja(pago, costoTotal);
+    if (!val.ok) {
+      RN.inventario._actualizarAvisoCaja();
+      RN.notifyUI.toast(val.motivo || 'No hay saldo suficiente en caja', 'warn');
+      return;
+    }
+  }
 
   var loteId = RN.calc.uid('lot');
   var lote = {
@@ -95,18 +255,19 @@ RN.inventario.guardarLote = function () {
     cantidad: cant,
     costoUnitario: costoU,
     costoTotal: costoTotal,
-    notas: document.getElementById('lot-notas').value.trim(),
+    notas: (document.getElementById('lot-notas') || {}).value.trim(),
     fecha: new Date().toISOString(),
-    monedaPago: pago.moneda,
-    montoPagoUSD: pago.montoUSD,
-    montoPagoCUP: pago.montoCUP,
-    montoPagoCUPDesdeUSD: pago.montoCUPDesdeUSD,
-    totalPagoCUP: pago.totalRecibidoCUP,
-    tasaUsdCompra: pago.tasaUsd
+    monedaPago: aCredito ? 'CREDITO' : (pago.moneda || 'CUP'),
+    montoPagoUSD: aCredito ? 0 : (pago.montoUSD || 0),
+    montoPagoCUP: aCredito ? 0 : (pago.montoCUP || 0),
+    montoPagoCUPDesdeUSD: aCredito ? 0 : (pago.montoCUPDesdeUSD || 0),
+    totalPagoCUP: aCredito ? 0 : (pago.totalRecibidoCUP || 0),
+    tasaUsdCompra: pago.tasaUsd || 0,
+    aCredito: !!aCredito
   };
 
-  // v5.55.17: opcional — gasto / salida de caja ligada al lote
-  if (registrarGasto && costoTotal > 0) {
+  // v5.55.32: si se paga ahora, SIEMPRE registrar gasto → rebaja caja
+  if (!aCredito && costoTotal > 0) {
     RN.state.gastos = RN.state.gastos || [];
     var fecha = new Date().toISOString().slice(0, 10);
     var gastoId = RN.calc.uid('gasto');
@@ -127,34 +288,19 @@ RN.inventario.guardarLote = function () {
     lote.gastoCompraId = gastoId;
   }
 
+  RN.state.inventario = RN.state.inventario || [];
   RN.state.inventario.push(lote);
-  RN.storageLocal.guardar();
+  try { RN.storageLocal.guardar(); } catch (e) {}
   RN.uiComponents.cerrarModal();
-  RN.render.inventario();
-  if (RN.render.gastos) RN.render.gastos();
-  if (RN.render.dashboard) RN.render.dashboard();
-  var msg = 'Compra: ' + cant + ' × ' + RN.calc.formatCUP(costoU) + ' = ' + RN.calc.formatCUP(costoTotal);
-  if (registrarGasto) msg += ' · gasto en caja';
-  RN.notifyUI.toast(msg, 'success');
-};
+  if (RN.render && RN.render.inventario) RN.render.inventario();
+  if (RN.render && RN.render.gastos) RN.render.gastos();
+  if (RN.render && RN.render.caja) RN.render.caja();
+  if (RN.render && RN.render.dashboard) RN.render.dashboard();
 
-RN.inventario.eliminarLote = function (id) {
-  var asigs = (RN.state.asignacionesInventario || []).filter(function (a) { return a.loteId === id; });
-  if (asigs.length) {
-    RN.notifyUI.toast('No se puede eliminar: el lote tiene ' + asigs.length + ' asignación(es). Anula las asignaciones primero.', 'error');
-    return;
-  }
-  var lote = (RN.state.inventario || []).find(function (x) { return x.id === id; });
-  RN.uiComponents.confirm('Eliminar lote', '¿Eliminar este lote' + (lote && lote.gastoCompraId ? ' y su gasto ligado' : '') + '?', function () {
-    RN.state.inventario = RN.state.inventario.filter(function (x) { return x.id !== id; });
-    if (lote && lote.gastoCompraId) {
-      RN.state.gastos = (RN.state.gastos || []).filter(function (g) { return g.id !== lote.gastoCompraId; });
-    }
-    RN.storageLocal.guardar();
-    RN.render.inventario();
-    if (RN.render.gastos) RN.render.gastos();
-    RN.notifyUI.toast('Lote eliminado', 'warn');
-  }, { danger: true });
+  var msg = aCredito
+    ? ('Lote a crédito: ' + cant + ' × ' + material + ' (sin salida de caja)')
+    : ('Compra: ' + cant + ' × ' + material + ' · ' + RN.calc.formatCUP(costoTotal) + ' salió de caja');
+  RN.notifyUI.toast(msg, 'success');
 };
 
 /* ============================================================

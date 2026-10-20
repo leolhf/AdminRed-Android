@@ -2,6 +2,13 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.32 — Compra inventario → caja
+
+- Compra pagada **siempre registra gasto** y rebaja caja (bug del checkbox corregido).
+- Opción **A crédito** si no debe salir dinero ahora.
+- Validación de saldos físicos CUP/USD; aviso y **Completar con otra moneda** (mixto).
+- `usdEnCaja` resta USD de gastos (inventario, proveedor, etc.).
+
 ## v5.55.31 — Tasa vía el Toque (APK / web)
 
 - **Android APK:** al consultar tasa se abre la app `com.elToque.tasas` si está instalada (plugin ElToque).
