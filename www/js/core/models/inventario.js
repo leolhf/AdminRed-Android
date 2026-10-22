@@ -144,6 +144,33 @@ RN.inventarioModel.precioVentaSugerido = function (costoUnitario) {
  * @param {number} cantidad — cantidad a vender
  * @returns {Array<{loteId, cantidad, costoUnitario}>|null}
  */
+
+/** Lote FIFO vigente (con stock) del producto. */
+RN.inventarioModel.loteVigentePorNombre = function (material) {
+  var norm = RN.inventarioModel.normMaterial(material);
+  var lotes = (RN.state.inventario || [])
+    .filter(function (l) { return RN.inventarioModel.normMaterial(l.material) === norm; })
+    .sort(function (a, b) { return (a.fecha || '').localeCompare(b.fecha || ''); });
+  for (var i = 0; i < lotes.length; i++) {
+    if (RN.inventarioModel.stockDisponibleLote(lotes[i].id) > 0) return lotes[i];
+  }
+  return null;
+};
+
+/** Costo unitario USD del lote vigente, o 0 si se compró en CUP. */
+RN.inventarioModel.costoVigenteUSDPorNombre = function (material) {
+  var l = RN.inventarioModel.loteVigentePorNombre(material);
+  if (!l) return 0;
+  if (l.costoMoneda === 'USD' && +l.costoUnitarioUSD > 0) return +l.costoUnitarioUSD;
+  return 0;
+};
+
+/** Precio de venta sugerido en USD = costoUSD × (1 + pct/100). */
+RN.inventarioModel.precioVentaSugeridoUSD = function (costoUsd) {
+  var pct = RN.inventarioModel.pctGanancia();
+  return +((costoUsd || 0) * (1 + pct / 100)).toFixed(2);
+};
+
 RN.inventarioModel.repartirFIFO = function (material, cantidad) {
   var norm = RN.inventarioModel.normMaterial(material);
   var lotes = (RN.state.inventario || [])

@@ -20,20 +20,94 @@ RN.inventario = RN.inventario || {};
 
 /* ============================================================
    COMPRA DE INVENTARIO (NUEVO LOTE)
+   v5.55.33: costo en CUP o USD. Si costo USD → pago SOLO en USD;
+   si no alcanza el USD físico en caja, se notifica y se bloquea.
    ============================================================ */
 
-/** Recalcula el costo total del lote a partir de cantidad × costo unitario. */
-RN.inventario._recalcCostoLote = function () {
+/** Moneda del costo: CUP o USD. */
+RN.inventario._costoMoneda = function () {
+  var el = document.getElementById('lot-costo-moneda');
+  return (el && el.value === 'USD') ? 'USD' : 'CUP';
+};
+
+/**
+ * Devuelve { costoU, cant, total, mon, tasa, totalCUP, totalUSD }.
+ * totalCUP siempre es el ancla contable del lote.
+ */
+RN.inventario._datosCostoLote = function () {
   var cant = parseFloat((document.getElementById('lot-cant') || {}).value) || 0;
   var costoU = parseFloat((document.getElementById('lot-costo-u') || {}).value) || 0;
   var total = +(cant * costoU).toFixed(2);
+  var mon = RN.inventario._costoMoneda();
+  var tasa = (RN.moneda && RN.moneda.tasa) ? (RN.moneda.tasa() || 0) : ((RN.state.config && RN.state.config.tasaUsd) || 0);
+  var totalCUP, totalUSD, costoUCUP, costoUUSD;
+  if (mon === 'USD') {
+    totalUSD = total;
+    costoUUSD = costoU;
+    totalCUP = tasa > 0 ? +(total * tasa).toFixed(2) : 0;
+    costoUCUP = tasa > 0 ? +(costoU * tasa).toFixed(2) : 0;
+  } else {
+    totalCUP = total;
+    costoUCUP = costoU;
+    totalUSD = tasa > 0 ? +(total / tasa).toFixed(2) : 0;
+    costoUUSD = tasa > 0 ? +(costoU / tasa).toFixed(2) : 0;
+  }
+  return {
+    cant: cant, costoU: costoU, total: total, mon: mon, tasa: tasa,
+    totalCUP: totalCUP, totalUSD: totalUSD, costoUCUP: costoUCUP, costoUUSD: costoUUSD
+  };
+};
+
+/** Si el costo es USD, solo se muestra el botón de pago USD. */
+RN.inventario._syncPagoSegunCosto = function () {
+  var mon = RN.inventario._costoMoneda();
+  var toggle = document.getElementById('lot-pago-moneda-toggle');
+  if (!toggle) return;
+  var btns = toggle.querySelectorAll('[data-moneda]');
+  btns.forEach(function (b) {
+    var m = b.getAttribute('data-moneda');
+    if (mon === 'USD') {
+      b.style.display = (m === 'USD') ? '' : 'none';
+    } else {
+      b.style.display = '';
+    }
+  });
+  if (mon === 'USD' && RN.moneda && RN.moneda.setMonedaBloque) {
+    RN.moneda.setMonedaBloque('lot-pago', 'USD');
+  }
+};
+
+/** Recalcula totales y fuerza pago USD cuando el costo es en dólares. */
+RN.inventario._recalcCostoLote = function () {
+  var d = RN.inventario._datosCostoLote();
   var elTot = document.getElementById('lot-costo-tot');
-  if (elTot) elTot.value = total ? RN.calc.formatCUP(total) : '';
-  RN.moneda.recalcBloquePago('lot-pago');
+  var elEq = document.getElementById('lot-costo-eq');
+  var lbl = document.getElementById('lot-lbl-costo-u');
+  if (d.mon === 'USD') {
+    if (lbl) lbl.innerHTML = 'Costo unitario (USD) *';
+    if (elTot) elTot.value = d.total > 0 ? ('$' + d.total.toFixed(2) + ' USD') : '';
+    if (elEq) {
+      elEq.style.display = (d.tasa > 0 && d.total > 0) ? 'block' : 'none';
+      elEq.textContent = (d.tasa > 0 && d.total > 0)
+        ? ('≈ ' + RN.calc.formatCUP(d.totalCUP) + ' CUP a tasa ' + d.tasa)
+        : (d.total > 0 ? 'Configura la tasa USD en Ajustes' : '');
+    }
+  } else {
+    if (lbl) lbl.innerHTML = 'Costo unitario (CUP) *';
+    if (elTot) elTot.value = d.total > 0 ? RN.calc.formatCUP(d.total) : '';
+    if (elEq) { elEq.style.display = 'none'; elEq.textContent = ''; }
+  }
+  RN.inventario._syncPagoSegunCosto();
+  if (RN.moneda && RN.moneda.recalcBloquePago) {
+    // El bloque de pago valida cobertura en CUP-equivalente
+    RN.moneda.recalcBloquePago('lot-pago');
+  }
   RN.inventario._actualizarAvisoCaja();
 };
 
-/** Muestra saldos de caja y aviso si no alcanza (propuesta mixto). */
+/**
+ * Avisos de caja. Compra en USD: solo dólares; si no alcanzan, aviso claro (sin mixto).
+ */
 RN.inventario._actualizarAvisoCaja = function () {
   var box = document.getElementById('lot-caja-aviso');
   if (!box) return;
@@ -43,21 +117,48 @@ RN.inventario._actualizarAvisoCaja = function () {
     box.style.display = 'block';
     return;
   }
-  var cant = parseFloat((document.getElementById('lot-cant') || {}).value) || 0;
-  var costoU = parseFloat((document.getElementById('lot-costo-u') || {}).value) || 0;
-  var total = +(cant * costoU).toFixed(2);
-  var s = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0, tasa: RN.moneda.tasa() };
-  var pago = RN.moneda.leerBloquePago('lot-pago', total);
+  var d = RN.inventario._datosCostoLote();
+  var s = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0, tasa: 0 };
   var html = '<div class="muted" style="font-size:12px;margin-bottom:6px">En caja ahora: <strong>' +
     RN.calc.formatCUP(s.cup || 0) + '</strong> CUP · <strong>$' + (+(s.usd || 0)).toFixed(2) + '</strong> USD</div>';
-  if (total <= 0) {
+
+  if (d.total <= 0) {
     box.innerHTML = html;
     box.style.display = 'block';
     return;
   }
-  var falta = +(total - (pago.totalRecibidoCUP || 0)).toFixed(2);
+
+  // —— Compra en USD: solo se puede pagar con USD físico ——
+  if (d.mon === 'USD') {
+    if (!(d.tasa > 0)) {
+      html += '<div style="font-size:13px;color:var(--danger);font-weight:600">⚠️ Configura la tasa USD en Ajustes antes de comprar en dólares.</div>';
+      box.innerHTML = html;
+      box.style.display = 'block';
+      return;
+    }
+    var usdDisp = +(s.usd || 0);
+    var usdNec = d.totalUSD;
+    if (usdDisp + 0.01 < usdNec) {
+      html += '<div style="font-size:13px;color:var(--danger);font-weight:600;margin-top:4px">' +
+        '⚠️ No alcanza el USD en caja. Necesitas <strong>$' + usdNec.toFixed(2) +
+        '</strong> y solo hay <strong>$' + usdDisp.toFixed(2) +
+        '</strong>. Deposita dólares o marca la compra a crédito.</div>';
+      html += '<div class="muted" style="font-size:12px;margin-top:4px">Las compras en USD se pagan solo en USD (no se completa con CUP).</div>';
+    } else {
+      html += '<div style="font-size:12px;color:var(--success)">✓ Hay $' + usdDisp.toFixed(2) +
+        ' USD en caja. Al guardar saldrán <strong>$' + usdNec.toFixed(2) +
+        '</strong> (inversión en material).</div>';
+    }
+    box.innerHTML = html;
+    box.style.display = 'block';
+    return;
+  }
+
+  // —— Compra en CUP: permite mixto como antes ——
+  var pago = RN.moneda.leerBloquePago('lot-pago', d.totalCUP);
+  var falta = +(d.totalCUP - (pago.totalRecibidoCUP || 0)).toFixed(2);
   if (falta > 0.01) {
-    var tasa = pago.tasaUsd || RN.moneda.tasa() || 0;
+    var tasa = pago.tasaUsd || d.tasa || 0;
     html += '<div style="font-size:12px;color:var(--amber)">Falta cubrir ' + RN.calc.formatCUP(falta);
     if (tasa > 0) {
       html += ' · ≈ $' + (falta / tasa).toFixed(2) + ' USD a tasa ' + tasa;
@@ -65,8 +166,7 @@ RN.inventario._actualizarAvisoCaja = function () {
     }
     html += '</div>';
   }
-  // Validación física
-  var val = RN.inventario._validarSalidaCaja(pago, total);
+  var val = RN.inventario._validarSalidaCaja(pago, d.totalCUP);
   if (!val.ok && val.motivo) {
     html += '<div style="font-size:12px;color:var(--danger);margin-top:4px">' + RN.render.esc(val.motivo) + '</div>';
     if (val.sugerencia) {
@@ -74,23 +174,47 @@ RN.inventario._actualizarAvisoCaja = function () {
         ' <button type="button" class="btn sm primary" onclick="RN.inventario.completarConOtraMoneda()">Aplicar sugerencia</button></div>';
     }
   } else if (falta <= 0.01) {
-    html += '<div style="font-size:12px;color:var(--success)">✓ Pago cubierto; al guardar <strong>sale de caja</strong>.</div>';
+    html += '<div style="font-size:12px;color:var(--success)">✓ Pago cubierto; al guardar <strong>sale de caja</strong> (inversión en material).</div>';
   }
   box.innerHTML = html;
   box.style.display = 'block';
 };
 
 /**
- * Valida que haya billetes suficientes de cada moneda para la salida.
- * @returns {{ok:boolean, motivo:string, sugerencia:string, faltaCUP:number, sugerir:string}}
+ * Valida billetes. Si opts.soloUSD, exige que el USD físico cubra totalUSD
+ * y no sugiere completar con CUP.
  */
-RN.inventario._validarSalidaCaja = function (pago, totalCUP) {
+RN.inventario._validarSalidaCaja = function (pago, totalCUP, opts) {
+  opts = opts || {};
   pago = pago || {};
   var usd = +(pago.montoUSD || 0);
   var cup = +(pago.montoCUP || 0);
   var s = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0, tasa: 0 };
-  var tasa = pago.tasaUsd || s.tasa || RN.moneda.tasa() || 0;
+  var tasa = pago.tasaUsd || s.tasa || (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || 0;
   var res = { ok: true, motivo: '', sugerencia: '', faltaCUP: 0, sugerir: '' };
+
+  if (opts.soloUSD) {
+    var nec = +(opts.totalUSD || 0);
+    if (!(nec > 0)) {
+      res.ok = false;
+      res.motivo = 'Indica el costo en USD de la compra.';
+      return res;
+    }
+    if ((s.usd || 0) + 0.01 < nec) {
+      res.ok = false;
+      res.motivo = 'No alcanza el USD en caja. Necesitas $' + nec.toFixed(2) +
+        ' USD y solo hay $' + (+(s.usd || 0)).toFixed(2) +
+        ' USD. Deposita dólares o marca a crédito. Las compras en USD no se pagan con CUP.';
+      return res;
+    }
+    // Forzar que el pago declarado sea en USD y cubra
+    if (usd + 0.01 < nec) {
+      res.ok = false;
+      res.motivo = 'El pago en USD ($' + usd.toFixed(2) + ') no cubre los $' + nec.toFixed(2) + ' del costo.';
+      return res;
+    }
+    return res;
+  }
 
   if (usd > (s.usd || 0) + 0.01) {
     res.ok = false;
@@ -121,38 +245,28 @@ RN.inventario._validarSalidaCaja = function (pago, totalCUP) {
     }
     return res;
   }
-  // Cubrir total en equivalente
-  var pagado = +(pago.totalRecibidoCUP || 0);
-  if (totalCUP > 0 && pagado + 0.01 < totalCUP) {
-    res.ok = false;
-    res.motivo = 'El pago no cubre el total de la compra (' + RN.calc.formatCUP(totalCUP) + ').';
-    res.faltaCUP = +(totalCUP - pagado).toFixed(2);
-    res.sugerir = (cup >= (s.cup || 0) - 0.01 && tasa > 0) ? 'USD' : 'CUP';
-  }
   return res;
 };
 
-/** Pasa a MIXTO y precarga la otra moneda con el faltante. */
+/** Pasa a MIXTO (solo compras en CUP). */
 RN.inventario.completarConOtraMoneda = function () {
-  var cant = parseFloat((document.getElementById('lot-cant') || {}).value) || 0;
-  var costoU = parseFloat((document.getElementById('lot-costo-u') || {}).value) || 0;
-  var total = +(cant * costoU).toFixed(2);
-  var s = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0, tasa: 0 };
+  if (RN.inventario._costoMoneda() === 'USD') {
+    RN.notifyUI.toast('Las compras en USD solo se pagan en USD. Deposita dólares o marca a crédito.', 'warn');
+    return;
+  }
+  var d = RN.inventario._datosCostoLote();
+  var total = d.totalCUP;
+  var s = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0 };
   var tasa = RN.moneda.tasa() || 0;
   if (tasa <= 0) {
     RN.notifyUI.toast('Configura la tasa USD en Ajustes para completar en la otra moneda', 'warn');
     return;
   }
+  var mixBtn = document.querySelector('#lot-pago-moneda-toggle [data-moneda="MIXTO"]');
+  if (mixBtn) mixBtn.click();
+  RN.moneda.setMonedaBloque('lot-pago', 'MIXTO');
   var cupDisp = Math.max(0, +(s.cup || 0));
   var usdDisp = Math.max(0, +(s.usd || 0));
-
-  // Mostrar botón Mixto del bloque (viene oculto por defecto)
-  var mixBtn = document.querySelector('#lot-pago-moneda-toggle [data-moneda="MIXTO"]');
-  if (mixBtn) mixBtn.style.display = '';
-
-  RN.moneda.setMonedaBloque('lot-pago', 'MIXTO');
-
-  // Estrategia: usar CUP disponible hasta el total; resto en USD
   var cupUsar = Math.min(cupDisp, total);
   var falta = +(total - cupUsar).toFixed(2);
   var usdUsar = falta > 0 ? +(falta / tasa).toFixed(2) : 0;
@@ -160,11 +274,10 @@ RN.inventario.completarConOtraMoneda = function () {
     usdUsar = Math.min(usdDisp, +(total / tasa).toFixed(2));
     cupUsar = Math.min(cupDisp, Math.max(0, +(total - usdUsar * tasa).toFixed(2)));
   }
-
   var cupIn = document.getElementById('lot-pago-monto-cup');
   var usdIn = document.getElementById('lot-pago-monto-usd');
-  if (cupIn) cupIn.value = cupUsar > 0 ? cupUsar : '';
-  if (usdIn) usdIn.value = usdUsar > 0 ? usdUsar : '';
+  if (cupIn) cupIn.value = cupUsar ? cupUsar : '';
+  if (usdIn) usdIn.value = usdUsar ? usdUsar : '';
   RN.moneda.recalcBloquePago('lot-pago');
   RN.inventario._actualizarAvisoCaja();
   RN.notifyUI.toast('Pago mixto según lo disponible en caja', 'info', 4000);
@@ -172,11 +285,9 @@ RN.inventario.completarConOtraMoneda = function () {
 
 /**
  * Abre el modal para comprar un nuevo lote de inventario.
- * Si se pasa `materialExistente`, precarga ese material (flujo "comprar más").
  */
 RN.inventario.abrirNuevoLote = function (materialExistente) {
   var precargarMat = materialExistente || '';
-  var s = RN.calc.saldosMoneda ? RN.calc.saldosMoneda() : { cup: 0, usd: 0 };
   var html = '\
     <div class="modal-header"><h3>Compra de inventario</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>\
     <div class="modal-body">\
@@ -187,64 +298,94 @@ RN.inventario.abrirNuevoLote = function (materialExistente) {
         <div><label>Notas</label><input id="lot-notas" placeholder="proveedor, factura..." spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>\
       </div>\
       <div class="form-row cols-2">\
-        <div><label>Costo unitario (CUP) *</label><input id="lot-costo-u" type="number" step="0.01" min="0" placeholder="0.00" oninput="RN.inventario._recalcCostoLote()"></div>\
-        <div><label>Costo total de la compra</label><input id="lot-costo-tot" readonly placeholder="0.00 CUP" style="font-weight:700"></div>\
+        <div><label>Moneda del costo</label>\
+          <select id="lot-costo-moneda" onchange="RN.inventario._recalcCostoLote()">\
+            <option value="CUP" selected>CUP (pesos)</option>\
+            <option value="USD">USD (dólares)</option>\
+          </select>\
+          <small class="muted" style="display:block;margin-top:4px">Si eliges USD, el pago sale solo de los dólares de caja.</small>\
+        </div>\
+        <div><label id="lot-lbl-costo-u">Costo unitario (CUP) *</label><input id="lot-costo-u" type="number" step="0.01" min="0" placeholder="0.00" oninput="RN.inventario._recalcCostoLote()"></div>\
+      </div>\
+      <div class="form-row cols-2">\
+        <div><label>Costo total de la compra</label><input id="lot-costo-tot" readonly placeholder="—" style="font-weight:700"></div>\
+        <div><div id="lot-costo-eq" class="muted" style="font-size:12px;margin-top:22px;display:none"></div></div>\
       </div>\
       <div class="divider"></div>\
       <label class="flex" style="align-items:center;gap:8px;margin-bottom:10px;font-size:13px">\
         <input type="checkbox" id="lot-a-credito" onchange="RN.inventario._actualizarAvisoCaja()">\
         <span>A crédito (no sale de caja ahora)</span>\
       </label>\
-      <div class="muted" style="font-size:13px;margin-bottom:8px">¿Cómo se paga esta compra? (sale de caja)</div>\
+      <div class="muted" style="font-size:13px;margin-bottom:8px">¿Cómo se paga esta compra? (sale de caja como inversión en material)</div>\
       ' + RN.moneda.bloquePagoHTML('lot-pago', { titulo: 'Pago de la compra', autoCUP: true }) + '\
       <div id="lot-caja-aviso" class="cobro-desglose" style="margin-top:10px;display:none"></div>\
     </div>\
-    <div class="modal-footer"><button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>\
+    <div class="modal-footer">\
+      <button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>\
       <button class="btn primary" onclick="RN.inventario.guardarLote()">Guardar compra</button></div>';
-  RN.uiComponents.modal(html);
-  RN.inventario._recalcCostoLote();
+
+  RN.uiComponents.modal(html, { lg: true });
   RN.moneda.configBloquePago('lot-pago', function () {
-    var cant = parseFloat((document.getElementById('lot-cant') || {}).value) || 0;
-    var costoU = parseFloat((document.getElementById('lot-costo-u') || {}).value) || 0;
-    return +(cant * costoU).toFixed(2);
-  }, true);
-  // Recalcular aviso al cambiar montos
-  ['lot-pago-monto-cup', 'lot-pago-monto-usd'].forEach(function (id) {
-    var el = document.getElementById(id);
-    if (el) {
-      el.addEventListener('input', function () { RN.inventario._actualizarAvisoCaja(); });
-    }
+    var d = RN.inventario._datosCostoLote();
+    return d.totalCUP;
   });
-  var mixBtn = document.querySelector('#lot-pago-moneda-toggle [data-moneda="MIXTO"]');
-  if (mixBtn) mixBtn.style.display = '';
-  RN.moneda.recalcBloquePago('lot-pago');
-  RN.inventario._actualizarAvisoCaja();
+  RN.inventario._recalcCostoLote();
 };
 
 RN.inventario.guardarLote = function () {
   const material = document.getElementById('lot-material').value.trim();
   if (!material) { RN.notifyUI.toast('El material es obligatorio', 'error'); return; }
-  const cant = parseInt(document.getElementById('lot-cant').value, 10) || 0;
-  if (cant <= 0) { RN.notifyUI.toast('La cantidad debe ser mayor que 0', 'error'); return; }
-  const costoU = parseFloat(document.getElementById('lot-costo-u').value) || 0;
-  if (costoU < 0) { RN.notifyUI.toast('El costo unitario no es válido', 'error'); return; }
-  const costoTotal = +(cant * costoU).toFixed(2);
+  var d = RN.inventario._datosCostoLote();
+  if (d.cant <= 0) { RN.notifyUI.toast('La cantidad debe ser mayor que 0', 'error'); return; }
+  if (d.costoU < 0) { RN.notifyUI.toast('El costo unitario no es válido', 'error'); return; }
+  if (d.mon === 'USD' && !(d.tasa > 0)) {
+    RN.notifyUI.toast('Configura la tasa USD en Ajustes antes de comprar en dólares', 'error');
+    return;
+  }
   const aCredito = !!(document.getElementById('lot-a-credito') || {}).checked;
+  const costoTotal = d.totalCUP;
+  const costoU = d.costoUCUP;
 
+  // Pago: si costo USD, forzar lectura como USD
+  if (d.mon === 'USD' && !aCredito) {
+    if (RN.moneda && RN.moneda.setMonedaBloque) RN.moneda.setMonedaBloque('lot-pago', 'USD');
+  }
   const pago = RN.moneda.leerBloquePago('lot-pago', costoTotal);
 
-  // Pagado desde caja: validar cobertura y saldos físicos
-  if (!aCredito && costoTotal > 0) {
-    if (!(pago.totalRecibidoCUP > 0) || (pago.totalRecibidoCUP + 0.01 < costoTotal)) {
-      RN.inventario._actualizarAvisoCaja();
-      RN.notifyUI.toast('El pago no cubre el total. Completa con la otra moneda o marca a crédito.', 'warn');
-      return;
-    }
-    var val = RN.inventario._validarSalidaCaja(pago, costoTotal);
-    if (!val.ok) {
-      RN.inventario._actualizarAvisoCaja();
-      RN.notifyUI.toast(val.motivo || 'No hay saldo suficiente en caja', 'warn');
-      return;
+  if (!aCredito && d.total > 0) {
+    if (d.mon === 'USD') {
+      // Asegurar montos USD del pago
+      var usdPago = +(pago.montoUSD || 0);
+      if (usdPago < d.totalUSD - 0.01) {
+        // Auto-rellenar si el bloque quedó vacío
+        var usdIn = document.getElementById('lot-pago-monto-usd');
+        if (usdIn && !usdIn.value) {
+          usdIn.value = d.totalUSD;
+          RN.moneda.recalcBloquePago('lot-pago');
+          pago.montoUSD = d.totalUSD;
+          pago.montoCUPDesdeUSD = costoTotal;
+          pago.totalRecibidoCUP = costoTotal;
+          pago.moneda = 'USD';
+        }
+      }
+      var valUsd = RN.inventario._validarSalidaCaja(pago, costoTotal, { soloUSD: true, totalUSD: d.totalUSD });
+      if (!valUsd.ok) {
+        RN.inventario._actualizarAvisoCaja();
+        RN.notifyUI.toast(valUsd.motivo || 'No hay USD suficiente en caja', 'error', 6000);
+        return;
+      }
+    } else {
+      if (!(pago.totalRecibidoCUP > 0) || (pago.totalRecibidoCUP + 0.01 < costoTotal)) {
+        RN.inventario._actualizarAvisoCaja();
+        RN.notifyUI.toast('El pago no cubre el total. Completa con la otra moneda o marca a crédito.', 'warn');
+        return;
+      }
+      var val = RN.inventario._validarSalidaCaja(pago, costoTotal);
+      if (!val.ok) {
+        RN.inventario._actualizarAvisoCaja();
+        RN.notifyUI.toast(val.motivo || 'No hay saldo suficiente en caja', 'warn');
+        return;
+      }
     }
   }
 
@@ -252,37 +393,41 @@ RN.inventario.guardarLote = function () {
   var lote = {
     id: loteId,
     material: material,
-    cantidad: cant,
+    cantidad: d.cant,
     costoUnitario: costoU,
     costoTotal: costoTotal,
+    costoMoneda: d.mon,
+    costoUnitarioUSD: d.mon === 'USD' ? d.costoUUSD : (d.costoUUSD || 0),
+    costoTotalUSD: d.mon === 'USD' ? d.totalUSD : (d.totalUSD || 0),
     notas: (document.getElementById('lot-notas') || {}).value.trim(),
     fecha: new Date().toISOString(),
-    monedaPago: aCredito ? 'CREDITO' : (pago.moneda || 'CUP'),
-    montoPagoUSD: aCredito ? 0 : (pago.montoUSD || 0),
-    montoPagoCUP: aCredito ? 0 : (pago.montoCUP || 0),
-    montoPagoCUPDesdeUSD: aCredito ? 0 : (pago.montoCUPDesdeUSD || 0),
-    totalPagoCUP: aCredito ? 0 : (pago.totalRecibidoCUP || 0),
-    tasaUsdCompra: pago.tasaUsd || 0,
+    monedaPago: aCredito ? 'CREDITO' : (d.mon === 'USD' ? 'USD' : (pago.moneda || 'CUP')),
+    montoPagoUSD: aCredito ? 0 : (d.mon === 'USD' ? d.totalUSD : (pago.montoUSD || 0)),
+    montoPagoCUP: aCredito ? 0 : (d.mon === 'USD' ? 0 : (pago.montoCUP || 0)),
+    montoPagoCUPDesdeUSD: aCredito ? 0 : (d.mon === 'USD' ? costoTotal : (pago.montoCUPDesdeUSD || 0)),
+    totalPagoCUP: aCredito ? 0 : costoTotal,
+    tasaUsdCompra: d.tasa || 0,
     aCredito: !!aCredito
   };
 
-  // v5.55.32: si se paga ahora, SIEMPRE registrar gasto → rebaja caja
+  // Siempre gasto de inversión en material si se paga ahora
   if (!aCredito && costoTotal > 0) {
     RN.state.gastos = RN.state.gastos || [];
     var fecha = new Date().toISOString().slice(0, 10);
     var gastoId = RN.calc.uid('gasto');
     RN.state.gastos.push({
       id: gastoId,
-      concepto: 'Compra inventario — ' + material,
+      concepto: 'Inversión material — ' + material,
       monto: costoTotal,
-      categoria: 'Inventario / material',
+      categoria: 'Inventario / inversión material',
       fecha: fecha + 'T00:00:00',
       mes: fecha.slice(0, 7),
-      moneda: pago.moneda || 'CUP',
-      montoPagadoUSD: pago.montoUSD || 0,
-      montoPagadoCUP: pago.montoCUP || 0,
-      tasaUsd: pago.tasaUsd || 0,
+      moneda: d.mon === 'USD' ? 'USD' : (pago.moneda || 'CUP'),
+      montoPagadoUSD: d.mon === 'USD' ? d.totalUSD : (pago.montoUSD || 0),
+      montoPagadoCUP: d.mon === 'USD' ? 0 : (pago.montoCUP || 0),
+      tasaUsd: d.tasa || 0,
       esCompraInventario: true,
+      esInversionMaterial: true,
       loteInventarioId: loteId
     });
     lote.gastoCompraId = gastoId;
@@ -298,8 +443,10 @@ RN.inventario.guardarLote = function () {
   if (RN.render && RN.render.dashboard) RN.render.dashboard();
 
   var msg = aCredito
-    ? ('Lote a crédito: ' + cant + ' × ' + material + ' (sin salida de caja)')
-    : ('Compra: ' + cant + ' × ' + material + ' · ' + RN.calc.formatCUP(costoTotal) + ' salió de caja');
+    ? ('Lote a crédito: ' + d.cant + ' × ' + material + ' (sin salida de caja)')
+    : (d.mon === 'USD'
+      ? ('Compra USD: ' + d.cant + ' × ' + material + ' · $' + d.totalUSD.toFixed(2) + ' salió de caja')
+      : ('Compra: ' + d.cant + ' × ' + material + ' · ' + RN.calc.formatCUP(costoTotal) + ' salió de caja'));
   RN.notifyUI.toast(msg, 'success');
 };
 
@@ -353,13 +500,25 @@ RN.inventario.asignar = function (material) {
   var disp = RN.inventarioModel.stockDisponibleProducto(material);
   if (disp <= 0) { RN.notifyUI.toast('No hay unidades disponibles de este producto', 'warn'); return; }
   var costoVigente = RN.inventarioModel.costoVigentePorNombre(material);
-  var precioSugerido = RN.inventarioModel.precioVentaSugerido(costoVigente);
+  var costoUsd = RN.inventarioModel.costoVigenteUSDPorNombre ? RN.inventarioModel.costoVigenteUSDPorNombre(material) : 0;
   var pct = RN.inventarioModel.pctGanancia();
+  var tasa = (RN.moneda && RN.moneda.tasa) ? (RN.moneda.tasa() || 0) : 0;
+  var precioSugeridoCUP = RN.inventarioModel.precioVentaSugerido(costoVigente);
+  var precioSugeridoUSD = (costoUsd > 0 && RN.inventarioModel.precioVentaSugeridoUSD)
+    ? RN.inventarioModel.precioVentaSugeridoUSD(costoUsd) : 0;
+  // Si el lote se compró en USD, el campo de venta se prellena con el equivalente CUP del sugerido USD
+  var precioSugerido = precioSugeridoCUP;
+  var notaUsd = '';
+  if (precioSugeridoUSD > 0) {
+    precioSugerido = tasa > 0 ? +(precioSugeridoUSD * tasa).toFixed(2) : precioSugeridoCUP;
+    notaUsd = ' · Sugerido <strong>$' + precioSugeridoUSD.toFixed(2) + ' USD</strong>' +
+      (tasa > 0 ? (' ≈ ' + RN.calc.formatCUP(precioSugerido) + ' CUP') : '');
+  }
   var cliOpts = RN.state.clients.map(c => '<option value="' + c.id + '">' + RN.render.esc(c.nombre) + '</option>').join('');
   var html = '\
     <div class="modal-header"><h3>Asignar / vender inventario</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>\
     <div class="modal-body">\
-      <p class="muted mb-16">Producto: <strong>' + RN.render.esc(material) + '</strong> · Disponible: <strong>' + disp + '</strong> · Costo vigente (FIFO): <strong>' + RN.calc.formatCUP(costoVigente) + '/ud</strong></p>\
+      <p class="muted mb-16">Producto: <strong>' + RN.render.esc(material) + '</strong> · Disponible: <strong>' + disp + '</strong> · Costo vigente (FIFO): <strong>' + RN.calc.formatCUP(costoVigente) + '/ud</strong>' + (costoUsd > 0 ? ' · <strong>$' + costoUsd.toFixed(2) + ' USD/ud</strong>' : '') + (notaUsd || '') + '</p>\
       <input type="hidden" id="asig-material" value="' + RN.render.esc(material) + '">\
       <div class="form-row cols-2">\
         <div><label>Cliente *</label><select id="asig-cli"><option value="">— elegir —</option>' + cliOpts + '</select></div>\

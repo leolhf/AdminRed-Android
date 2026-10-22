@@ -2,6 +2,14 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.33 — Inventario: compras USD estrictas
+
+- Selector **moneda del costo** (CUP / USD) en compra de inventario.
+- Si el costo es **USD**, el pago **solo sale de los dólares de caja** (sin completar con CUP).
+- Si **no alcanza el USD**, se notifica con claridad y se bloquea el guardado (opción: crédito o depositar dólares).
+- Gasto registrado como **Inversión material**.
+- Al vender un lote comprado en USD: precio sugerido con **\$USD** y ≈ CUP a la tasa actual.
+
 ## v5.55.32 — Compra inventario → caja
 
 - Compra pagada **siempre registra gasto** y rebaja caja (bug del checkbox corregido).
