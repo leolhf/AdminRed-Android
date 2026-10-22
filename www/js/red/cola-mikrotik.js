@@ -30,7 +30,12 @@ RN.cola.DEFECTOS = {
   colaPadre: 'LEO',
   colaPadreMaxLimit: 44,
   reservaMegas: 1,
-  colaAdminPrioridad: 1
+  colaAdminPrioridad: 1,
+  redPrefijo: '192.168.20.',
+  redIpInicio: 2,
+  redIpFin: 250,
+  ipsIgnoradas: ['192.168.20.1'],
+  colaPadresExtra: []
 };
 
 /** Copia profunda de las reglas por defecto. */
@@ -48,7 +53,97 @@ RN.cola.asegurarConfig = function (cfg) {
   }
   if (!(+cfg.colaAdminPrioridad >= 1)) cfg.colaAdminPrioridad = RN.cola.DEFECTOS.colaAdminPrioridad;
   if (!Array.isArray(cfg.colaReglas) || !cfg.colaReglas.length) cfg.colaReglas = RN.cola.reglasDefecto();
+  if (!cfg.redPrefijo || typeof cfg.redPrefijo !== 'string') cfg.redPrefijo = RN.cola.DEFECTOS.redPrefijo;
+  if (!(+cfg.redIpInicio >= 1)) cfg.redIpInicio = RN.cola.DEFECTOS.redIpInicio;
+  if (!(+cfg.redIpFin >= 1)) cfg.redIpFin = RN.cola.DEFECTOS.redIpFin;
+  if (!Array.isArray(cfg.ipsIgnoradas)) cfg.ipsIgnoradas = RN.cola.DEFECTOS.ipsIgnoradas.slice();
+  if (!Array.isArray(cfg.colaPadresExtra)) cfg.colaPadresExtra = [];
   return cfg;
+};
+
+
+/* ============================================================
+ * v5.55.35 — IP libre, IPs ignoradas y cola padre por cliente
+ * ============================================================ */
+
+RN.cola.redPrefijo = function () {
+  var cfg = RN.cola.asegurarConfig(RN.state.config);
+  var p = String(cfg.redPrefijo || '192.168.20.').trim();
+  if (p && p.charAt(p.length - 1) !== '.') p += '.';
+  return p;
+};
+
+RN.cola.ipsIgnoradasSet = function () {
+  var cfg = RN.cola.asegurarConfig(RN.state.config);
+  var pref = RN.cola.redPrefijo();
+  var set = {};
+  (cfg.ipsIgnoradas || []).forEach(function (raw) {
+    var s = String(raw || '').trim();
+    if (!s) return;
+    if (/^\d{1,3}$/.test(s)) s = pref + s;
+    if (RN.cola.ipValida(s)) set[s] = true;
+  });
+  return set;
+};
+
+RN.cola.ipsOcupadas = function (opts) {
+  opts = opts || {};
+  var set = {};
+  (RN.state.clients || []).forEach(function (c) {
+    if (!opts.todos && c.activo === false) return;
+    var ip = String(c.ip || '').trim();
+    if (RN.cola.ipValida(ip)) set[ip] = c.id || true;
+  });
+  return set;
+};
+
+RN.cola.siguienteIpLibre = function (excluirId) {
+  var cfg = RN.cola.asegurarConfig(RN.state.config);
+  var pref = RN.cola.redPrefijo();
+  var ini = Math.max(1, Math.min(254, +cfg.redIpInicio || 2));
+  var fin = Math.max(ini, Math.min(254, +cfg.redIpFin || 250));
+  var ignoradas = RN.cola.ipsIgnoradasSet();
+  var ocupadas = RN.cola.ipsOcupadas({ todos: true });
+  if (excluirId) {
+    var yo = (RN.state.clients || []).find(function (c) { return c.id === excluirId; });
+    if (yo && yo.ip && ocupadas[String(yo.ip).trim()] === excluirId) delete ocupadas[String(yo.ip).trim()];
+  }
+  for (var n = ini; n <= fin; n++) {
+    var ip = pref + n;
+    if (ignoradas[ip] || ocupadas[ip]) continue;
+    return ip;
+  }
+  return '';
+};
+
+RN.cola.ipLibre = function (ip, excluirId) {
+  ip = String(ip || '').trim();
+  if (!RN.cola.ipValida(ip)) return false;
+  if (RN.cola.ipsIgnoradasSet()[ip]) return false;
+  var ocupadas = RN.cola.ipsOcupadas({ todos: true });
+  if (excluirId && ocupadas[ip] === excluirId) return true;
+  return !ocupadas[ip];
+};
+
+RN.cola.padresDisponibles = function () {
+  var cfg = RN.cola.asegurarConfig(RN.state.config);
+  var lista = [], visto = {};
+  function add(n) {
+    n = RN.cola.nombreSeguro(n);
+    if (!n || visto[n]) return;
+    visto[n] = true;
+    lista.push(n);
+  }
+  add(cfg.colaPadre || 'LEO');
+  (cfg.colaPadresExtra || []).forEach(add);
+  (RN.state.clients || []).forEach(function (c) { if (c.colaPadre) add(c.colaPadre); });
+  return lista;
+};
+
+RN.cola.padreDe = function (cliente) {
+  var cfg = RN.cola.asegurarConfig(RN.state.config);
+  if (cliente && cliente.colaPadre) return RN.cola.nombreSeguro(cliente.colaPadre);
+  return RN.cola.nombreSeguro(cfg.colaPadre || RN.cola.DEFECTOS.colaPadre);
 };
 
 /** Reglas válidas ordenadas de mayor a menor minMegas. */
@@ -204,7 +299,7 @@ RN.cola.comando = function (cliente, opts) {
   if (a.d.falta.indexOf('megas') !== -1) return { ok: false, comando: '', error: 'El cliente no tiene megas definidos', estilo: estilo };
 
   var target = ip + '/32';
-  var padre = RN.cola.nombreSeguro(cfg.colaPadre || RN.cola.DEFECTOS.colaPadre);
+  var padre = RN.cola.padreDe(cliente);
   var nombre = RN.cola.nombreSeguro(cliente.nombre);
   var partesAdd = [a.limitAt];
   if (a.maxLimit) partesAdd.push(a.maxLimit);
@@ -566,7 +661,22 @@ RN.cola.abrirAjustes = function () {
     '<div><label>Max Limit del padre (Mbps)</label><input id="cola-padre-max" type="number" min="1" step="1" value="' + cfg.colaPadreMaxLimit + '"></div>' +
     '<div><label>Reserva (Mbps)</label><input id="cola-reserva" type="number" min="0" step="0.5" value="' + cfg.reservaMegas + '"></div>' +
     '<div><label>Prioridad de administradores</label><input id="cola-prio-admin" type="number" min="1" max="8" step="1" value="' + cfg.colaAdminPrioridad + '"></div></div>';
-  h += '<p class="muted" style="font-size:12px;margin:6px 0 10px">Tope de capacidad = paquete del proveedor \u2212 reserva. Las reglas se aplican de arriba hacia abajo por m\u00ednimo de megas. El Limit At se redondea a m\u00faltiplos de 50k.</p>';
+    h += '<div class="divider"></div>';
+  h += '<h4 style="margin:8px 0 6px;font-size:13px">Red local (IP libre)</h4>';
+  h += '<div class="form-row cols-3">' +
+    '<div><label>Prefijo de red</label><input id="cola-red-prefijo" value="' + RN.render.esc(cfg.redPrefijo || '192.168.20.') + '" placeholder="192.168.20." spellcheck="false" autocapitalize="off"></div>' +
+    '<div><label>Desde (último octeto)</label><input id="cola-red-ini" type="number" min="1" max="254" value="' + (cfg.redIpInicio || 2) + '"></div>' +
+    '<div><label>Hasta</label><input id="cola-red-fin" type="number" min="1" max="254" value="' + (cfg.redIpFin || 250) + '"></div>' +
+    '</div>';
+  h += '<div class="form-row"><div><label>IPs ignoradas (no sugerir)</label>' +
+    '<textarea id="cola-ips-ignoradas" rows="2" placeholder="192.168.20.1\n192.168.20.254" spellcheck="false" autocapitalize="off">' +
+    RN.render.esc((cfg.ipsIgnoradas || []).join('\n')) + '</textarea>' +
+    '<small class="muted">Una por línea. Gateway, router, etc.</small></div></div>';
+  h += '<div class="form-row"><div><label>Otras colas padre (opcionales)</label>' +
+    '<input id="cola-padres-extra" value="' + RN.render.esc((cfg.colaPadresExtra || []).join(', ')) +
+    '" placeholder="LEO CASA, OTRO" spellcheck="false" autocapitalize="off">' +
+    '<small class="muted">Separadas por coma. Se suman a la cola padre por defecto.</small></div></div>';
+  h += h += '<p class="muted" style="font-size:12px;margin:6px 0 10px">Tope de capacidad = paquete del proveedor \u2212 reserva. Las reglas se aplican de arriba hacia abajo por m\u00ednimo de megas. El Limit At se redondea a m\u00faltiplos de 50k.</p>';
   h += '<table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Desde (M)</th><th style="text-align:left">% del plan</th><th style="text-align:left">Prioridad</th></tr></thead><tbody id="cola-reglas">';
   reglas.forEach(function (r, i) {
     h += '<tr><td><input type="number" min="0" step="1" class="cola-r-min" value="' + r.minMegas + '"></td>' +
@@ -611,9 +721,32 @@ RN.cola.guardarAjustes = function () {
   }
   if (!vistos[0]) { RN.notifyUI.toast('Debe haber una regla desde 0M para que ning\u00fan plan quede sin regla', 'error'); return; }
   reglas.sort(function (a, b) { return b.minMegas - a.minMegas; });
+  var prefijo = ((document.getElementById('cola-red-prefijo') || {}).value || '192.168.20.').trim();
+  if (prefijo && prefijo.charAt(prefijo.length - 1) !== '.') prefijo += '.';
+  var ipIni = parseInt((document.getElementById('cola-red-ini') || {}).value, 10) || 2;
+  var ipFin = parseInt((document.getElementById('cola-red-fin') || {}).value, 10) || 250;
+  var ignRaw = ((document.getElementById('cola-ips-ignoradas') || {}).value || '').split(/[\n,;]+/);
+  var ipsIgn = [];
+  ignRaw.forEach(function (s) {
+    s = String(s || '').trim();
+    if (!s) return;
+    if (/^\d{1,3}$/.test(s)) s = prefijo + s;
+    if (RN.cola.ipValida(s)) ipsIgn.push(s);
+  });
+  var extraRaw = ((document.getElementById('cola-padres-extra') || {}).value || '').split(/[,;]+/);
+  var extras = [];
+  extraRaw.forEach(function (s) {
+    s = RN.cola.nombreSeguro(s);
+    if (s && s !== padre && extras.indexOf(s) < 0) extras.push(s);
+  });
   var cfg = RN.state.config;
   cfg.colaPadre = padre; cfg.colaPadreMaxLimit = padreMax; cfg.reservaMegas = reserva;
   cfg.colaAdminPrioridad = prioAdmin; cfg.colaReglas = reglas;
+  cfg.redPrefijo = prefijo;
+  cfg.redIpInicio = ipIni;
+  cfg.redIpFin = ipFin;
+  cfg.ipsIgnoradas = ipsIgn;
+  cfg.colaPadresExtra = extras;
   RN.config.persistir();
   RN.storageLocal.guardar();
   RN.uiComponents.cerrarModal();

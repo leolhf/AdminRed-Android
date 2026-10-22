@@ -142,9 +142,13 @@ RN.modalCobro.abrir = function (clienteId) {
 
         <!-- ====== Campo USD (siempre visible si hay tasa) ====== -->
         <div id="cobro-row-usd" style="${tasa ? '' : 'display:none'};margin-bottom:10px">
-          <label>💵 Cantidad en USD <span class="muted" style="font-size:11px">(opcional)</span></label>
-          <input id="cobro-monto-usd" type="number" step="0.01" placeholder="0.00" oninput="RN.modalCobro.onUSDChange()">
+          <label>💵 Cantidad en USD <span class="muted" style="font-size:11px">(sugerido aunque el plan sea en CUP)</span></label>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <input id="cobro-monto-usd" type="number" step="0.01" placeholder="0.00" oninput="RN.modalCobro.onUSDChange()" style="flex:1;min-width:120px">
+            <button type="button" class="btn sm" id="cobro-btn-sugerir-usd" onclick="RN.modalCobro.aplicarSugerenciaUSD()" title="Rellenar con el equivalente del total en USD">Usar sugerido</button>
+          </div>
           <div class="muted" style="font-size:11px;margin-top:2px" id="cobro-usd-conv">↳ Equivale a 0.00 CUP</div>
+          <div class="muted" style="font-size:12px;margin-top:4px" id="cobro-usd-sugerido"></div>
         </div>
 
         <!-- ====== Campo CUP (siempre visible) ====== -->
@@ -248,13 +252,17 @@ RN.modalCobro.setMoneda = function (moneda) {
   var aPagar = RN.modalCobro._totalAPagar();
 
   if (moneda === 'USD') {
-    // Si el CUP tiene exactamente el monto a pagar (valor por defecto/sugerido),
-    // lo limpiamos para que el usuario ingrese USD y el CUP se auto-recalcule.
+    // Si el CUP tiene el monto total sugerido, pasar a sugerencia USD completa
     if (inpCup) {
       var cupVal = parseFloat(inpCup.value) || 0;
       if (Math.abs(cupVal - aPagar) < 0.01) {
-        inpCup.value = '';
+        inpCup.value = '0.00';
         RN.modalCobro._cupIngresado = 0;
+        var usdSug = RN.modalCobro._aUSD(aPagar);
+        if (inpUsd && usdSug > 0 && !(parseFloat(inpUsd.value) > 0)) {
+          inpUsd.value = usdSug.toFixed(2);
+          RN.modalCobro._usdIngresado = usdSug;
+        }
       }
     }
     if (inpUsd) inpUsd.focus();
@@ -460,11 +468,63 @@ RN.modalCobro.recalcularDesdePago = function () {
 /** Muestra la equivalencia en USD del total calculado (modo automático, sin input manual). */
 RN.modalCobro._actualizarEquivalenciaUSD = function (totalCUP) {
   var el = document.getElementById('cobro-total-usd');
-  if (!el) return;
+  var elSug = document.getElementById('cobro-usd-sugerido');
+  var inpUsd = document.getElementById('cobro-monto-usd');
   var tasa = RN.modalCobro._tasa();
-  if (tasa && totalCUP > 0) {
-    el.innerHTML = '<span class="muted" style="font-size:13px">≈ ' + RN.moneda.formatUSD(RN.modalCobro._aUSD(totalCUP)) + '</span>';
+  var usd = (tasa && totalCUP > 0) ? RN.modalCobro._aUSD(totalCUP) : 0;
+  RN.modalCobro._usdSugerido = usd;
+  if (el) {
+    if (usd > 0) {
+      el.innerHTML = '<span style="font-size:13px">≈ <strong>' + RN.moneda.formatUSD(usd) + '</strong>' +
+        ' <span class="muted">a tasa ' + tasa + '</span></span>';
+    } else {
+      el.innerHTML = '';
+    }
   }
+  if (elSug) {
+    if (usd > 0) {
+      elSug.innerHTML = 'Sugerido para cobro completo: <strong>$' + usd.toFixed(2) + ' USD</strong> ' +
+        '<button type="button" class="btn sm primary" style="margin-left:6px" onclick="RN.modalCobro.aplicarSugerenciaUSD()">Aplicar $' + usd.toFixed(2) + '</button>';
+    } else {
+      elSug.innerHTML = '';
+    }
+  }
+  if (inpUsd && usd > 0 && !inpUsd.value) {
+    inpUsd.placeholder = usd.toFixed(2);
+  }
+  var btn = document.getElementById('cobro-btn-sugerir-usd');
+  if (btn && usd > 0) btn.textContent = 'Usar $' + usd.toFixed(2);
+};
+
+/**
+ * v5.55.34 — Rellena el pago con el equivalente USD del total a cobrar (plan en CUP).
+ * Pone el USD sugerido y deja CUP en 0 (pago completo en dólares).
+ */
+RN.modalCobro.aplicarSugerenciaUSD = function () {
+  var tasa = RN.modalCobro._tasa();
+  if (!(tasa > 0)) {
+    RN.notifyUI.toast('Configura la tasa USD en Ajustes', 'warn');
+    return;
+  }
+  var aPagar = RN.modalCobro._totalAPagar();
+  var usd = RN.modalCobro._aUSD(aPagar);
+  if (!(usd > 0)) return;
+  var inpUsd = document.getElementById('cobro-monto-usd');
+  var inpCup = document.getElementById('cobro-monto-cup');
+  if (inpUsd) {
+    inpUsd.value = usd.toFixed(2);
+    RN.modalCobro._usdIngresado = usd;
+  }
+  if (inpCup) {
+    inpCup.value = '0.00';
+    RN.modalCobro._cupIngresado = 0;
+  }
+  RN.modalCobro._moneda = 'USD';
+  document.querySelectorAll('#cobro-moneda-toggle button').forEach(function (b) {
+    b.classList.toggle('primary', b.dataset.moneda === 'USD');
+  });
+  RN.modalCobro.recalcularDesdePago();
+  RN.notifyUI.toast('Pago sugerido: $' + usd.toFixed(2) + ' USD (equivale al total en CUP)', 'info', 3500);
 };
 
 /**

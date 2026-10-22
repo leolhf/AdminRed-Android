@@ -96,6 +96,11 @@ RN.state = {
     colaPadre: 'LEO',
     colaPadreMaxLimit: 44,
     colaAdminPrioridad: 1,
+    redPrefijo: '192.168.20.',
+    redIpInicio: 2,
+    redIpFin: 250,
+    ipsIgnoradas: ['192.168.20.1'],
+    colaPadresExtra: [],
     colaReglas: [
       { minMegas: 8, pct: 45, prioridad: 3 },
       { minMegas: 5, pct: 35, prioridad: 4 },

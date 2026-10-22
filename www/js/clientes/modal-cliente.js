@@ -284,6 +284,7 @@ RN.modalCliente._clienteDesdeForm = function () {
   return {
     nombre: (val('cl-nombre') || '').trim(),
     ip: (val('cl-ip') || '').replace(/[^0-9.]/g, '').trim(),
+    colaPadre: (document.getElementById('cl-cola-padre') && document.getElementById('cl-cola-padre').value) || null,
     planId: planId,
     megas: planId ? 0 : (parseFloat(val('cl-megas')) || 0),
     esAdmin: esAdmin,
@@ -339,7 +340,13 @@ RN.modalCliente.abrir = function (id) {
           </div>
         </div>
         <div><label>Direcci\u00f3n</label><input id="cl-dir" value="${RN.render.esc(c ? c.direccion : '')}" spellcheck="true" autocorrect="on" autocapitalize="sentences"></div>
-        <div><label>IP / Direcci\u00f3n de red <span class="muted" style="font-size:11px">(ej: 192.168.1.10)</span></label><input id="cl-ip" inputmode="decimal" pattern="[0-9.]*" maxlength="15" value="${RN.render.esc(c ? c.ip : '')}" placeholder="Ej: 192.168.1.10" oninput="this.value=this.value.replace(/[^0-9.]/g,'')" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
+        <div><label>IP / Direcci\u00f3n de red <span class="muted" style="font-size:11px">(red local)</span></label>
+          <div style="display:flex;gap:6px;align-items:center">
+            <input id="cl-ip" inputmode="decimal" pattern="[0-9.]*" maxlength="15" value="${RN.render.esc((function(){ if(c&&c.ip) return c.ip; return (RN.cola&&RN.cola.siguienteIpLibre)?(RN.cola.siguienteIpLibre(null)||''):''; })())}" placeholder="Ej: 192.168.20.10" oninput="this.value=this.value.replace(/[^0-9.]/g,'');RN.modalCliente._hintIp()" spellcheck="false" autocorrect="off" autocapitalize="off" style="flex:1">
+            <button type="button" class="btn sm" title="Siguiente IP libre" onclick="RN.modalCliente.usarIpLibre()">Libre</button>
+          </div>
+          <small class="muted" id="cl-ip-hint" style="display:block;margin-top:4px"></small>
+        </div>
         <div><label>Nodo de red <span class="muted" style="font-size:11px">(opcional)</span></label>
           <select id="cl-nodo"><option value="">— Sin asignar —</option>${(RN.nodos && RN.nodos.lista ? RN.nodos.lista() : []).slice().sort(function(a,b){return (a.nombre||'').localeCompare(b.nombre||'','es');}).map(function(n){return '<option value="'+n.id+'"'+(c&&c.nodoId===n.id?' selected':'')+'>'+RN.render.esc(n.nombre)+(n.tipo?' · '+n.tipo:'')+'</option>';}).join('')}</select>
           <span class="muted" style="font-size:11px">Carga por AP/router (100M vs 1G)</span>
@@ -365,12 +372,23 @@ RN.modalCliente.abrir = function (id) {
       <div id="cl-desglose-personalizado" class="cobro-desglose" style="background:var(--bg-alt);padding:10px 12px;border-radius:8px;margin-bottom:12px"></div>
 
       <div class="divider"></div>
-      <h3 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:8px">Cola MikroTik</h3>
+      <h3 style="font-size:13px;text-transform:uppercase;color:var(--text-muted);margin-bottom:4px">Cola MikroTik</h3>
+      <p class="muted" style="font-size:12px;margin:0 0 8px">Parent e IP definen el comando para el RouterBoard.</p>
       <div class="form-row cols-2">
+        <div><label>Cola padre</label>
+          <select id="cl-cola-padre">${(function(){
+            var padres = (RN.cola && RN.cola.padresDisponibles) ? RN.cola.padresDisponibles() : ['LEO'];
+            var actual = (c && c.colaPadre) ? c.colaPadre : ((RN.state.config && RN.state.config.colaPadre) || 'LEO');
+            if (padres.indexOf(actual) < 0) padres = [actual].concat(padres);
+            return padres.map(function(p){
+              return '<option value="' + RN.render.esc(p) + '"' + (p === actual ? ' selected' : '') + '>' + RN.render.esc(p) + '</option>';
+            }).join('');
+          })()}</select>
+        </div>
         <div><label id="cl-lbl-limitat">Limit At manual <span class="muted" style="font-size:11px">(opcional · ej: 2M, 1400k)</span></label>
           <input id="cl-limitat" value="${c && c.limitAtManual > 0 ? RN.cola.formatoVel(c.limitAtManual) : ''}" placeholder="Autom\u00e1tico seg\u00fan el plan" spellcheck="false" autocorrect="off" autocapitalize="off"></div>
       </div>
-      <div id="cl-cola-info" class="cobro-desglose" style="background:var(--bg-alt);padding:10px 12px;border-radius:8px;margin-bottom:8px"></div>
+<div id="cl-cola-info" class="cobro-desglose" style="background:var(--bg-alt);padding:10px 12px;border-radius:8px;margin-bottom:8px"></div>
       <div class="form-row"><button type="button" class="btn sm" onclick="RN.modalCliente.copiarComando()">\ud83d\udccb Copiar comando</button></div>
 
       <div id="cl-bloque-pago">
@@ -448,11 +466,12 @@ RN.modalCliente.abrir = function (id) {
   // v5.50.0: aplicar estado de administrador (si el cliente ya lo es)
   RN.modalCliente.toggleAdmin();
   // v5.50.0: mantener la seccion "Cola MikroTik" al dia con el formulario
-  ['cl-nombre', 'cl-ip', 'cl-plan', 'cl-megas', 'cl-admin', 'cl-limitat'].forEach(function (eid) {
+  ['cl-nombre', 'cl-ip', 'cl-plan', 'cl-megas', 'cl-admin', 'cl-limitat', 'cl-cola-padre'].forEach(function (eid) {
     var el = document.getElementById(eid);
     if (el) { el.addEventListener('input', RN.modalCliente.actualizarCola); el.addEventListener('change', RN.modalCliente.actualizarCola); }
   });
   RN.modalCliente.actualizarCola();
+  if (RN.modalCliente._hintIp) RN.modalCliente._hintIp();
 };
 
 RN.modalCliente.editar = RN.modalCliente.abrir;
@@ -558,12 +577,23 @@ RN.modalCliente.guardar = function () {
   if (esAdmin) data.esAdmin = true;
   // v5.50.0: Limit At manual (kbps); ausente = se calcula por las reglas
   if (limitAtManual > 0) data.limitAtManual = limitAtManual;
+  var padreSel = (document.getElementById('cl-cola-padre') || {}).value || '';
+  var padreDef = (RN.state.config && RN.state.config.colaPadre) || 'LEO';
+  if (padreSel && padreSel !== padreDef) data.colaPadre = padreSel;
+  else delete data.colaPadre;
+
+  // IP duplicada
+  if (ipRaw && RN.cola && RN.cola.ipValida(ipRaw) && RN.cola.ipLibre && !RN.cola.ipLibre(ipRaw, id || null)) {
+    RN.notifyUI.toast('Esa IP ya está asignada a otro cliente', 'error');
+    return;
+  }
 
   if (id) {
     const c = RN.state.clients.find(x => x.id === id);
     Object.assign(c, data);
     if (!esAdmin) delete c.esAdmin;
     if (!(limitAtManual > 0)) delete c.limitAtManual;
+    if (!data.colaPadre) delete c.colaPadre;
   } else {
     data.id = RN.calc.uid('cli');
     data.createdAt = new Date().toISOString();

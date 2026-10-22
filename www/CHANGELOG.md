@@ -2,6 +2,17 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.35 — Red: IP libre y cola padre
+
+- **Ajustes → Cola MikroTik (Reglas):** prefijo de red, rango de octetos, IPs ignoradas, otras colas padre.
+- **Nuevo/editar cliente:** selector de **cola padre**; campo IP con botón **Libre** (siguiente IP disponible).
+- El comando `/queue simple` usa el parent del cliente (o el global).
+- Aviso si la IP está ocupada o en la lista de ignoradas.
+
+## v5.55.34 — Cobros: sugerencia en USD
+
+Aunque el plan del cliente esté en CUP, el modal de cobro muestra el **equivalente en USD** y un botón **Aplicar $X.XX** / **Usar sugerido** para registrar el pago completo en dólares. Al tocar el toggle USD se rellena automáticamente el monto sugerido.
+
 ## v5.55.33 — Inventario: compras USD estrictas
 
 - Selector **moneda del costo** (CUP / USD) en compra de inventario.
