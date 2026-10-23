@@ -25,6 +25,12 @@ RN.panel._kpiHtml = function (kpis) {
 };
 
 /** Clientes que cobran hoy (día de pago = hoy). */
+/**
+ * v5.55.40 — Clientes que PUEDEN pagar hoy: están dentro de su ventana de cobro
+ * (ej. corte 25 → del 21 al 25) y aún no pagaron el mes.
+ * Antes solo se miraba diaPago === hoy; por eso el día 23 salía vacío aunque
+ * el ciclo del 25 ya estuviera abierto.
+ */
 RN.panel._cobranHoy = function () {
   var lista = [];
   try {
@@ -33,10 +39,14 @@ RN.panel._cobranHoy = function () {
     var base = RN.calc.clientesCobrables ? RN.calc.clientesCobrables() : RN.calc.clientesActivos();
     base.forEach(function (c) {
       if (RN.calc.esAdmin && RN.calc.esAdmin(c)) return;
-      var dp = c.diaPago || 1;
-      if (dp !== hoy) return;
       var st = RN.calc.getStatus(c, mes);
-      if (st === 'paid') return;
+      if (st === 'paid' || st === 'admin') return;
+      var dp = c.diaPago || 1;
+      var ven = (RN.ciclos && RN.ciclos.ventanaCobro)
+        ? RN.ciclos.ventanaCobro(dp)
+        : { inicio: dp, fin: dp };
+      // Dentro de la ventana hábil de su corte (inicio … día de pago)
+      if (hoy < ven.inicio || hoy > ven.fin) return;
       lista.push(c);
     });
   } catch (e) {}
@@ -184,11 +194,11 @@ RN.render.dashboard = function () {
   var hero = document.getElementById('panel-hero-hoy');
   if (hero) {
     hero.innerHTML =
-      '<div class="muted" style="font-size:12px;font-weight:600">Hoy · qué hacer</div>' +
+      '<div class="muted" style="font-size:12px;font-weight:600">Hoy · en ventana de cobro</div>' +
       '<div style="font-size:20px;font-weight:800;margin:4px 0">' +
         (cobranHoy.length
-          ? (cobranHoy.length + ' cobran hoy · ' + RN.calc.formatCUP(montoHoy))
-          : 'Nadie con día de pago hoy') +
+          ? (cobranHoy.length + ' pueden pagar · ' + RN.calc.formatCUP(montoHoy))
+          : 'Nadie en ciclo de cobro hoy') +
       '</div>' +
       '<div class="flex wrap" style="gap:8px;margin-top:10px">' +
         '<button type="button" class="btn primary sm" onclick="RN.tabs.ir(\'cobros\')">Ir a Cobros</button>' +
@@ -201,7 +211,7 @@ RN.render.dashboard = function () {
     var cob = { total: 0, pagaron: 0, faltan: 0 };
     try { cob = RN.calc.cobranzaMes(mes) || cob; } catch (e2) {}
     kpiHoy.innerHTML = RN.panel._kpiHtml([
-      { label: 'Cobran hoy', value: String(cobranHoy.length), cls: cobranHoy.length ? 'amber' : 'green', click: 'RN.tabs.ir(\'cobros\')' },
+      { label: 'En ciclo', value: String(cobranHoy.length), cls: cobranHoy.length ? 'amber' : 'green', click: 'RN.tabs.ir(\'cobros\')' },
       { label: 'Pend. mes', value: String(cob.faltan || 0), cls: (cob.faltan || 0) ? 'red' : 'green', click: 'RN.tabs.ir(\'cobros\')' },
       { label: 'Pagaron', value: String(cob.pagaron || 0), cls: 'green' }
     ]);

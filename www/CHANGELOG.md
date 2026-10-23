@@ -2,6 +2,11 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.40 — Panel: ventana de cobro (no solo el día exacto)
+
+- **Hoy · qué hacer** y el KPI **En ciclo** listan clientes **dentro de su ventana** (1–5, 11–15, 21–25) que aún no pagaron.
+- Ejemplo: el día 23 salen los del corte 25 (ventana 21–25), no “nadie”.
+
 ## v5.55.39 — Bloque de pago unificado (USD + CUP)
 
 - Eliminado el selector CUP / USD / Mixto en el bloque estándar de moneda.
