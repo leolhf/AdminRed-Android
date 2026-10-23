@@ -2,6 +2,11 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.41 — WhatsApp: tasa según tipo de plan
+
+- **Plan en CUP**: monto en CUP + equivalente USD con la **tasa actual**.
+- **Plan en USD**: monto en USD + equivalente CUP con la **tasa del mensaje** (fijada al 1.er WhatsApp del mes).
+
 ## v5.55.40 — Panel: ventana de cobro (no solo el día exacto)
 
 - **Hoy · qué hacer** y el KPI **En ciclo** listan clientes **dentro de su ventana** (1–5, 11–15, 21–25) que aún no pagaron.

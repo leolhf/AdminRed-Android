@@ -41,31 +41,46 @@ RN.whatsapp.enviarRecordatorio = function (clienteId) {
   if (esUSD && RN.calc.fijarTasaMensaje(c, mes)) {
     try { RN.storageLocal.guardar(); } catch (e) { /* silencioso */ }
   }
-  // v5.55.36: el monto del servicio se muestra SIEMPRE en CUP y USD
-  const tasaMsg = esUSD
-    ? (RN.calc.infoTasa(c, mes).tasa || RN.moneda.tasa() || 0)
+  // v5.55.41:
+  //  - Plan CUP: conversión con la TASA ACTUAL de la app.
+  //  - Plan USD: se fija la tasa del mensaje (1.ª vez del mes) y se usa esa
+  //    tasa (infoTasa) para convertir a CUP.
+  var infoTasa = esUSD ? RN.calc.infoTasa(c, mes) : null;
+  var tasaMsg = esUSD
+    ? ((infoTasa && infoTasa.tasa) || RN.moneda.tasa() || 0)
     : (RN.moneda.tasa() || 0);
+  var etiquetaTasa = esUSD
+    ? ('tasa del mensaje: 1 USD = ' + tasaMsg + ' CUP')
+    : ('tasa actual: 1 USD = ' + tasaMsg + ' CUP');
+  var dualOpts = { primario: esUSD ? 'USD' : 'CUP', etiquetaTasa: etiquetaTasa };
+
   const baseCUP = RN.calc.getPrecioBase(c, mes);
   const netoCUP = RN.calc.getPrecioNeto(c, mes);
-  // Incluir mora en el total a comunicar si hay atraso
-  var totalCUP = netoCUP;
+  var moraMonto = 0;
   try {
     var r = RN.calc.resumenCliente(c, mes);
-    if (r && r.moraMonto > 0) totalCUP = +(netoCUP + r.moraMonto).toFixed(2);
+    if (r && r.moraMonto > 0) moraMonto = +r.moraMonto;
   } catch (e) {}
-  const baseUSD = esUSD
-    ? (RN.calc.totalUSD(c) || 0)
-    : (tasaMsg ? +(baseCUP / tasaMsg).toFixed(2) : 0);
-  const netoUSD = esUSD
-    ? (RN.calc.getPrecioNetoUSD(c, mes) || 0)
-    : (tasaMsg ? +(netoCUP / tasaMsg).toFixed(2) : 0);
-  const totalUSD = tasaMsg ? +(totalCUP / tasaMsg).toFixed(2) : netoUSD;
+
+  var baseUSD, netoUSD, totalUSD, totalCUP;
+  if (esUSD) {
+    baseUSD = RN.calc.totalUSD(c) || 0;
+    netoUSD = RN.calc.getPrecioNetoUSD(c, mes) || 0;
+    var moraUSD = (tasaMsg > 0 && moraMonto > 0) ? +(moraMonto / tasaMsg).toFixed(2) : 0;
+    totalUSD = +(netoUSD + moraUSD).toFixed(2);
+    totalCUP = tasaMsg > 0 ? +(totalUSD * tasaMsg).toFixed(2) : +(netoCUP + moraMonto).toFixed(2);
+  } else {
+    totalCUP = +(netoCUP + moraMonto).toFixed(2);
+    baseUSD = tasaMsg ? +(baseCUP / tasaMsg).toFixed(2) : 0;
+    netoUSD = tasaMsg ? +(netoCUP / tasaMsg).toFixed(2) : 0;
+    totalUSD = tasaMsg ? +(totalCUP / tasaMsg).toFixed(2) : 0;
+  }
   const ctx = {
     nombre: c.nombre,
-    precioBase: RN.waTemplates.montoDual(baseUSD, baseCUP, tasaMsg),
-    descuentoRecurrente: RN.waTemplates.montoDesdeCUP(RN.calc.getDescuentoRecurrente(c), tasaMsg),
-    descuentoLinea: RN.waTemplates.montoDesdeCUP(RN.calc.getDescuentosPuntualesMes(c.id, mes), tasaMsg),
-    precioNeto: RN.waTemplates.montoDual(totalUSD, totalCUP, tasaMsg),
+    precioBase: RN.waTemplates.montoDual(baseUSD, baseCUP, tasaMsg, dualOpts),
+    descuentoRecurrente: RN.waTemplates.montoDesdeCUP(RN.calc.getDescuentoRecurrente(c), tasaMsg, dualOpts),
+    descuentoLinea: RN.waTemplates.montoDesdeCUP(RN.calc.getDescuentosPuntualesMes(c.id, mes), tasaMsg, dualOpts),
+    precioNeto: RN.waTemplates.montoDual(totalUSD, totalCUP, tasaMsg, dualOpts),
     precioUSD: totalUSD ? ('$' + (+totalUSD).toFixed(2) + ' USD') : '',
     precioCUP: RN.calc.formatCUP(totalCUP),
     tasa: tasaMsg ? String(tasaMsg) : '',

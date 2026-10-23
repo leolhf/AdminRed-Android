@@ -45,25 +45,35 @@ RN.waTemplates.rellenar = function (tpl, ctx) {
 };
 
 /**
- * v5.55.36: monto del servicio siempre en las dos monedas.
- * Formato: "X CUP / $Y USD (tasa Z)" — si no hay tasa, solo CUP.
+ * v5.55.41: monto siempre en las dos monedas.
+ * @param {number} usd
+ * @param {number} cup
+ * @param {number} tasa
+ * @param {object} [opts] { primario: 'CUP'|'USD', etiquetaTasa: string }
+ *   - CUP (plan en pesos): "X CUP / $Y USD (tasa actual: 1 USD = Z)"
+ *   - USD (plan fijo en dólares): "$Y USD / X CUP (tasa del mensaje: 1 USD = Z)"
  */
-RN.waTemplates.montoDual = function (usd, cup, tasa) {
+RN.waTemplates.montoDual = function (usd, cup, tasa, opts) {
+  opts = opts || {};
   var cupTxt = RN.calc.formatCUP(+cup || 0);
   var tasaN = +tasa || 0;
   var usdN = +usd || 0;
   if (!(tasaN > 0) && usdN <= 0) return cupTxt;
   if (usdN <= 0 && tasaN > 0) usdN = +((+cup || 0) / tasaN).toFixed(2);
+  if ((+cup || 0) <= 0 && tasaN > 0 && usdN > 0) cupTxt = RN.calc.formatCUP(+(usdN * tasaN).toFixed(2));
   var usdTxt = '$' + usdN.toFixed(2) + ' USD';
-  if (tasaN > 0) return cupTxt + ' / ' + usdTxt + ' (1 USD = ' + tasaN + ' CUP)';
-  return cupTxt + ' / ' + usdTxt;
+  var primario = opts.primario === 'USD' ? 'USD' : 'CUP';
+  var cuerpo = primario === 'USD' ? (usdTxt + ' / ' + cupTxt) : (cupTxt + ' / ' + usdTxt);
+  if (!(tasaN > 0)) return cuerpo;
+  var etiqueta = opts.etiquetaTasa || ('1 USD = ' + tasaN + ' CUP');
+  return cuerpo + ' (' + etiqueta + ')';
 };
 
 /** Helper: formatea un monto CUP siempre dual (usa tasa vigente o la indicada). */
-RN.waTemplates.montoDesdeCUP = function (cup, tasa) {
+RN.waTemplates.montoDesdeCUP = function (cup, tasa, opts) {
   tasa = +tasa || (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || 0;
   var usd = tasa > 0 ? +((+cup || 0) / tasa).toFixed(2) : 0;
-  return RN.waTemplates.montoDual(usd, cup, tasa);
+  return RN.waTemplates.montoDual(usd, cup, tasa, opts);
 };
 
 RN.waTemplates.abrir = function () {
