@@ -125,12 +125,9 @@ RN.modalCobro.abrir = function (clienteId) {
 
       <!-- ====== Sección de pago combinado USD + CUP ====== -->
       <div class="card" style="margin:0 0 16px;padding:14px;background:var(--bg)">
-        <div class="flex" style="justify-content:space-between;align-items:center;margin-bottom:10px">
+        <div style="margin-bottom:10px">
           <strong style="font-size:14px">💵 Pago del cliente</strong>
-          <div class="moneda-toggle" id="cobro-moneda-toggle">
-            <button type="button" class="btn sm primary" data-moneda="CUP" onclick="RN.modalCobro.setMoneda('CUP')">CUP</button>
-            <button type="button" class="btn sm" data-moneda="USD" onclick="RN.modalCobro.setMoneda('USD')" ${tasa ? '' : 'disabled title="Configura la tasa USD en Ajustes"'}>USD</button>
-          </div>
+          <span class="muted" style="font-size:12px;margin-left:8px">USD y/o CUP</span>
         </div>
         ${RN.modalCobro._infoTasa ? `<div class="muted" style="font-size:12px;margin-bottom:10px">Precio fijo: <strong>${RN.moneda.formatUSD(RN.calc.getPrecioNetoUSD(c, mes))}</strong> · Tasa aplicada: <strong>1 USD = ${RN.modalCobro._infoTasa.tasa} CUP</strong> (${RN.render.esc(RN.modalCobro._infoTasa.motivo)}${RN.modalCobro._infoTasa.tasaMensaje ? ' · mensaje: ' + RN.modalCobro._infoTasa.tasaMensaje + ', hoy: ' + RN.modalCobro._infoTasa.tasaHoy : ''}) · Fondo de caja: <strong>${RN.calc.formatCUP(fondo)}</strong></div>` : tasa ? `<div class="muted" style="font-size:12px;margin-bottom:10px">Tasa vigente: <strong>1 USD = ${tasa} CUP</strong> · Fondo de caja: <strong>${RN.calc.formatCUP(fondo)}</strong></div>` : `<div class="muted" style="font-size:12px;margin-bottom:10px;color:var(--danger)">⚠ No hay tasa USD configurada. Configúrala en Ajustes para aceptar pagos en USD.</div>`}
 
@@ -140,22 +137,22 @@ RN.modalCobro.abrir = function (clienteId) {
           <strong id="cobro-a-pagar" style="font-size:16px">${RN.calc.formatCUP(totalAPagar)}</strong>
         </div>
 
-        <!-- ====== Campo USD (siempre visible si hay tasa) ====== -->
-        <div id="cobro-row-usd" style="${tasa ? '' : 'display:none'};margin-bottom:10px">
-          <label>💵 Cantidad en USD <span class="muted" style="font-size:11px">(sugerido aunque el plan sea en CUP)</span></label>
-          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-            <input id="cobro-monto-usd" type="number" step="0.01" placeholder="0.00" oninput="RN.modalCobro.onUSDChange()" style="flex:1;min-width:120px">
-            <button type="button" class="btn sm" id="cobro-btn-sugerir-usd" onclick="RN.modalCobro.aplicarSugerenciaUSD()" title="Rellenar con el equivalente del total en USD">Usar sugerido</button>
+        <div class="form-row cols-2" style="margin-bottom:8px">
+          <div id="cobro-row-usd" style="${tasa ? '' : 'display:none'}">
+            <label>💵 Cantidad en USD</label>
+            <input id="cobro-monto-usd" type="number" step="0.01" min="0" placeholder="0.00" oninput="RN.modalCobro.onUSDChange()">
+            <div class="muted" style="font-size:11px;margin-top:2px" id="cobro-usd-conv">↳ Equivale a 0.00 CUP</div>
           </div>
-          <div class="muted" style="font-size:11px;margin-top:2px" id="cobro-usd-conv">↳ Equivale a 0.00 CUP</div>
-          <div class="muted" style="font-size:12px;margin-top:4px" id="cobro-usd-sugerido"></div>
+          <div id="cobro-row-cup">
+            <label>🪙 Cantidad en CUP <span class="muted" style="font-size:11px" id="cobro-cup-hint"></span></label>
+            <input id="cobro-monto-cup" type="number" step="0.01" min="0" placeholder="0.00" oninput="RN.modalCobro.onCUPChange()">
+          </div>
         </div>
-
-        <!-- ====== Campo CUP (siempre visible) ====== -->
-        <div id="cobro-row-cup">
-          <label>🪙 Cantidad en CUP <span class="muted" style="font-size:11px" id="cobro-cup-hint">(monto a pagar)</span></label>
-          <input id="cobro-monto-cup" type="number" step="0.01" placeholder="0.00" oninput="RN.modalCobro.onCUPChange()">
+        <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <button type="button" class="btn sm" id="cobro-btn-sugerir-usd" onclick="RN.modalCobro.aplicarSugerenciaUSD()" ${tasa ? '' : 'disabled'}>Usar total en USD</button>
+          <button type="button" class="btn sm" onclick="RN.modalCobro.aplicarSugerenciaCUP()">Usar total en CUP</button>
         </div>
+        <div class="muted" style="font-size:12px;margin-bottom:8px" id="cobro-usd-sugerido"></div>
 
         <!-- ====== Desglose detallado del pago ====== -->
         <div id="cobro-desglose" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
@@ -173,6 +170,23 @@ RN.modalCobro.abrir = function (clienteId) {
           <div class="cobro-desglose-row" id="cobro-fila-excede" style="display:none">
             <span class="muted">⚠ Excedente a devolver</span>
             <span id="cobro-desglose-excede"><strong style="color:var(--danger)">—</strong></span>
+          </div>
+          <div id="cobro-vuelto-opts" style="display:none;margin-top:10px;padding:10px;background:var(--bg-alt);border-radius:8px;font-size:13px">
+            <div style="font-weight:600;margin-bottom:6px">¿Cómo devuelves el vuelto?</div>
+            <div class="moneda-toggle" id="cobro-vuelto-toggle" style="margin-bottom:8px">
+              <button type="button" class="btn sm primary" data-vuelto="USD" onclick="RN.modalCobro.setModoVuelto('USD')">Priorizar USD</button>
+              <button type="button" class="btn sm" data-vuelto="MIXTO" onclick="RN.modalCobro.setModoVuelto('MIXTO')">Mixto</button>
+              <button type="button" class="btn sm" data-vuelto="CUP" onclick="RN.modalCobro.setModoVuelto('CUP')">Solo CUP</button>
+            </div>
+            <div id="cobro-vuelto-mixto" style="display:none;margin-bottom:6px">
+              <div class="form-row cols-2" style="margin:0">
+                <div><label style="font-size:12px">Vuelto en USD</label>
+                  <input id="cobro-vuelto-usd" type="number" step="0.01" min="0" value="0" oninput="RN.modalCobro.onVueltoManual()"></div>
+                <div><label style="font-size:12px">Vuelto en CUP</label>
+                  <input id="cobro-vuelto-cup" type="number" step="0.01" min="0" value="0" oninput="RN.modalCobro.onVueltoManual()"></div>
+              </div>
+            </div>
+            <div id="cobro-vuelto-resumen" class="muted" style="font-size:12px"></div>
           </div>
           <!-- Fila: Estado del pago -->
           <div class="cobro-desglose-row" id="cobro-fila-estado" style="display:none">
@@ -227,6 +241,8 @@ RN.modalCobro.abrir = function (clienteId) {
 
   // Mostrar equivalencia USD inicial
   RN.modalCobro._actualizarEquivalenciaUSD(totalAPagar);
+  RN.modalCobro._modoVuelto = 'USD';
+  RN.modalCobro._vueltoManual = false;
   // Recalcular desglose inicial
   RN.modalCobro.recalcularDesdePago();
 };
@@ -238,8 +254,7 @@ RN.modalCobro.abrir = function (clienteId) {
  */
 RN.modalCobro.setMoneda = function (moneda) {
   RN.modalCobro._moneda = moneda;
-
-  // Actualizar botones toggle
+  // v5.55.39: sin toggle visible; se conserva por compatibilidad
   document.querySelectorAll('#cobro-moneda-toggle button').forEach(function (b) {
     b.classList.toggle('primary', b.dataset.moneda === moneda);
   });
@@ -344,6 +359,96 @@ RN.modalCobro.onCUPChange = function () {
  * Total pagado = (USD × tasa) + CUP.
  * Compara contra el monto a pagar para determinar: completo, parcial o excedente.
  */
+
+RN.modalCobro._modoVuelto = 'USD';
+RN.modalCobro._vueltoManual = false;
+
+RN.modalCobro.setModoVuelto = function (modo) {
+  RN.modalCobro._modoVuelto = modo || 'USD';
+  RN.modalCobro._vueltoManual = false;
+  document.querySelectorAll('#cobro-vuelto-toggle button').forEach(function (b) {
+    b.classList.toggle('primary', b.getAttribute('data-vuelto') === RN.modalCobro._modoVuelto);
+  });
+  var mix = document.getElementById('cobro-vuelto-mixto');
+  if (mix) mix.style.display = (RN.modalCobro._modoVuelto === 'MIXTO') ? '' : 'none';
+  RN.modalCobro.recalcularDesdePago();
+};
+
+RN.modalCobro.calcularVuelto = function (excedenteCUP, usdRecibido, cupRecibido, tasa) {
+  excedenteCUP = Math.max(0, +excedenteCUP || 0);
+  usdRecibido = Math.max(0, +usdRecibido || 0);
+  tasa = +tasa || 0;
+  var modo = RN.modalCobro._modoVuelto || 'USD';
+  var vueltoUSD = 0, vueltoCUP = 0;
+  if (excedenteCUP <= 0.01) return { vueltoUSD: 0, vueltoCUP: 0, excedenteCUP: 0 };
+
+  if (modo === 'MIXTO' && RN.modalCobro._vueltoManual) {
+    var iu = document.getElementById('cobro-vuelto-usd');
+    var ic = document.getElementById('cobro-vuelto-cup');
+    vueltoUSD = Math.min(usdRecibido, Math.max(0, parseFloat(iu && iu.value) || 0));
+    var cubierto = tasa > 0 ? +(vueltoUSD * tasa).toFixed(2) : 0;
+    var falta = Math.max(0, +(excedenteCUP - cubierto).toFixed(2));
+    if (ic && String(ic.value).length) vueltoCUP = Math.max(0, parseFloat(ic.value) || 0);
+    else vueltoCUP = falta;
+    return { vueltoUSD: +vueltoUSD.toFixed(2), vueltoCUP: +vueltoCUP.toFixed(2), excedenteCUP: excedenteCUP };
+  }
+
+  if (modo === 'CUP' || !(tasa > 0) || !(usdRecibido > 0)) {
+    vueltoCUP = excedenteCUP;
+  } else if (modo === 'USD') {
+    var maxUsd = +(excedenteCUP / tasa).toFixed(2);
+    vueltoUSD = Math.min(usdRecibido, maxUsd);
+    var resto = +(excedenteCUP - vueltoUSD * tasa).toFixed(2);
+    if (resto < 0.5) resto = 0;
+    if (resto < 0) {
+      vueltoUSD = Math.max(0, +(vueltoUSD - 0.01).toFixed(2));
+      resto = Math.max(0, +(excedenteCUP - vueltoUSD * tasa).toFixed(2));
+    }
+    vueltoCUP = resto;
+  } else {
+    var half = +(excedenteCUP / 2 / tasa).toFixed(2);
+    vueltoUSD = Math.min(usdRecibido, half);
+    vueltoCUP = Math.max(0, +(excedenteCUP - vueltoUSD * tasa).toFixed(2));
+  }
+  return { vueltoUSD: +(+vueltoUSD).toFixed(2), vueltoCUP: +(+vueltoCUP).toFixed(2), excedenteCUP: excedenteCUP };
+};
+
+RN.modalCobro.onVueltoManual = function () {
+  RN.modalCobro._vueltoManual = true;
+  RN.modalCobro._modoVuelto = 'MIXTO';
+  document.querySelectorAll('#cobro-vuelto-toggle button').forEach(function (b) {
+    b.classList.toggle('primary', b.getAttribute('data-vuelto') === 'MIXTO');
+  });
+  var mix = document.getElementById('cobro-vuelto-mixto');
+  if (mix) mix.style.display = '';
+  RN.modalCobro.recalcularDesdePago();
+};
+
+RN.modalCobro._aplicarUIVuelto = function (excede, usd, cup, tasa) {
+  var box = document.getElementById('cobro-vuelto-opts');
+  var res = document.getElementById('cobro-vuelto-resumen');
+  if (!box) return { vueltoUSD: 0, vueltoCUP: excede > 0 ? excede : 0, excedenteCUP: excede || 0 };
+  if (!(excede > 0.01) || !(usd > 0) || !(tasa > 0)) {
+    box.style.display = 'none';
+    return { vueltoUSD: 0, vueltoCUP: excede > 0 ? excede : 0, excedenteCUP: excede || 0 };
+  }
+  box.style.display = '';
+  var v = RN.modalCobro.calcularVuelto(excede, usd, cup, tasa);
+  if (!RN.modalCobro._vueltoManual) {
+    var iu = document.getElementById('cobro-vuelto-usd');
+    var ic = document.getElementById('cobro-vuelto-cup');
+    if (iu) iu.value = v.vueltoUSD ? v.vueltoUSD.toFixed(2) : '0';
+    if (ic) ic.value = v.vueltoCUP ? v.vueltoCUP.toFixed(2) : '0';
+  }
+  if (res) {
+    var partes = [];
+    if (v.vueltoUSD > 0) partes.push('$' + v.vueltoUSD.toFixed(2) + ' USD');
+    if (v.vueltoCUP > 0.01) partes.push(RN.calc.formatCUP(v.vueltoCUP));
+    res.innerHTML = partes.length ? ('Devolver: <strong>' + partes.join(' + ') + '</strong>') : '';
+  }
+  return v;
+};
+
 RN.modalCobro.recalcularDesdePago = function () {
   var inpUsd = document.getElementById('cobro-monto-usd');
   var inpCup = document.getElementById('cobro-monto-cup');
@@ -429,10 +534,12 @@ RN.modalCobro.recalcularDesdePago = function () {
   if (avisoFondo) avisoFondo.style.display = 'none';
 
   if (Math.abs(diferencia) < 0.01) {
+    var _vo0 = document.getElementById('cobro-vuelto-opts'); if (_vo0) _vo0.style.display = 'none';
     // Pago exacto
     if (dEstado) dEstado.innerHTML = '<strong style="color:var(--green)">✓ Pago completo</strong>' + (ajuste ? '<br><span class="muted" style="font-size:11px">' + (ajuste > 0 ? 'Redondeo a favor del cliente: −' : 'Redondeo a tu favor: +') + RN.calc.formatCUP(Math.abs(ajuste)) + '</span>' : '');
     if (elTot) elTot.textContent = RN.calc.formatCUP(pagadoCUP);
   } else if (diferencia < 0) {
+    var _vo1 = document.getElementById('cobro-vuelto-opts'); if (_vo1) _vo1.style.display = 'none';
     // Pago parcial — falta dinero
     var falta = Math.abs(diferencia);
     if (filaFalta) filaFalta.style.display = 'flex';
@@ -440,17 +547,30 @@ RN.modalCobro.recalcularDesdePago = function () {
     if (dEstado) dEstado.innerHTML = '<strong style="color:var(--amber)">⏳ Pago parcial</strong>';
     if (elTot) elTot.textContent = RN.calc.formatCUP(pagadoCUP);
   } else {
-    // Excedente — hay vuelto que devolver
+    // Excedente — hay vuelto que devolver (v5.55.38: elegir USD / mixto / CUP)
     var excede = diferencia;
     if (filaExcede) filaExcede.style.display = 'flex';
-    if (dExcede) dExcede.innerHTML = '<strong style="color:var(--danger)">' + RN.calc.formatCUP(excede) + ' (se descuenta del fondo)</strong>';
-    if (dEstado) dEstado.innerHTML = '<strong style="color:var(--danger)">⚠ Excedente — devolver ' + RN.calc.formatCUP(excede) + '</strong>';
+    var vInfo = RN.modalCobro._aplicarUIVuelto(excede, usd, cup, tasa);
+    var detVuelto = '';
+    if (vInfo && (vInfo.vueltoUSD > 0 || vInfo.vueltoCUP > 0.01)) {
+      var pv = [];
+      if (vInfo.vueltoUSD > 0) pv.push('$' + vInfo.vueltoUSD.toFixed(2) + ' USD');
+      if (vInfo.vueltoCUP > 0.01) pv.push(RN.calc.formatCUP(vInfo.vueltoCUP));
+      detVuelto = ' → ' + pv.join(' + ');
+    }
+    if (dExcede) dExcede.innerHTML = '<strong style="color:var(--danger)">' + RN.calc.formatCUP(excede) + detVuelto + '</strong>';
+    if (dEstado) dEstado.innerHTML = '<strong style="color:var(--danger)">⚠ Excedente — devolver ' + RN.calc.formatCUP(excede) + detVuelto + '</strong>';
     if (elTot) elTot.textContent = RN.calc.formatCUP(aPagar);
 
-    // Avisar si el fondo no tiene suficiente para el vuelto
-    if (avisoFondo && excede > fondo) {
+    var cupDisp = (RN.calc.saldosMoneda ? RN.calc.saldosMoneda().cup : fondo) || 0;
+    var vueltoCUPNeed = vInfo ? (+vInfo.vueltoCUP || 0) : excede;
+    if (avisoFondo && vueltoCUPNeed > cupDisp + 0.01) {
       avisoFondo.style.display = 'block';
-      avisoFondo.innerHTML = '⚠ El fondo de caja no tiene suficiente efectivo para el vuelto. Fondo actual: ' + RN.calc.formatCUP(fondo) + ' · Vuelto: ' + RN.calc.formatCUP(excede);
+      avisoFondo.innerHTML = '⚠ CUP en caja insuficiente para el vuelto en pesos (' +
+        RN.calc.formatCUP(vueltoCUPNeed) + '). Disponible: ' + RN.calc.formatCUP(cupDisp) +
+        '. Usa más USD en el vuelto o deposita pesos.';
+    } else if (avisoFondo) {
+      avisoFondo.style.display = 'none';
     }
   }
 
@@ -678,6 +798,18 @@ RN.modalCobro.confirmar = function () {
     excedente = diferencia;
   }
 
+  // v5.55.38: vuelto en USD prioritario (o mixto / CUP)
+  var vueltoUSD = 0, vueltoCUP = 0;
+  if (tipoPago === 'excedente' && excedente > 0.01) {
+    var vCalc = RN.modalCobro.calcularVuelto(excedente, usd, cup, tasa);
+    vueltoUSD = vCalc.vueltoUSD || 0;
+    vueltoCUP = vCalc.vueltoCUP || 0;
+    if (vueltoUSD > usd + 0.01) {
+      RN.notifyUI.toast('No puedes devolver más USD de los recibidos', 'error');
+      return;
+    }
+  }
+
   // ====== Si hay excedente (vuelto), registrar para referencia ======
   var fondoAntes = RN.calc.fondoCaja();
   // v5.10.1: El excedente NO se descuenta del fondo porque los ingresos (h.monto)
@@ -746,6 +878,9 @@ RN.modalCobro.confirmar = function () {
     moneda: moneda,
     montoPagadoUSD: usd,
     montoPagadoCUP: cup,
+    vueltoUSD: vueltoUSD || 0,
+    vueltoCUP: vueltoCUP || 0,
+    modoVuelto: (tipoPago === 'excedente' && (usd > 0)) ? (RN.modalCobro._modoVuelto || 'USD') : undefined,
     montoPagadoCUPDesdeUSD: cupDesdeUSD,
     totalPagadoCUP: pagadoCUP,
     totalPagadoUSD: pagadoUSD,
@@ -809,7 +944,13 @@ RN.modalCobro.confirmar = function () {
   } else if (tipoPago === 'parcial') {
     msg = `Pago parcial: ${RN.calc.formatCUP(pagadoCUP)} · Falta ${RN.calc.formatCUP(falta)}`;
   } else {
-    msg = `Cobro registrado: ${RN.calc.formatCUP(aPagar)} · Vuelto: ${RN.calc.formatCUP(excedente)}`;
+    msg = 'Cobro registrado: ' + RN.calc.formatCUP(aPagar) + ' · Vuelto: ' + RN.calc.formatCUP(excedente);
+    if (vueltoUSD > 0 || vueltoCUP > 0.01) {
+      var vp = [];
+      if (vueltoUSD > 0) vp.push('$' + (+vueltoUSD).toFixed(2) + ' USD');
+      if (vueltoCUP > 0.01) vp.push(RN.calc.formatCUP(vueltoCUP));
+      msg += ' (' + vp.join(' + ') + ')';
+    }
   }
   // Detalle de monedas si es combinado
   if (usd > 0 && cup > 0) {

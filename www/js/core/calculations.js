@@ -160,7 +160,16 @@ RN.calc.getStatus = function (cliente, mes) {
     // h.monto es SIEMPRE solo servicio, netoEsperado también es solo servicio.
     const netoEsperado = RN.calc.netoEsperadoMes(cliente, mes);
     const totalServicio = cobrosMes.reduce((s, h) => s + (h.monto || 0), 0);
-    if (totalServicio >= netoEsperado - 0.01) return 'paid';
+    // v5.55.37: pagos mixtos con redondeo "a favor del cliente" guardan
+    // ajusteRedondeo > 0 (CUP perdonados). Ese ajuste cuenta como cubierto
+    // para no marcar "parcial" un cobro ya registrado como completo.
+    const totalAjuste = cobrosMes.reduce(function (s, h) { return s + (+h.ajusteRedondeo || 0); }, 0);
+    if (totalServicio + totalAjuste >= netoEsperado - 0.01) return 'paid';
+    // Cobro explícitamente completo/excedente (aunque el monto numérico quede
+    // unos pesos por debajo por el redondeo del resto en CUP).
+    if (cobrosMes.some(function (h) {
+      return h.tipoPago === 'completo' || h.tipoPago === 'excedente';
+    })) return 'paid';
     return 'parcial';
   }
 
@@ -1063,10 +1072,8 @@ RN.calc.cupEnCaja = function () {
 
 /**
  * v5.20.0: Cuánto USD físico hay en la caja ahora mismo: lo cobrado a clientes
- * en USD (h.montoPagadoUSD) + depósitos en USD − retiros en USD. El vuelto de
- * un cobro en USD se devuelve en CUP (se descuenta del fondo en CUP, ver
- * modal-cobro.js), así que el USD recibido de un cliente se queda íntegro en
- * la gaveta y no hay que restarle nada aquí.
+ * en USD (h.montoPagadoUSD) + depósitos en USD − retiros en USD. El vuelto puede devolverse en USD y/o CUP (v5.55.38). Si se devuelve en USD,
+ * se resta h.vueltoUSD del gaveta de dólares.
  *
  * v5.30.0 (BUG MIXTO): también cuenta la parte en dólares de los movimientos
  * MIXTO. Antes solo se miraba `moneda === 'USD'`, por lo que un depósito/retiro
@@ -1075,7 +1082,10 @@ RN.calc.cupEnCaja = function () {
  * (RN.calc.desgloseMovimiento).
  */
 RN.calc.usdEnCaja = function () {
-  var deCobros = (RN.state.history || []).reduce(function (s, h) { return s + (h.montoPagadoUSD || 0); }, 0);
+  // v5.55.38: restar vuelto devuelto en USD (el cliente se lleva dólares de vuelta)
+  var deCobros = (RN.state.history || []).reduce(function (s, h) {
+    return s + Math.max(0, (+(h.montoPagadoUSD || 0)) - (+(h.vueltoUSD || 0)));
+  }, 0);
   var deDepositos = (RN.state.depositos || []).reduce(function (s, d) { return s + RN.calc.desgloseMovimiento(d).usd; }, 0);
   var deRetiros = (RN.state.retiros || []).reduce(function (s, r) { return s + RN.calc.desgloseMovimiento(r).usd; }, 0);
   // v5.31.0: un cuadre de caja hecho en dólares también mueve la gaveta de USD.

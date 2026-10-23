@@ -41,19 +41,33 @@ RN.whatsapp.enviarRecordatorio = function (clienteId) {
   if (esUSD && RN.calc.fijarTasaMensaje(c, mes)) {
     try { RN.storageLocal.guardar(); } catch (e) { /* silencioso */ }
   }
+  // v5.55.36: el monto del servicio se muestra SIEMPRE en CUP y USD
+  const tasaMsg = esUSD
+    ? (RN.calc.infoTasa(c, mes).tasa || RN.moneda.tasa() || 0)
+    : (RN.moneda.tasa() || 0);
+  const baseCUP = RN.calc.getPrecioBase(c, mes);
   const netoCUP = RN.calc.getPrecioNeto(c, mes);
-  const tasaMsg = esUSD ? RN.calc.infoTasa(c, mes).tasa : (RN.moneda.tasa() || 0);
-  const netoUSD = esUSD ? RN.calc.getPrecioNetoUSD(c, mes) : (tasaMsg ? RN.moneda.aUSD(netoCUP) : 0);
+  // Incluir mora en el total a comunicar si hay atraso
+  var totalCUP = netoCUP;
+  try {
+    var r = RN.calc.resumenCliente(c, mes);
+    if (r && r.moraMonto > 0) totalCUP = +(netoCUP + r.moraMonto).toFixed(2);
+  } catch (e) {}
+  const baseUSD = esUSD
+    ? (RN.calc.totalUSD(c) || 0)
+    : (tasaMsg ? +(baseCUP / tasaMsg).toFixed(2) : 0);
+  const netoUSD = esUSD
+    ? (RN.calc.getPrecioNetoUSD(c, mes) || 0)
+    : (tasaMsg ? +(netoCUP / tasaMsg).toFixed(2) : 0);
+  const totalUSD = tasaMsg ? +(totalCUP / tasaMsg).toFixed(2) : netoUSD;
   const ctx = {
     nombre: c.nombre,
-    precioBase: esUSD
-      ? RN.waTemplates.montoDual(RN.calc.totalUSD(c), RN.calc.getPrecioBase(c, mes), tasaMsg)
-      : RN.calc.formatCUP(RN.calc.getPrecioBase(c)),
-    descuentoRecurrente: RN.calc.formatCUP(RN.calc.getDescuentoRecurrente(c)),
-    descuentoLinea: RN.calc.formatCUP(RN.calc.getDescuentosPuntualesMes(c.id, mes)),
-    precioNeto: esUSD ? RN.waTemplates.montoDual(netoUSD, netoCUP, tasaMsg) : RN.calc.formatCUP(netoCUP),
-    precioUSD: netoUSD ? RN.moneda.formatUSD(netoUSD) : '',
-    precioCUP: RN.calc.formatCUP(netoCUP),
+    precioBase: RN.waTemplates.montoDual(baseUSD, baseCUP, tasaMsg),
+    descuentoRecurrente: RN.waTemplates.montoDesdeCUP(RN.calc.getDescuentoRecurrente(c), tasaMsg),
+    descuentoLinea: RN.waTemplates.montoDesdeCUP(RN.calc.getDescuentosPuntualesMes(c.id, mes), tasaMsg),
+    precioNeto: RN.waTemplates.montoDual(totalUSD, totalCUP, tasaMsg),
+    precioUSD: totalUSD ? ('$' + (+totalUSD).toFixed(2) + ' USD') : '',
+    precioCUP: RN.calc.formatCUP(totalCUP),
     tasa: tasaMsg ? String(tasaMsg) : '',
     mes: RN.calc.mesTexto(RN.calc.mesActualStr()),
     diaPago: String(c.diaPago || 1),
@@ -86,9 +100,15 @@ RN.whatsapp.enviarComprobante = function (cobroId) {
   if (!c || !c.telefono) { RN.notifyUI.toast('El cliente no tiene teléfono', 'warn'); return; }
   const tpls = RN.waTemplates.cargar();
   const total = RN.calc.ingresoCobro(h);
+  const tasa = +(h.tasaUsd || h.tasa || 0) || (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || 0;
+  var usd = +(h.montoPagadoUSD || 0);
+  if (!(usd > 0) && tasa > 0) usd = +(total / tasa).toFixed(2);
   const ctx = {
     nombre: c.nombre,
-    precioNeto: RN.calc.formatCUP(total),
+    precioNeto: RN.waTemplates.montoDual(usd, total, tasa),
+    precioCUP: RN.calc.formatCUP(total),
+    precioUSD: usd ? ('$' + usd.toFixed(2) + ' USD') : '',
+    tasa: tasa ? String(tasa) : '',
     reciboNum: h.reciboNum || '',
     mes: h.mes || ''
   };

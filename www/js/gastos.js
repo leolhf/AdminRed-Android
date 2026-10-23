@@ -23,25 +23,19 @@ RN.gastos.abrirNuevo = function () {
         <div><label>Fecha</label><input id="g-fecha" type="date" value="${new Date().toISOString().slice(0,10)}"></div>
       </div>
 
-      <div class="card" style="margin:0 0 16px;padding:14px;background:var(--bg)">
-        <div class="flex" style="justify-content:space-between;align-items:center;margin-bottom:10px">
-          <strong style="font-size:14px">\ud83d\udcb0 Moneda de pago</strong>
-          <div class="moneda-toggle" id="g-moneda-toggle">
-            <button type="button" class="btn sm primary" data-moneda="CUP" onclick="RN.gastos.setMoneda('CUP')">CUP</button>
-            <button type="button" class="btn sm" data-moneda="USD" onclick="RN.gastos.setMoneda('USD')" ${tasa ? '' : 'disabled title=\"Configura la tasa USD en Ajustes\"'}>USD</button>
-            <!-- Oculto: el negocio ya opera en USD, no se necesita mixto para gastos nuevos -->
-            <button type="button" class="btn sm" data-moneda="MIXTO" onclick="RN.gastos.setMoneda('MIXTO')" ${tasa ? '' : 'disabled title=\"Configura la tasa USD en Ajustes\"'} style="display:none">Mixto</button>
+            <div class="card" style="margin:0 0 16px;padding:14px;background:var(--bg)">
+        <div style="margin-bottom:8px"><strong style="font-size:14px">💰 Pago del gasto</strong>
+          <span class="muted" style="font-size:12px;margin-left:6px">USD y/o CUP</span></div>
+        ${tasa ? `<div class="muted" style="font-size:12px;margin-bottom:10px">Tasa vigente: <strong>1 USD = ${tasa} CUP</strong></div>` : `<div class="muted" style="font-size:12px;margin-bottom:10px;color:var(--danger)">⚠ Configura la tasa USD en Ajustes para pagar en dólares.</div>`}
+        <div class="form-row cols-2" style="margin:0">
+          <div id="g-row-usd">
+            <label>💵 Cantidad en USD</label>
+            <input id="g-monto-usd" type="number" step="0.01" min="0" placeholder="0.00" ${tasa ? '' : 'disabled'} oninput="RN.gastos.recalcular()">
           </div>
-        </div>
-        ${tasa ? `<div class="muted" style="font-size:12px;margin-bottom:10px">Tasa vigente: <strong>1 USD = ${tasa} CUP</strong></div>` : `<div class="muted" style="font-size:12px;margin-bottom:10px;color:var(--danger)">\u26a0 No hay tasa USD configurada. Config\u00farala en Ajustes para pagar en USD.</div>`}
-
-        <div id="g-row-usd" style="display:none;margin-bottom:10px">
-          <label>\ud83d\udcb5 Cantidad en USD</label>
-          <input id="g-monto-usd" type="number" step="0.01" placeholder="0.00" oninput="RN.gastos.recalcular()">
-        </div>
-        <div>
-          <label>\ud83e\ude99 Cantidad en CUP</label>
-          <input id="g-monto-cup" type="number" step="0.01" value="0" oninput="RN.gastos.recalcular()">
+          <div>
+            <label>🪙 Cantidad en CUP</label>
+            <input id="g-monto-cup" type="number" step="0.01" min="0" value="0" oninput="RN.gastos.recalcular()">
+          </div>
         </div>
         <div id="g-desglose" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"></div>
       </div>
@@ -55,19 +49,9 @@ RN.gastos.abrirNuevo = function () {
 
 /** Cambia la moneda activa del gasto. */
 RN.gastos.setMoneda = function (moneda) {
-  RN.gastos._moneda = moneda;
-  document.querySelectorAll('#g-moneda-toggle button').forEach(function (b) {
-    b.classList.toggle('primary', b.dataset.moneda === moneda);
-  });
+  RN.gastos._moneda = moneda || 'CUP';
   var rowUsd = document.getElementById('g-row-usd');
-  if (rowUsd) rowUsd.style.display = (moneda === 'USD' || moneda === 'MIXTO') ? '' : 'none';
-  if (moneda === 'CUP') {
-    var usdIn = document.getElementById('g-monto-usd');
-    if (usdIn) usdIn.value = 0;
-  } else if (moneda === 'USD') {
-    var cupIn = document.getElementById('g-monto-cup');
-    if (cupIn) cupIn.value = 0;
-  }
+  if (rowUsd) rowUsd.style.display = '';
   RN.gastos.recalcular();
 };
 

@@ -2,6 +2,30 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.39 — Bloque de pago unificado (USD + CUP)
+
+- Eliminado el selector CUP / USD / Mixto en el bloque estándar de moneda.
+- Siempre se muestran **los dos campos**; usas uno, el otro, o ambos.
+- Aplicado en depósitos/retiros (vía `bloquePagoHTML`), cobros de clientes y gastos.
+- Atajos en cobro: “Usar total en USD” / “Usar total en CUP”.
+
+## v5.55.38 — Vuelto en USD (prioridad) o mixto
+
+- Si el cliente paga de más en USD, puedes devolver el vuelto en **USD**, **mixto** o **solo CUP**.
+- Por defecto se **prioriza USD** (devuelve dólares primero; el resto en pesos si hace falta).
+- La gaveta de USD resta lo devuelto en dólares.
+
+## v5.55.37 — Fix pago mixto marcado como parcial
+
+- Con redondeo **a favor del cliente** (resto CUP a múltiplo de 100), el cobro se registraba completo pero el estado salía **parcial**.
+- `getStatus` ahora suma `ajusteRedondeo` y respeta `tipoPago: completo`.
+
+## v5.55.36 — WhatsApp en dos monedas
+
+- Recordatorios, mora y comprobantes muestran el **pago del servicio en CUP y USD** (con la tasa).
+- Formato: `3,200.00 CUP / $10.00 USD (1 USD = 320 CUP)`.
+- Si no hay tasa configurada, solo se muestra CUP.
+
 ## v5.55.35 — Red: IP libre y cola padre
 
 - **Ajustes → Cola MikroTik (Reglas):** prefijo de red, rango de octetos, IPs ignoradas, otras colas padre.

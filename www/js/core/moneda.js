@@ -93,13 +93,14 @@ RN.moneda.mostrar = function (cup) {
  *
  * El bloque de moneda es un patrón común a varios modales (compra de
  * inventario, inversión personal, pago del proveedor, cobros de clientes).
- * Estos helpers estandarizan el HTML, la lógica de toggle y la lectura de
+ * v5.55.39: un solo bloque con USD y CUP siempre visibles (sin toggle CUP/USD/Mixto).
+ * Estos helpers estandarizan el HTML y la lectura de
  * los campos de pago para evitar duplicar código en cada modal.
  *
  * Flujo de uso:
  *   1. RN.moneda.bloquePagoHTML(prefix, opts) → devuelve el HTML a insertar
  *   2. RN.moneda.initBloquePago(prefix)       → inicializa el estado interno (moneda='CUP')
- *   3. RN.moneda.setMonedaBloque(prefix, m)   → cambia la moneda y muestra/oculta el campo USD
+ *   3. RN.moneda.setMonedaBloque(prefix, m)   → compat (ya no oculta campos; siempre USD+CUP)
  *   4. RN.moneda.recalcBloquePago(prefix, aPagarCUP) → recalcula el desglose del pago
  *   5. RN.moneda.leerBloquePago(prefix, aPagarCUP)   → devuelve {moneda, usd, cup, totalRecibidoCUP, ...}
  *
@@ -118,42 +119,37 @@ RN.moneda._bloqueState = RN.moneda._bloqueState || {};
 /** Genera el HTML del bloque de moneda de pago. */
 RN.moneda.bloquePagoHTML = function (prefix, opts) {
   opts = opts || {};
-  var titulo = opts.titulo || 'Moneda de pago';
+  var titulo = opts.titulo || 'Pago (USD y/o CUP)';
   var tasa = RN.moneda.tasa();
-  var usdDisabled = tasa ? '' : 'disabled title="Configura la tasa USD en Ajustes"';
   var avisoTasa = tasa
-    ? '<div class="muted" style="font-size:12px;margin-bottom:10px">Tasa vigente: <strong>1 USD = ' + tasa + ' CUP</strong></div>'
-    : '<div class="muted" style="font-size:12px;margin-bottom:10px;color:var(--danger)">⚠ No hay tasa USD configurada. Configúrala en Ajustes.</div>';
+    ? '<div class="muted" style="font-size:12px;margin-bottom:10px">Tasa vigente: <strong>1 USD = ' + tasa + ' CUP</strong> · Puedes usar una moneda, la otra, o ambas.</div>'
+    : '<div class="muted" style="font-size:12px;margin-bottom:10px;color:var(--danger)">⚠ No hay tasa USD. Configúrala en Ajustes para pagar en dólares.</div>';
   return ''
-    + '<div class="card" style="margin:0 0 16px;padding:14px;background:var(--bg)">'
-    +   '<div class="flex" style="justify-content:space-between;align-items:center;margin-bottom:10px">'
-    +     '<strong style="font-size:14px">💰 ' + titulo + '</strong>'
-    +     '<div class="moneda-toggle" id="' + prefix + '-moneda-toggle">'
-    +       '<button type="button" class="btn sm primary" data-moneda="CUP" onclick="RN.moneda.setMonedaBloque(\'' + prefix + '\',\'CUP\')">CUP</button>'
-    +       '<button type="button" class="btn sm" data-moneda="USD" onclick="RN.moneda.setMonedaBloque(\'' + prefix + '\',\'USD\')" ' + usdDisabled + '>USD</button>'
-    +       '<!-- Oculto: el negocio ya opera en USD, no se necesita mixto para movimientos nuevos -->'
-    +       '<button type="button" class="btn sm" data-moneda="MIXTO" onclick="RN.moneda.setMonedaBloque(\'' + prefix + '\',\'MIXTO\')" ' + usdDisabled + ' style="display:none">Mixto</button>'
+    + '<div class="card" style="margin:0 0 16px;padding:14px;background:var(--bg)" data-bloque-pago="' + prefix + '">'
+    +   '<div style="margin-bottom:10px"><strong style="font-size:14px">💰 ' + titulo + '</strong></div>'
+    +   avisoTasa
+    +   '<div class="form-row cols-2" style="margin-bottom:0">'
+    +     '<div id="' + prefix + '-row-usd">'
+    +       '<label>💵 Cantidad en USD</label>'
+    +       '<input id="' + prefix + '-monto-usd" type="number" step="0.01" min="0" placeholder="0.00"'
+    +         (tasa ? '' : ' disabled')
+    +         ' oninput="RN.moneda.recalcBloquePago(\'' + prefix + '\')">'
+    +     '</div>'
+    +     '<div id="' + prefix + '-row-cup">'
+    +       '<label>🪙 Cantidad en CUP</label>'
+    +       '<input id="' + prefix + '-monto-cup" type="number" step="0.01" min="0" placeholder="0.00" oninput="RN.moneda.recalcBloquePago(\'' + prefix + '\')">'
     +     '</div>'
     +   '</div>'
-    +   avisoTasa
-    +   '<div id="' + prefix + '-row-usd" style="display:none;margin-bottom:10px">'
-    +     '<label>💵 Cantidad en USD</label>'
-    +     '<input id="' + prefix + '-monto-usd" type="number" step="0.01" placeholder="0.00" oninput="RN.moneda.recalcBloquePago(\'' + prefix + '\')">'
-    +   '</div>'
-    +   '<div>'
-    +     '<label>🪙 Cantidad en CUP</label>'
-    +     '<input id="' + prefix + '-monto-cup" type="number" step="0.01" placeholder="0.00" oninput="RN.moneda.recalcBloquePago(\'' + prefix + '\')">'
-    +   '</div>'
     +   '<div id="' + prefix + '-desglose" style="display:none;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)"></div>'
+    +   '<!-- compat: toggle oculto por si algún código antiguo lo busca -->'
+    +   '<div class="moneda-toggle" id="' + prefix + '-moneda-toggle" style="display:none" aria-hidden="true">'
+    +     '<button type="button" data-moneda="CUP"></button>'
+    +     '<button type="button" data-moneda="USD"></button>'
+    +     '<button type="button" data-moneda="MIXTO"></button>'
+    +   '</div>'
     + '</div>';
 };
 
-/**
- * Inicializa el estado del bloque de moneda.
- * v5.30.0: acepta una moneda inicial ('CUP' | 'USD' | 'MIXTO') para que los
- * modales de caja puedan abrirse ya en USD ("Retirar USD") sin hacks de
- * setTimeout desde fuera.
- */
 RN.moneda.initBloquePago = function (prefix, monedaInicial) {
   RN.moneda._bloqueState[prefix] = { moneda: 'CUP' };
   if (monedaInicial && monedaInicial !== 'CUP') {
@@ -161,39 +157,22 @@ RN.moneda.initBloquePago = function (prefix, monedaInicial) {
   }
 };
 
-/** Cambia la moneda seleccionada en el bloque. */
+/**
+ * v5.55.39: el bloque siempre muestra USD + CUP. Esta función se mantiene
+ * por compatibilidad; ya no oculta campos ni borra montos.
+ */
 RN.moneda.setMonedaBloque = function (prefix, moneda) {
-  RN.moneda._bloqueState[prefix] = RN.moneda._bloqueState[prefix] || { moneda: 'CUP' };
-  // v5.30.0: sin tasa USD configurada, USD y Mixto no tienen sentido.
-  if ((moneda === 'USD' || moneda === 'MIXTO') && !RN.moneda.tasa()) {
-    if (RN.notifyUI && RN.notifyUI.toast) {
-      RN.notifyUI.toast('Configura la tasa USD en Ajustes para usar USD o Mixto', 'warn');
-    }
-    moneda = 'CUP';
-  }
-  RN.moneda._bloqueState[prefix].moneda = moneda;
-  var toggle = document.getElementById(prefix + '-moneda-toggle');
-  if (toggle) {
-    toggle.querySelectorAll('button').forEach(function (b) {
-      b.classList.toggle('primary', b.dataset.moneda === moneda);
-    });
-  }
+  RN.moneda._bloqueState[prefix] = RN.moneda._bloqueState[prefix] || {};
+  RN.moneda._bloqueState[prefix].moneda = moneda || 'CUP';
   var rowUsd = document.getElementById(prefix + '-row-usd');
-  if (rowUsd) rowUsd.style.display = (moneda === 'USD' || moneda === 'MIXTO') ? '' : 'none';
-  if (moneda === 'CUP') {
-    var usdIn = document.getElementById(prefix + '-monto-usd');
-    if (usdIn) usdIn.value = '';
-  } else if (moneda === 'USD') {
-    var cupIn = document.getElementById(prefix + '-monto-cup');
-    if (cupIn) cupIn.value = '';
-  }
+  var rowCup = document.getElementById(prefix + '-row-cup');
+  if (rowUsd) rowUsd.style.display = '';
+  if (rowCup) rowCup.style.display = '';
+  var usdIn = document.getElementById(prefix + '-monto-usd');
+  if (usdIn && RN.moneda.tasa()) usdIn.disabled = false;
   RN.moneda.recalcBloquePago(prefix);
 };
 
-/**
- * Devuelve el monto a pagar (CUP) del bloque.
- * Se calcula a partir del callback oPagarCUP() pasado por el modal.
- */
 RN.moneda._aPagarBloque = function (prefix) {
   var st = RN.moneda._bloqueState[prefix] || {};
   if (typeof st.oPagarCUP === 'function') {

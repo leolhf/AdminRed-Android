@@ -3,7 +3,7 @@
  * Marcadores: {nombre}, {precioBase}, {descuentoRecurrente}, {descuentoLinea},
  * {precioNeto}, {reciboNum}, {mes}, {negocio}, {telefonoNegocio}
  * v5.48.0: {precioUSD}, {precioCUP}, {tasa}. Para clientes con precio fijo en USD,
- * {precioNeto} y {precioBase} salen en ambas monedas ("35.00 USD o 18,800.00 CUP (1 USD = 537 CUP)").
+ * {precioNeto} y {precioBase} salen siempre en ambas monedas ("18,800.00 CUP / $35.00 USD (1 USD = 537 CUP)").
  */
 RN.waTemplates = RN.waTemplates || {};
 
@@ -44,10 +44,26 @@ RN.waTemplates.rellenar = function (tpl, ctx) {
     .replace(/{telefonoNegocio}/g, ctx.telefonoNegocio || RN.state.config.telefonoNegocio || '');
 };
 
-/** v5.48.0: texto de un monto en ambas monedas para clientes con precio USD. */
+/**
+ * v5.55.36: monto del servicio siempre en las dos monedas.
+ * Formato: "X CUP / $Y USD (tasa Z)" — si no hay tasa, solo CUP.
+ */
 RN.waTemplates.montoDual = function (usd, cup, tasa) {
-  var t = (+usd || 0).toFixed(2) + ' USD o ' + RN.calc.formatCUP(cup);
-  return tasa ? t + ' (1 USD = ' + (+tasa) + ' CUP)' : t;
+  var cupTxt = RN.calc.formatCUP(+cup || 0);
+  var tasaN = +tasa || 0;
+  var usdN = +usd || 0;
+  if (!(tasaN > 0) && usdN <= 0) return cupTxt;
+  if (usdN <= 0 && tasaN > 0) usdN = +((+cup || 0) / tasaN).toFixed(2);
+  var usdTxt = '$' + usdN.toFixed(2) + ' USD';
+  if (tasaN > 0) return cupTxt + ' / ' + usdTxt + ' (1 USD = ' + tasaN + ' CUP)';
+  return cupTxt + ' / ' + usdTxt;
+};
+
+/** Helper: formatea un monto CUP siempre dual (usa tasa vigente o la indicada). */
+RN.waTemplates.montoDesdeCUP = function (cup, tasa) {
+  tasa = +tasa || (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || 0;
+  var usd = tasa > 0 ? +((+cup || 0) / tasa).toFixed(2) : 0;
+  return RN.waTemplates.montoDual(usd, cup, tasa);
 };
 
 RN.waTemplates.abrir = function () {
