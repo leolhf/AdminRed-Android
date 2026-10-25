@@ -31,7 +31,7 @@ RN.cobros._pintarRecordatorios = function (res, stats) {
 
   var chips = [
     { id: 'pendientes', cls: 'chip-venc', label: 'Pendientes', n: nPend },
-    { id: 'hoy', cls: 'chip-hoy', label: 'Hoy', n: nHoy },
+    { id: 'hoy', cls: 'chip-hoy', label: 'Por cobrar', n: (nHoy + nCiclo + nVen) },
     { id: 'ciclo', cls: 'chip-ciclo', label: 'En ciclo', n: nCiclo },
     { id: 'vencidos', cls: 'chip-venc', label: 'Vencidos', n: nVen },
     { id: 'pagados', cls: '', label: 'Pagados', n: nPag },
@@ -143,7 +143,8 @@ RN.render.cobros = function () {
     lista = lista.filter(function (c) { return RN.calc.getStatus(c, mes) === 'paid'; });
   } else if (res && filtro !== 'todos') {
     var ids = {};
-    var arr = filtro === 'hoy' ? res.hoy
+    // v5.55.43: "hoy" = ventana abierta + vencidos de ciclos atrás (no solo día exacto)
+    var arr = filtro === 'hoy' ? (res.hoy || []).concat(res.enCiclo || []).concat(res.vencidos || [])
       : filtro === 'ciclo' ? res.enCiclo
       : filtro === 'vencidos' ? res.vencidos
       : filtro === 'notificados' ? res.notificados

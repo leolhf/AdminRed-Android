@@ -584,7 +584,7 @@ RN.panelWidgets.renderAtencionClientes = function () {
   if (!chipsEl || !lista) return;
   var activo = RN.panelWidgets._filtroAtencion;
   var defs = [
-    ['morosos', '🔴 Morosos'], ['hoy', '📅 Por cobrar hoy'],
+    ['morosos', '🔴 Morosos'], ['hoy', '📅 Por cobrar'],
     ['parciales', '⏳ Parciales'], ['inactivos', '💤 Inactivos con deuda']
   ];
   chipsEl.innerHTML = defs.map(function (d) {

@@ -599,7 +599,7 @@ RN.investment.monedaDeuda = function (inv) {
   if (inv.monedaDeuda === 'USD' || inv.monedaDeuda === 'CUP') return inv.monedaDeuda;
   if (inv.monedaPago === 'USD') return 'USD';
   if (inv.monedaPago === 'MIXTO' && +inv.montoPagoUSD > 0) {
-    var tasa = +inv.tasaUsdCompra || +(RN.state.config && RN.state.config.tasaUSD) || 0;
+    var tasa = +inv.tasaUsdCompra || (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || +(RN.state.config && RN.state.config.tasaUsd) || 0;
     var cupDesdeUsd = (+inv.montoPagoUSD) * tasa;
     var cupDirecto = +inv.montoPagoCUP || 0;
     if (cupDesdeUsd >= cupDirecto) return 'USD';
@@ -622,7 +622,7 @@ RN.investment.totalDevueltoMoneda = function (inv) {
   return RN.investment.devolucionesInv(inv).reduce(function (s, g) {
     if (+g.montoMonedaDeuda > 0) return s + +g.montoMonedaDeuda;
     if (RN.investment.monedaDeuda(inv) === 'CUP') return s + (+g.monto || 0);
-    var tasa = +g.tasaUsd || +(RN.state.config && RN.state.config.tasaUSD) || 0;
+    var tasa = +g.tasaUsd || (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || +(RN.state.config && RN.state.config.tasaUsd) || 0;
     if (tasa > 0 && +g.monto > 0) return s + (+g.monto / tasa);
     return s;
   }, 0);
@@ -660,7 +660,7 @@ RN.investment.sugeridoDevolucion = function (inv) {
   var libreCUP = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
   var pct = RN.investment.pctLibreDeudas();
   var cupSugerido = libreCUP * (pct / 100);
-  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
+  var tasa = (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || +(RN.state.config && RN.state.config.tasaUsd) || 0;
   var enMoneda = mon === 'USD' ? (tasa > 0 ? cupSugerido / tasa : 0) : cupSugerido;
   if (!(enMoneda > 0)) enMoneda = 0;
   return +Math.min(saldo, enMoneda).toFixed(2);
@@ -712,7 +712,7 @@ RN.investment.cupAMonedaDeuda = function (inv, cup) {
   var mon = RN.investment.monedaDeuda(inv);
   cup = +cup || 0;
   if (mon !== 'USD') return +cup.toFixed(2);
-  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
+  var tasa = (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || +(RN.state.config && RN.state.config.tasaUsd) || 0;
   if (!(tasa > 0)) return 0;
   return +(cup / tasa).toFixed(2);
 };
@@ -722,7 +722,7 @@ RN.investment.monedaDeudaACup = function (inv, montoMon) {
   var mon = RN.investment.monedaDeuda(inv);
   montoMon = +montoMon || 0;
   if (mon !== 'USD') return +montoMon.toFixed(2);
-  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
+  var tasa = (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || +(RN.state.config && RN.state.config.tasaUsd) || 0;
   if (!(tasa > 0)) return 0;
   return +(montoMon * tasa).toFixed(2);
 };

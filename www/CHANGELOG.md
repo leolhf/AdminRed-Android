@@ -2,6 +2,17 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.43 — Clientes a atender = ciclo + atrasados
+
+- **Por cobrar** ya no es solo `diaPago === hoy`.
+- Incluye: **en ventana de cobro** (1–5 / 11–15 / 21–25) + **vencidos** de cortes anteriores + **mora**.
+- Misma lógica en panel y en la vista Cobros.
+
+## v5.55.42 — Fix tasa en pagar deuda
+
+- El modal **Pagar deuda** leía `config.tasaUSD` (clave incorrecta) y no veía la tasa de Ajustes (`tasaUsd`).
+- Ahora usa `RN.moneda.tasa()` y, si falta, la tasa de la compra de la deuda.
+
 ## v5.55.41 — WhatsApp: tasa según tipo de plan
 
 - **Plan en CUP**: monto en CUP + equivalente USD con la **tasa actual**.

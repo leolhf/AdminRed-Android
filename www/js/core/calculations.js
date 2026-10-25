@@ -1600,17 +1600,18 @@ RN.calc.filtrarClientes = function (lista, q) {
 };
 
 /**
- * v5.44.0: clientes que requieren atención, priorizados. Función pura.
- * Orden: 1) mora (más meses y más deuda primero), 2) vence hoy, 3) vence mañana,
- * 4) pago parcial. `filtro`: '' (todos) | 'morosos' | 'hoy' | 'parciales' | 'inactivos'.
- * 'inactivos' devuelve los clientes inactivos con deuda (mora) pendiente.
+ * v5.55.43: clientes que requieren atención, priorizados.
+ * Orden: 1) mora, 2) en ventana de cobro (ciclo abierto), 3) vencidos del mes,
+ * 4) pago parcial, 5) vence mañana (fuera de ventana).
+ * `filtro`: '' (todos) | 'morosos' | 'hoy' | 'parciales' | 'inactivos'.
+ * 'hoy' = en ciclo de pago AHORA + pendientes de ciclos ya pasados (no solo diaPago===hoy).
  * @returns {Array<{cliente, motivo:string, prioridad:number, mora:number, deuda:number}>}
  */
 RN.calc.clientesAtencion = function (filtro) {
   filtro = filtro || '';
   var mes = RN.calc.mesActualStr();
   var hoy = RN.calc.hoy();
-  var diaHoy = hoy.getDate();
+  var diaHoy = (RN.ciclos && RN.ciclos.diaHoyNum) ? RN.ciclos.diaHoyNum() : hoy.getDate();
   var man = new Date(hoy.getFullYear(), hoy.getMonth(), hoy.getDate() + 1);
   var diaMan = man.getDate();
   var out = [];
@@ -1625,21 +1626,46 @@ RN.calc.clientesAtencion = function (filtro) {
   }
 
   RN.calc.clientesCobrables().forEach(function (c) {
-    if (c.activo === false) return; // los inactivos con deuda solo salen en su chip
+    if (c.activo === false) return;
     var mora = RN.calc.getMora(c);
     var st = RN.calc.getStatus(c, mes);
     var dia = c.diaPago || 1;
     var deuda = RN.calc.deudaTotalCliente(c, mes);
     var pagado = st === 'paid';
+    if (st === 'por-iniciar' || pagado) return;
+
+    var ven = (RN.ciclos && RN.ciclos.ventanaCobro)
+      ? RN.ciclos.ventanaCobro(dia)
+      : { inicio: dia, fin: dia };
+    var enVentana = diaHoy >= ven.inicio && diaHoy <= ven.fin;
+    var vencidoMes = dia < diaHoy; // ya pasó su día de pago este mes
+
     var motivo = '', prio = 9;
-    if (mora > 0) { motivo = 'mora'; prio = 1; }
-    else if (!pagado && st !== 'por-iniciar' && dia === diaHoy) { motivo = 'vence hoy'; prio = 2; }
-    else if (!pagado && st !== 'por-iniciar' && dia === diaMan) { motivo = 'vence mañana'; prio = 3; }
-    else if (st === 'parcial') { motivo = 'pago parcial'; prio = 4; }
+    if (mora > 0) {
+      motivo = 'mora · ciclo ' + (ven.texto || ('día ' + dia));
+      prio = 1;
+    } else if (enVentana) {
+      motivo = (dia === diaHoy)
+        ? ('vence hoy · ' + (ven.texto || ''))
+        : ('en ciclo · ' + (ven.texto || ('día ' + dia)));
+      prio = 2;
+    } else if (vencidoMes) {
+      motivo = 'vencido · corte día ' + dia;
+      prio = 3;
+    } else if (st === 'parcial') {
+      motivo = 'pago parcial';
+      prio = 4;
+    } else if (dia === diaMan) {
+      motivo = 'vence mañana';
+      prio = 5;
+    }
     if (!motivo) return;
+
+    // Chip "Por cobrar hoy": ciclo abierto + atrasados (mora o vencidos del mes)
+    if (filtro === 'hoy' && !(prio === 1 || prio === 2 || prio === 3)) return;
     if (filtro === 'morosos' && prio !== 1) return;
-    if (filtro === 'hoy' && !(dia === diaHoy && !pagado && st !== 'por-iniciar')) return;
     if (filtro === 'parciales' && st !== 'parcial') return;
+
     out.push({ cliente: c, motivo: motivo, prioridad: prio, mora: mora, deuda: deuda });
   });
   return out.sort(function (a, b) {

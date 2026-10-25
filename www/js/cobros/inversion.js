@@ -576,7 +576,10 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
   var plan = RN.investment.planDevolucion(inv);
   var mon = plan.moneda;
   var unit = mon === 'USD' ? 'USD' : 'CUP';
-  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
+  var tasa = (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0)
+    || +(RN.state.config && RN.state.config.tasaUsd)
+    || +(inv.tasaUsdCompra || 0)
+    || 0;
   var sugerido = plan.sugeridoReal;
   var fmt = function (m) { return RN.investment.fmtMontoDeuda(inv, m); };
 
@@ -754,7 +757,11 @@ RN.inversion.guardarDevolucion = function (inversionId) {
     RN.notifyUI.toast('El pago excede el saldo pendiente en ' + mon, 'error');
     return;
   }
-  var tasa = +(RN.state.config && RN.state.config.tasaUSD) || 0;
+  // v5.55.42: tasaUsd (no tasaUSD). Fallback: tasa de la compra de la deuda.
+  var tasa = (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0)
+    || +(RN.state.config && RN.state.config.tasaUsd)
+    || +(inv.tasaUsdCompra || 0)
+    || 0;
   var montoCUP;
   if (mon === 'USD') {
     if (!(tasa > 0)) {
