@@ -2,6 +2,11 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.44 — Atención: WhatsApp + Cobrar; orden panel
+
+- Botones **WhatsApp** y **Cobrar** en cada cliente de Clientes a atender.
+- **Clientes a atender** aparece **arriba de Bandeja**.
+
 ## v5.55.43 — Clientes a atender = ciclo + atrasados
 
 - **Por cobrar** ya no es solo `diaPago === hoy`.

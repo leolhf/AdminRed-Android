@@ -603,11 +603,18 @@ RN.panelWidgets.renderAtencionClientes = function () {
   lista.innerHTML = items.slice(0, MAX).map(function (it) {
     var c = it.cliente;
     var det = it.mora > 0 ? it.mora + ' mes' + (it.mora > 1 ? 'es' : '') + ' de mora · ' : '';
+        var telOk = !!(c.telefono && String(c.telefono).replace(/\D/g, '').length >= 7);
+    var idEsc = RN.render.escAttr(c.id);
+    var btnWa = telOk
+      ? '<button type="button" class="btn sm" title="WhatsApp" onclick="event.stopPropagation(); RN.whatsapp.enviarRecordatorio(\'' + idEsc + '\')">WhatsApp</button>'
+      : '<button type="button" class="btn sm" disabled title="Sin teléfono">WhatsApp</button>';
     return '<div class="atencion-cli">' +
       '<div class="atencion-cli-info"><strong>' + RN.render.esc(c.nombre) + '</strong>' +
       '<div class="muted" style="font-size:12px">' + det + RN.render.esc(it.motivo) + '</div></div>' +
       '<div class="atencion-cli-monto">' + RN.calc.formatCUP(it.deuda) + '</div>' +
-      '<button class="btn sm primary" onclick="RN.modalCobro.abrir(\'' + c.id + '\')">Cobrar</button>' +
+      '<div class="atencion-cli-actions">' + btnWa +
+      '<button type="button" class="btn sm primary" onclick="event.stopPropagation(); RN.modalCobro.abrir(\'' + idEsc + '\')">Cobrar</button>' +
+      '</div>' +
     '</div>';
   }).join('') + (items.length > MAX ? '<div class="muted" style="font-size:12px;padding-top:6px">y ' + (items.length - MAX) + ' más…</div>' : '');
 };

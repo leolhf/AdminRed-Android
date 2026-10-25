@@ -865,6 +865,8 @@ tr:hover td { background: rgba(59,130,246,.07); }
 .atencion-cli:last-child { border-bottom: none; }
 .atencion-cli-info { flex: 1; min-width: 0; }
 .atencion-cli-monto { font-weight: 800; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.atencion-cli-actions { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; justify-content: flex-end; }
+.atencion-cli-actions .btn { flex-shrink: 0; }
 
 /* Tarjeta "Caja ahora" */
 .caja-real { display: flex; gap: 12px; flex-wrap: wrap; }
