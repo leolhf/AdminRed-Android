@@ -2,6 +2,12 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.51 — Release sin iconos globales (5.50)
+
+- Empaqueta **5.55.49** (caja única libre/reserva al pagar deuda).
+- **No** incluye el cambio de iconos de cabecera/panel/cliente de la 5.55.50.
+- Sí mantiene WhatsApp/Cobrar en icono (pedidos antes).
+
 ## v5.55.50 — Iconos en botones de acción
 
 - Cliente: Historial 📋, Cola 📡, Equipos 📦, Editar ✏️, Eliminar 🗑️ (+ Cobrar/WA).

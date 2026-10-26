@@ -1309,19 +1309,19 @@ RN.inversion._cardInversion = function (inv, opts) {
     if (esConcluida) {
       accionesHtml =
         '<button class="btn sm" onclick="RN.inversion.historialDevoluciones(\'' + RN.render.escAttr(inv.id) + '\')">📋 Ver devoluciones</button>'
-        + '<button class="btn sm" onclick="RN.inversion.abrirEditar(\'' + RN.render.escAttr(inv.id) + '\')" title="Editar" aria-label="Editar">✏️</button>'
+        + '<button class="btn sm" onclick="RN.inversion.abrirEditar(\'' + RN.render.escAttr(inv.id) + '\')">Editar</button>'
         + '<button class="btn sm danger" onclick="RN.inversion.eliminar(\'' + RN.render.escAttr(inv.id) + '\')">🗑</button>';
     } else {
       accionesHtml =
-        '<button class="btn sm primary" onclick="RN.inversion.devolucionPrestamo(\'' + RN.render.escAttr(inv.id) + '\')" title="Pagar" aria-label="Pagar">💨</button>'
+        '<button class="btn sm primary" onclick="RN.inversion.devolucionPrestamo(\'' + RN.render.escAttr(inv.id) + '\')">Pagar</button>'
         + '<span class="badge warn" style="margin-left:4px">Saldo: ' + RN.investment.fmtSaldoDeuda(inv) + '</span>'
         + '<button class="btn sm" onclick="RN.inversion.historialDevoluciones(\'' + RN.render.escAttr(inv.id) + '\')">📋 Devoluciones</button>'
-        + '<button class="btn sm" onclick="RN.inversion.abrirEditar(\'' + RN.render.escAttr(inv.id) + '\')" title="Editar" aria-label="Editar">✏️</button>'
+        + '<button class="btn sm" onclick="RN.inversion.abrirEditar(\'' + RN.render.escAttr(inv.id) + '\')">Editar</button>'
         + '<button class="btn sm danger" onclick="RN.inversion.eliminar(\'' + RN.render.escAttr(inv.id) + '\')">🗑</button>';
     }
   } else {
     accionesHtml =
-      '<button class="btn sm" onclick="RN.inversion.abrirEditar(\'' + RN.render.escAttr(inv.id) + '\')" title="Editar" aria-label="Editar">✏️</button>'
+      '<button class="btn sm" onclick="RN.inversion.abrirEditar(\'' + RN.render.escAttr(inv.id) + '\')">Editar</button>'
       + '<button class="btn sm danger" onclick="RN.inversion.eliminar(\'' + RN.render.escAttr(inv.id) + '\')">🗑</button>';
   }
 
@@ -1330,7 +1330,7 @@ RN.inversion._cardInversion = function (inv, opts) {
   var paySummary = '';
   if (esDeuda && !esConcluida) {
     paySummary = '<div class="acc-summary-pay">'
-      + '<button type="button" class="btn sm primary" onclick="event.stopPropagation(); RN.inversion.devolucionPrestamo(\'' + RN.render.escAttr(inv.id) + '\')" title="Pagar" aria-label="Pagar">💨</button>'
+      + '<button type="button" class="btn sm primary" onclick="event.stopPropagation(); RN.inversion.devolucionPrestamo(\'' + RN.render.escAttr(inv.id) + '\')">Pagar</button>'
       + '</div>';
   }
   return '<div class="acc-card" id="' + cardId + '">'
