@@ -2,6 +2,12 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.47 — Fix crítico pantalla / clientes
+
+- Se había borrado por error `RN.render.escAttr` al añadir iconos.
+- Eso provocaba **Error al pintar la pantalla** y listas vacías.
+- Función restaurada; iconos WhatsApp/Cobrar siguen activos.
+
 ## v5.55.46 — WhatsApp y Cobrar solo iconos (toda la app)
 
 - Helpers `RN.render.btnWhatsApp` / `btnCobrar`.

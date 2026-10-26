@@ -18,7 +18,12 @@ RN.render.esc = function (s) {
 /** v5.13.5 (ISSUE #26): Escape de un string para atributos onclick="...('STR')".
  * Escapa comillas simples (contexto JS) y dobles (contexto HTML) para evitar
  * que nombres con " o ' rompan el HTML. */
-
+RN.render.escAttr = function (s) {
+  return String(s == null ? '' : s)
+    .replace(/\\/g, '\\\\')
+    .replace(/'/g, "\\'")
+    .replace(/"/g, '&quot;');
+};
 
 // v5.13.9 (DUP-2): Badge unificado de tipo de pago para cobros del historial.
 // Centraliza el patron repetido en render.realizados(), render.reportes() y recibo._html().
