@@ -158,9 +158,9 @@ RN.lifecycle.renderPanel = function () {
       html += '</div></div>';
       html += '<div class="amt" style="color:var(--danger)">' + f(deuda) + '</div></div>';
       html += '<div class="ana-row-actions">';
-      html += '<button type="button" class="btn sm primary" onclick="RN.modalCobro.abrir(\'' + RN.render.escAttr(c.id) + '\')">Cobrar</button>';
+      html += RN.render.btnCobrar(c.id);
       if (c.telefono) {
-        html += '<button type="button" class="btn sm" onclick="RN.whatsapp.enviarRecordatorio(\'' + RN.render.escAttr(c.id) + '\')">WhatsApp</button>';
+        html += RN.render.btnWhatsApp(c.id, { telefono: c.telefono });
       }
       html += '<button type="button" class="btn sm" onclick="RN.lifecycle.abrirBaja(\'' + RN.render.escAttr(c.id) + '\')">Dar de baja</button>';
       html += '</div></div>';

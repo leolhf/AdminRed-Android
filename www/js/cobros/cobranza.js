@@ -66,7 +66,6 @@ RN.cobranza.abrir = function (opts) {
         ? ' <span class="badge ok" title="Notificado por WhatsApp en este ciclo">💬 Notificado</span>'
         : '';
       var trCls = notificadoWa ? ' class="cobranza-notificado-wa"' : '';
-      var waBtnLabel = notificadoWa ? '💬 Otra vez' : 'WhatsApp';
       return '<tr' + trCls + '>' +
         '<td><strong>' + RN.render.esc(c.nombre) + '</strong>' + waBadge +
           '<br><span class="muted" style="font-size:12px">' + planTxt + '</span></td>' +
@@ -74,8 +73,8 @@ RN.cobranza.abrir = function (opts) {
         '<td>' + tel + '</td>' +
         '<td style="text-align:right">' + totalTxt + '</td>' +
         '<td style="text-align:center;white-space:nowrap">' +
-          '<button class="btn sm primary" onclick="RN.cobranza._cobrar(\'' + cid + '\')">Cobrar</button> ' +
-          '<button class="btn sm' + (notificadoWa ? ' ghost' : '') + '" onclick="RN.cobranza._recordar(\'' + cid + '\')">' + waBtnLabel + '</button>' +
+          RN.render.btnCobrar(c.id) + ' ' +
+          RN.render.btnWhatsApp(c.id, { telefono: c.telefono, cls: 'btn sm icon-btn' + (notificadoWa ? ' ghost' : '') }) +
         '</td>' +
       '</tr>';
     }).join('');

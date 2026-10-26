@@ -188,7 +188,7 @@ RN.render.clientes = function () {
 
     var showCobrar = !esAdm && (estado === 'due' || estado === 'warn' || estado === 'parcial' || (estado !== 'paid' && total > 0));
     var cobrarBtn = showCobrar
-      ? '<div class="acc-summary-cli-actions"><button type="button" class="btn sm primary" onclick="event.stopPropagation();RN.modalCobro.abrir(\'' + RN.render.escAttr(c.id) + '\')">Cobrar</button></div>'
+      ? '<div class="acc-summary-cli-actions">' + RN.render.btnCobrar(c.id, { stop: true }) + '</div>'
       : '';
 
     return '<div class="acc-card" id="acc-cli-' + c.id + '">' +
@@ -226,9 +226,9 @@ RN.render.clientes = function () {
         '<div class="acc-row"><span class="acc-label">Estado</span><span class="acc-value">' + RN.render.badgeEstado(estado) + '</span></div>' +
         (esAdm ? '' : '<div class="acc-row"><span class="acc-label">Saldo equipo</span><span class="acc-value">' + (deuda > 0 ? '<span class="badge due">' + RN.calc.formatCUP(deuda) + '</span>' : '<span class="muted">—</span>') + '</span></div>') +
         '<div class="acc-actions">' +
-          (esAdm ? '' : '<button class="btn sm primary" onclick="RN.modalCobro.abrir(\'' + RN.render.escAttr(c.id) + '\')">Cobrar</button>') +
+          (esAdm ? '' : RN.render.btnCobrar(c.id)) +
           (esAdm ? '' : '<button class="btn sm" onclick="RN.clientHistory.abrir(\'' + c.id + '\')">Historial</button>') +
-          (esAdm ? '' : '<button class="btn sm" onclick="RN.whatsapp.enviarRecordatorio(\'' + c.id + '\')">WhatsApp</button>') +
+          (esAdm ? '' : RN.render.btnWhatsApp(c.id, { telefono: c.telefono })) +
           (RN.cola && RN.cola.tieneCola(c) ? '<button class="btn sm" onclick="RN.cola.copiarDeCliente(\'' + c.id + '\')" title="Comando cola Winbox">Cola</button>' : '') +
           '<button class="btn sm" onclick="RN.equiposRed.abrir(\'' + c.id + '\')">Equipos</button>' +
           '<button class="btn sm" onclick="RN.modalCliente.editar(\'' + c.id + '\')">Editar</button>' +

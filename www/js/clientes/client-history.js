@@ -43,7 +43,7 @@ RN.clientHistory.abrir = function (id) {
       <div class="table-wrap"><table><thead><tr><th>Fecha</th><th>Concepto</th><th>Monto</th><th>Recibo</th></tr></thead><tbody>${rows}</tbody></table></div>
     </div>
     <div class="modal-footer">
-      <button class="btn" onclick="RN.whatsapp.enviarRecordatorio('${RN.render.escAttr(c.id)}')">WhatsApp</button>
+      <button type="button" class="btn icon-btn" title="WhatsApp" aria-label="WhatsApp" onclick="RN.whatsapp.enviarRecordatorio('${RN.render.escAttr(c.id)}')">${RN.render._svgWhatsApp()}</button>
       <button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cerrar</button>
     </div>`;
   RN.uiComponents.modal(html, { lg: true });

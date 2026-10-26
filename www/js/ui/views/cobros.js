@@ -244,9 +244,9 @@ RN.render.cobros = function () {
     if (estado === 'paid') {
       accBtn = '';
     } else if (estado === 'parcial') {
-      accBtn = '<button type="button" class="btn sm primary" onclick="event.stopPropagation();RN.modalCobro.abrir(\'' + RN.render.escAttr(c.id) + '\')">Completar</button>';
+      accBtn = RN.render.btnCobrar(c.id, { stop: true });
     } else {
-      accBtn = '<button type="button" class="btn sm primary" onclick="event.stopPropagation();RN.modalCobro.abrir(\'' + RN.render.escAttr(c.id) + '\')">Cobrar</button>';
+      accBtn = RN.render.btnCobrar(c.id, { stop: true });
     }
     var cobrarWrap = accBtn
       ? '<div class="acc-summary-cob-actions">' + accBtn + '</div>'
@@ -269,17 +269,17 @@ RN.render.cobros = function () {
         }).join(' ')
       : '<span class="muted">Ninguna este mes</span>';
 
-    var waBtn = (estado !== 'paid' && c.telefono)
-      ? '<button type="button" class="btn sm" onclick="event.stopPropagation(); RN.whatsapp.enviarRecordatorio(\'' + RN.render.escAttr(c.id) + '\')">WhatsApp</button>'
+    var waBtn = (estado !== 'paid')
+      ? RN.render.btnWhatsApp(c.id, { telefono: c.telefono, stop: true })
       : '';
 
     var detailCobrar = '';
     if (estado === 'paid') {
       detailCobrar = '<span class="muted">Pagado este mes</span>';
     } else if (estado === 'parcial') {
-      detailCobrar = '<button type="button" class="btn sm primary" onclick="RN.modalCobro.abrir(\'' + RN.render.escAttr(c.id) + '\')">Completar pago</button>';
+      detailCobrar = RN.render.btnCobrar(c.id);
     } else {
-      detailCobrar = '<button type="button" class="btn sm primary" onclick="RN.modalCobro.abrir(\'' + RN.render.escAttr(c.id) + '\')">Cobrar ' + RN.calc.formatCUP(total) + '</button>';
+      detailCobrar = RN.render.btnCobrar(c.id) + ' <span class="muted" style="font-size:12px">' + RN.calc.formatCUP(total) + '</span>';
     }
 
     return '<div class="acc-card' + (notificadoWa ? ' notificado-wa' : '') + '" id="acc-cob-' + RN.render.escAttr(c.id) + '"' +

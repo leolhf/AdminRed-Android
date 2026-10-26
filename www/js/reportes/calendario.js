@@ -393,9 +393,9 @@ RN.calendario._filaCliente = function (c, r, ym) {
     '<td>' + tel + '</td>' +
     '<td class="cal-col-right">' + totalTxt + '</td>' +
     '<td class="cal-col-center">' +
-      '<button class="btn sm primary" data-accion="cobrar" data-id="' + RN.render.escAttr(c.id) + '">Cobrar</button> ' +
-      '<button class="btn sm" data-accion="recordar" data-id="' + RN.render.escAttr(c.id) + '"' +
-        (c.telefono ? '' : ' disabled title="Sin teléfono"') + '>WhatsApp</button>' +
+      '<button type="button" class="btn sm primary icon-btn" title="Cobrar" aria-label="Cobrar" data-accion="cobrar" data-id="' + RN.render.escAttr(c.id) + '">💰</button> ' +
+      '<button type="button" class="btn sm icon-btn" title="WhatsApp" aria-label="WhatsApp" data-accion="recordar" data-id="' + RN.render.escAttr(c.id) + '"' +
+        (c.telefono ? '' : ' disabled title="Sin teléfono"') + '>' + RN.render._svgWhatsApp(c.telefono ? undefined : 'currentColor') + '</button>' +
     '</td>' +
   '</tr>';
 };

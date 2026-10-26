@@ -970,3 +970,19 @@ tr.cobranza-notificado-wa td:first-child {
 /* v5.53.2 — Avisos al abrir */
 .aviso-inicio-lista { margin: 8px 0 0; padding-left: 1.2em; }
 .aviso-inicio-lista li { margin: 4px 0; }
+
+
+/* v5.55.46 — botones de acción solo icono (global) */
+.btn.icon-btn {
+  min-width: 36px;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  line-height: 1;
+}
+.btn.icon-btn svg { display: block; width: 18px; height: 18px; }
+.btn.icon-btn:disabled svg { opacity: 0.35; fill: currentColor; }

@@ -141,7 +141,7 @@ RN.recibo.ver = function (cobroId) {
     <div class="modal-header"><h3>Recibo ${h.reciboNum}</h3><button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>
     <div class="modal-body" style="background:#f1f5f9">${RN.recibo._html(h)}</div>
     <div class="modal-footer">
-      <button class="btn" onclick="RN.whatsapp.enviarComprobante('${RN.render.escAttr(h.id)}')">WhatsApp</button>
+      <button type="button" class="btn icon-btn" title="WhatsApp" aria-label="Enviar por WhatsApp" onclick="RN.whatsapp.enviarComprobante('${RN.render.escAttr(h.id)}')">${RN.render._svgWhatsApp()}</button>
       <button class="btn primary" onclick="RN.recibo.imprimir('${RN.render.escAttr(h.id)}')">🖨️ Imprimir</button>
     </div>`;
   RN.uiComponents.modal(html);

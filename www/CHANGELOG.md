@@ -2,6 +2,17 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.46 — WhatsApp y Cobrar solo iconos (toda la app)
+
+- Helpers `RN.render.btnWhatsApp` / `btnCobrar`.
+- Listas de clientes, cobros, mora, cobranza, calendario, historial, recibo, notificaciones y panel: **icono** en lugar del nombre.
+
+## v5.55.45 — Iconos compactos en Clientes a atender
+
+- WhatsApp: icono oficial (verde).
+- Cobrar: 💰.
+- Botones más compactos en móvil.
+
 ## v5.55.44 — Atención: WhatsApp + Cobrar; orden panel
 
 - Botones **WhatsApp** y **Cobrar** en cada cliente de Clientes a atender.

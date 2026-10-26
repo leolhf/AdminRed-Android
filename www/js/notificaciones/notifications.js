@@ -291,8 +291,8 @@ RN.notify._abrirAccionCliente = function (clienteId) {
     '</div>' +
     '<div class="modal-footer">' +
       '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cerrar</button>' +
-      '<button class="btn" onclick="RN.notify._accionCliente(\'' + c.id + '\',\'wa\')">💬 WhatsApp</button>' +
-      '<button class="btn primary" onclick="RN.notify._accionCliente(\'' + c.id + '\',\'cobrar\')">💵 Cobrar</button>' +
+      '<button type="button" class="btn icon-btn" title="WhatsApp" aria-label="WhatsApp" onclick="RN.notify._accionCliente(\'' + c.id + '\',\'wa\')">' + RN.render._svgWhatsApp() + '</button>' +
+      '<button type="button" class="btn primary icon-btn" title="Cobrar" aria-label="Cobrar" onclick="RN.notify._accionCliente(\'' + c.id + '\',\'cobrar\')">💰</button>' +
     '</div>';
   RN.uiComponents.modal(html, {});
 };

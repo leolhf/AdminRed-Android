@@ -50,8 +50,8 @@ RN.mora.abrir = function () {
         '<td style="text-align:center"><span class="badge due">' + mora + ' mes' + (mora !== 1 ? '(es)' : '') + ' de atraso</span></td>' +
         '<td style="text-align:right">' + totalTxt + '</td>' +
         '<td style="text-align:center;white-space:nowrap">' +
-          '<button class="btn sm primary" onclick="RN.mora._cobrar(\'' + cid + '\')">Cobrar</button> ' +
-          '<button class="btn sm" onclick="RN.mora._recordar(\'' + cid + '\')">WhatsApp</button>' +
+          RN.render.btnCobrar(c.id) + ' ' +
+          RN.render.btnWhatsApp(c.id, { telefono: c.telefono }) +
         '</td>' +
       '</tr>';
     }).join('');
