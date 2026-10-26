@@ -164,8 +164,11 @@ RN.panel.renderBandeja = function () {
 
   box.innerHTML = items.slice(0, 7).map(function (a) {
     var cls = a.nivel === 'red' ? 'due' : (a.nivel === 'amber' ? 'warn' : 'ok');
+    var mapIco = { 'Cobros hoy':'💵', 'Ver pendientes':'🧾', 'Pagar':'💨', 'Morosos':'🔴', 'Ver':'📈', 'Ver caja':'💼', 'Revisar':'📊' };
+    var ico = mapIco[a.accionTxt] || '›';
     var btn = a.accion
-      ? ' <button type="button" class="btn sm primary" onclick="' + a.accion + '">' + RN.render.esc(a.accionTxt || 'Ir') + '</button>'
+      ? ' <button type="button" class="btn sm primary icon-btn" title="' + RN.render.esc(a.accionTxt || 'Ir') +
+        '" aria-label="' + RN.render.esc(a.accionTxt || 'Ir') + '" onclick="' + a.accion + '">' + ico + '</button>'
       : '';
     return '<div class="acc-row" style="align-items:center;gap:8px">'
       + '<span class="acc-label"><span class="badge ' + cls + '">' + (a.nivel === 'red' ? 'Urgente' : (a.nivel === 'amber' ? 'Atención' : 'Info')) + '</span> '
@@ -201,8 +204,8 @@ RN.render.dashboard = function () {
           : 'Nadie en ciclo de cobro hoy') +
       '</div>' +
       '<div class="flex wrap" style="gap:8px;margin-top:10px">' +
-        '<button type="button" class="btn primary sm" onclick="RN.tabs.ir(\'cobros\')">Ir a Cobros</button>' +
-        '<button type="button" class="btn sm" onclick="RN.tabs.ir(\'calendario\')">Calendario</button>' +
+        '<button type="button" class="btn primary sm icon-btn" title="Ir a Cobros" aria-label="Ir a Cobros" onclick="RN.tabs.ir(\'cobros\')">💵</button>' +
+        '<button type="button" class="btn sm icon-btn" title="Calendario" aria-label="Calendario" onclick="RN.tabs.ir(\'calendario\')">📅</button>' +
       '</div>';
   }
 

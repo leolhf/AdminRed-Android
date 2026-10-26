@@ -227,12 +227,12 @@ RN.render.clientes = function () {
         (esAdm ? '' : '<div class="acc-row"><span class="acc-label">Saldo equipo</span><span class="acc-value">' + (deuda > 0 ? '<span class="badge due">' + RN.calc.formatCUP(deuda) + '</span>' : '<span class="muted">—</span>') + '</span></div>') +
         '<div class="acc-actions">' +
           (esAdm ? '' : RN.render.btnCobrar(c.id)) +
-          (esAdm ? '' : '<button class="btn sm" onclick="RN.clientHistory.abrir(\'' + c.id + '\')">Historial</button>') +
+          (esAdm ? '' : RN.render.btnIcon('📋', 'Historial', 'RN.clientHistory.abrir(\'' + RN.render.escAttr(c.id) + '\')')) +
           (esAdm ? '' : RN.render.btnWhatsApp(c.id, { telefono: c.telefono })) +
-          (RN.cola && RN.cola.tieneCola(c) ? '<button class="btn sm" onclick="RN.cola.copiarDeCliente(\'' + c.id + '\')" title="Comando cola Winbox">Cola</button>' : '') +
-          '<button class="btn sm" onclick="RN.equiposRed.abrir(\'' + c.id + '\')">Equipos</button>' +
-          '<button class="btn sm" onclick="RN.modalCliente.editar(\'' + c.id + '\')">Editar</button>' +
-          '<button class="btn sm danger" onclick="RN.confirmDelete.cliente(\'' + c.id + '\')">Eliminar</button>' +
+          (RN.cola && RN.cola.tieneCola(c) ? RN.render.btnIcon('📡', 'Cola MikroTik', 'RN.cola.copiarDeCliente(\'' + RN.render.escAttr(c.id) + '\')') : '') +
+          RN.render.btnIcon('📦', 'Equipos', 'RN.equiposRed.abrir(\'' + RN.render.escAttr(c.id) + '\')') +
+          RN.render.btnIcon('✏️', 'Editar', 'RN.modalCliente.editar(\'' + RN.render.escAttr(c.id) + '\')') +
+          RN.render.btnIcon('🗑️', 'Eliminar', 'RN.confirmDelete.cliente(\'' + RN.render.escAttr(c.id) + '\')', { danger: true }) +
         '</div>' +
       '</div>' +
     '</div>';

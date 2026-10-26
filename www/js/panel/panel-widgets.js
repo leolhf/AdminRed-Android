@@ -201,11 +201,24 @@ RN.panelWidgets.renderAtencion = function () {
     cont.innerHTML = '<div class="atencion-ok">\u2705 Todo en orden \u2014 no hay nada que requiera tu atenci\u00f3n.</div>';
     return;
   }
+  var iconAccion = {
+    'Ver morosos': '🔴',
+    'Pagar': '💨',
+    'Ver resumen': '📡',
+    'Revisar': '📊',
+    'Actualizar': '💱',
+    'Ver': '📈',
+    'Ver caja': '💼',
+    'Cobros hoy': '💵',
+    'Ver pendientes': '🧾'
+  };
   cont.innerHTML = alertas.map(function (a) {
+    var ico = iconAccion[a.accionTxt] || '›';
     return '<div class="atencion-item ' + a.nivel + '">' +
       '<span class="atencion-ico">' + a.icono + '</span>' +
       '<span class="atencion-txt">' + RN.render.esc(a.texto) + '</span>' +
-      '<button class="btn sm" onclick="' + a.accion + '">' + RN.render.esc(a.accionTxt) + '</button>' +
+      '<button type="button" class="btn sm icon-btn" title="' + RN.render.esc(a.accionTxt) +
+        '" aria-label="' + RN.render.esc(a.accionTxt) + '" onclick="' + a.accion + '">' + ico + '</button>' +
     '</div>';
   }).join('');
 };

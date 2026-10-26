@@ -2,6 +2,12 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.50 — Iconos en botones de acción
+
+- Cliente: Historial 📋, Cola 📡, Equipos 📦, Editar ✏️, Eliminar 🗑️ (+ Cobrar/WA).
+- Panel: Cobros 💵, Calendario 📅, Revisar 📊, Ver caja 💼, Pagar 💨, Ver 📈.
+- Cabeceras: Abrir caja 💼, Planes 📑, Nuevo ➕.
+
 ## v5.55.49 — Caja única en pagar deuda
 
 - **Libre y reserva** aplican al **total** de caja (CUP + USD×tasa).

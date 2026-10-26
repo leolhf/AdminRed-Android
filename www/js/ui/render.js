@@ -62,6 +62,25 @@ RN.render.btnWhatsApp = function (clienteId, opts) {
  * @param {string} clienteId
  * @param {object} [opts] { cls, stop, primary }
  */
+
+/**
+ * Botón de acción solo icono (genérico).
+ * @param {string} icono  emoji o HTML
+ * @param {string} title  tooltip / aria
+ * @param {string} onclick JS (ya escapado si hace falta)
+ * @param {object} [opts] { cls, danger, primary, disabled }
+ */
+RN.render.btnIcon = function (icono, title, onclick, opts) {
+  opts = opts || {};
+  var cls = opts.cls || 'btn sm icon-btn';
+  if (opts.primary) cls += ' primary';
+  if (opts.danger) cls += ' danger';
+  var dis = opts.disabled ? ' disabled' : '';
+  return '<button type="button" class="' + cls + '" title="' + RN.render.esc(title) +
+    '" aria-label="' + RN.render.esc(title) + '"' + dis +
+    (onclick ? ' onclick="' + onclick + '"' : '') + '>' + icono + '</button>';
+};
+
 RN.render.btnCobrar = function (clienteId, opts) {
   opts = opts || {};
   var id = RN.render.escAttr(clienteId);
