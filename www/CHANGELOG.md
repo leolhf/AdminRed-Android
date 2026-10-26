@@ -2,6 +2,18 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.49 — Caja única en pagar deuda
+
+- **Libre y reserva** aplican al **total** de caja (CUP + USD×tasa).
+- **CUP/USD** solo eligen de qué gaveta física sale el dinero.
+- Validación en dos pasos: (1) billetes disponibles (2) cabe en libre o confirma reserva.
+
+## v5.55.48 — Pagar deuda: prioridad moneda física
+
+- Deuda en **USD**: al pagar en USD se exige gaveta de dólares; si no alcanzan, aviso claro.
+- Deuda/pago en **CUP**: libre + reserva (como antes).
+- El gasto guarda `montoPagadoUSD` para descontar dólares reales de caja.
+
 ## v5.55.47 — Fix crítico pantalla / clientes
 
 - Se había borrado por error `RN.render.escAttr` al añadir iconos.

@@ -638,7 +638,7 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
             '<option value="CUP"' + (mon === 'CUP' ? ' selected' : '') + '>CUP</option>' +
             '<option value="USD"' + (mon === 'USD' ? ' selected' : '') + '>USD</option>' +
           '</select>' +
-          '<small class="muted" style="display:block;margin-top:4px">Tasa hoy: 1 USD = ' + (tasa || '—') + ' CUP</small>' +
+          '<small class="muted" style="display:block;margin-top:4px">Tasa hoy: 1 USD = ' + (tasa || '—') + ' CUP · Libre/reserva = caja total (CUP+USD)</small>' +
         '</div>' +
       '</div>' +
       '<div class="form-row"><div>' +
@@ -687,53 +687,148 @@ RN.inversion.devolucionPrestamo = function (inversionId) {
 /**
  * Valida monto; permite superar libre solo si se marcó "usar reserva".
  */
+/**
+ * v5.55.48 — Valida devolución priorizando la moneda de la deuda.
+ *  - Deuda USD + pagar en USD: exige dólares físicos; si faltan, avisa completar con CUP.
+ *  - Deuda CUP + pagar en CUP: bolsillo libre / reserva (como antes).
+ *  - Cruzado (deuda USD pagada en CUP, o al revés): convierte y valida la gaveta usada.
+ */
+/**
+ * v5.55.49 — Una sola caja: libre/reserva sobre el TOTAL (CUP + USD×tasa).
+ * CUP/USD solo eligen de qué gaveta física sale el billete.
+ *
+ * 1) ¿Hay moneda física suficiente?
+ * 2) ¿El equivalente CUP cabe en el libre total? Si no → confirmar reserva.
+ */
 RN.inversion._validarDevolucion = function (input) {
   var aviso = document.getElementById('dev-aviso');
   var preview = document.getElementById('dev-preview');
   var btn = document.getElementById('dev-guardar-btn');
   if (!input || !aviso) return;
+
   var monto = parseFloat(input.value) || 0;
   var mon = input.getAttribute('data-moneda-deuda') || 'CUP';
   var saldoMon = parseFloat(input.getAttribute('data-saldo-mon')) || 0;
-  var libre = parseFloat(input.getAttribute('data-libre')) || 0;
   var tasa = parseFloat(input.getAttribute('data-tasa')) || 0;
-  var reserva = parseFloat(input.getAttribute('data-reserva')) || 0;
   var usarReserva = !!(document.getElementById('dev-usar-reserva') || {}).checked;
+  var pagoMon = ((document.getElementById('dev-pago-moneda') || {}).value) || mon;
 
-  var cupSale = (mon === 'USD') ? (tasa > 0 ? monto * tasa : 0) : monto;
+  var libre = 0, reserva = 0;
+  try {
+    var b = RN.calc.bolsillos ? RN.calc.bolsillos() : null;
+    if (b) {
+      libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+      reserva = Math.max(0, +(b.reserva) || 0);
+    }
+  } catch (e) {}
+
+  var usdDisp = 0, cupDisp = 0, totalEq = 0;
+  try {
+    if (RN.calc.usdEnCaja) usdDisp = Math.max(0, +RN.calc.usdEnCaja() || 0);
+    if (RN.calc.saldosMoneda) {
+      var sm = RN.calc.saldosMoneda();
+      cupDisp = Math.max(0, +(sm.cup) || 0);
+      totalEq = Math.max(0, +(sm.totalCUP) || 0);
+    }
+  } catch (e2) {}
+
+  // Equivalente CUP del abono (siempre para libre/reserva de la caja única)
+  var cupEq = 0;
+  if (mon === 'USD') {
+    cupEq = tasa > 0 ? +(monto * tasa).toFixed(2) : 0;
+  } else {
+    cupEq = +monto.toFixed(2);
+  }
+
   var ok = true;
   var msgs = [];
+
   if (monto <= 0) ok = false;
   else if (monto > saldoMon + 0.0001) {
     ok = false;
-    msgs.push('<span class="badge due">⚠️ Excede el saldo</span>');
+    msgs.push('<span class="badge due">⚠️ Excede el saldo de la deuda</span>');
   }
-  if (mon === 'USD' && !(tasa > 0)) {
+  if ((mon === 'USD' || pagoMon === 'USD') && !(tasa > 0) && monto > 0) {
     ok = false;
     msgs.push('<span class="badge due">⚠️ Configura la tasa USD en Ajustes</span>');
   }
-  if (monto > 0 && cupSale > libre + 0.01) {
-    var extra = cupSale - libre;
-    if (usarReserva && extra <= reserva + 0.01) {
-      msgs.push('<span class="badge due">🔒 Usarás ' + RN.calc.formatCUP(extra) + ' de la reserva</span>');
-    } else if (usarReserva) {
-      ok = false;
-      msgs.push('<span class="badge due">⚠️ Reserva insuficiente (' + RN.calc.formatCUP(reserva) + ')</span>');
+
+  if (monto > 0 && ok) {
+    // 1) Gaveta física
+    if (pagoMon === 'USD') {
+      var usdNec = (mon === 'USD') ? monto : (tasa > 0 ? +(monto / tasa).toFixed(2) : 0);
+      if (usdNec > usdDisp + 0.001) {
+        ok = false;
+        msgs.push(
+          '<span class="badge due">⚠️ Solo hay $' + usdDisp.toFixed(2) +
+          ' USD físicos. Necesitas $' + usdNec.toFixed(2) +
+          '. Deposita dólares o paga en CUP.</span>'
+        );
+      } else {
+        msgs.push('<span class="badge ok">✓ Gaveta USD: $' + usdNec.toFixed(2) + '</span>');
+      }
     } else {
-      ok = false;
-      msgs.push('<span class="badge due">⚠️ Supera el libre. Marca "Usar reserva" si quieres continuar</span>');
+      if (cupEq > cupDisp + 0.01 && cupDisp < cupEq * 0.5) {
+        ok = false;
+        msgs.push(
+          '<span class="badge due">⚠️ CUP físico ≈ ' + RN.calc.formatCUP(cupDisp) +
+          '; el pago equivale a ' + RN.calc.formatCUP(cupEq) +
+          '. Revisa depósitos o paga en USD.</span>'
+        );
+      } else {
+        msgs.push('<span class="badge ok">✓ Gaveta CUP: ' + RN.calc.formatCUP(cupEq) + '</span>');
+      }
     }
-  } else if (monto > 0 && ok) {
-    msgs.push('<span class="badge ok">✓ Sale del bolsillo libre</span>');
+
+    // 2) Libre / reserva de TODA la caja
+    if (ok && cupEq > 0) {
+      if (cupEq <= libre + 0.01) {
+        msgs.push('<span class="badge ok">✓ Cabe en el libre de la caja total</span>');
+      } else {
+        var extra = +(cupEq - libre).toFixed(2);
+        if (usarReserva && extra <= reserva + 0.01) {
+          msgs.push(
+            '<span class="badge due">🔒 Toca la reserva: ' + RN.calc.formatCUP(extra) +
+            ' (libre ' + RN.calc.formatCUP(libre) + ')</span>'
+          );
+        } else if (usarReserva) {
+          ok = false;
+          msgs.push('<span class="badge due">⚠️ Reserva insuficiente (' + RN.calc.formatCUP(reserva) + ')</span>');
+        } else {
+          ok = false;
+          msgs.push(
+            '<span class="badge due">⚠️ Equiv. ' + RN.calc.formatCUP(cupEq) +
+            ' supera el libre (' + RN.calc.formatCUP(libre) +
+            '). Marca "Usar reserva" si quieres continuar.</span>'
+          );
+        }
+      }
+    }
   }
+
   aviso.innerHTML = msgs.join(' ');
   if (btn) btn.disabled = !ok || monto <= 0;
+
   if (preview) {
     if (monto > 0 && (mon !== 'USD' || tasa > 0)) {
       var resto = Math.max(0, saldoMon - monto);
-      preview.innerHTML = 'Sale de caja ≈ <strong>' + RN.calc.formatCUP(cupSale) + '</strong>' +
-        (mon === 'USD' ? ' (tasa del día)' : '') +
-        ' · Saldo quedaría en <strong>' + (mon === 'USD' ? resto.toFixed(2) + ' USD' : RN.calc.formatCUP(resto)) + '</strong>';
+      var usdNecP = (pagoMon === 'USD')
+        ? ((mon === 'USD') ? monto : (tasa > 0 ? +(monto / tasa).toFixed(2) : 0))
+        : 0;
+      var det = pagoMon === 'USD'
+        ? ('$' + usdNecP.toFixed(2) + ' USD de gaveta')
+        : (RN.calc.formatCUP(cupEq) + ' CUP de gaveta');
+      preview.innerHTML =
+        'Sale: <strong>' + det + '</strong> · Equiv. libros <strong>' + RN.calc.formatCUP(cupEq) + '</strong>' +
+        ' · Deuda quedaría <strong>' +
+        (mon === 'USD' ? resto.toFixed(2) + ' USD' : RN.calc.formatCUP(resto)) + '</strong>' +
+        '<br><span class="muted" style="font-size:11px">' +
+        'Caja total ≈ ' + RN.calc.formatCUP(totalEq) +
+        ' · Libre ' + RN.calc.formatCUP(libre) +
+        ' · Reserva ' + RN.calc.formatCUP(reserva) +
+        ' · USD $' + usdDisp.toFixed(2) +
+        ' · CUP ' + RN.calc.formatCUP(cupDisp) +
+        '</span>';
     } else preview.innerHTML = '';
   }
 };
@@ -757,7 +852,6 @@ RN.inversion.guardarDevolucion = function (inversionId) {
     RN.notifyUI.toast('El pago excede el saldo pendiente en ' + mon, 'error');
     return;
   }
-  // v5.55.42: tasaUsd (no tasaUSD). Fallback: tasa de la compra de la deuda.
   var tasa = (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0)
     || +(RN.state.config && RN.state.config.tasaUsd)
     || +(inv.tasaUsdCompra || 0)
@@ -772,7 +866,6 @@ RN.inversion.guardarDevolucion = function (inversionId) {
   } else {
     montoCUP = +montoMon.toFixed(2);
   }
-  // También validar vs saldo CUP legado (compat)
   var saldoCUP = RN.investment.saldoADevolver(inv);
   if (mon === 'CUP' && montoCUP > saldoCUP + 0.01) {
     RN.notifyUI.toast('La devolución excede el saldo pendiente (' + RN.calc.formatCUP(saldoCUP) + ')', 'error');
@@ -787,16 +880,35 @@ RN.inversion.guardarDevolucion = function (inversionId) {
   if (!concepto) {
     concepto = 'Devolución de préstamo: ' + inv.concepto;
   }
-  var pagoMon = ((document.getElementById('dev-pago-moneda') || {}).value) || 'CUP';
-  // v5.55.6: no tocar reserva sin confirmación
+
+  var pagoMon = ((document.getElementById('dev-pago-moneda') || {}).value) || mon;
   var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, reserva: 0 };
   var libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
   var reserva = Math.max(0, +(b.reserva) || 0);
   var usarReserva = !!(document.getElementById('dev-usar-reserva') || {}).checked;
-  if (montoCUP > libre + 0.01) {
-    var extra = montoCUP - libre;
+
+  var usdDisp = 0;
+  try { usdDisp = RN.calc.usdEnCaja ? Math.max(0, +RN.calc.usdEnCaja() || 0) : 0; } catch (e) {}
+
+  var cupEq = montoCUP;
+  var montoPagadoUSD = 0;
+  var montoPagadoCUP = 0;
+
+  if (pagoMon === 'USD') {
+    var usdNec = (mon === 'USD') ? montoMon : (tasa > 0 ? +(montoMon / tasa).toFixed(2) : 0);
+    if (usdNec > usdDisp + 0.001) {
+      RN.notifyUI.toast('No hay suficientes USD en caja ($' + usdDisp.toFixed(2) + '). Deposita dólares o paga en CUP.', 'error');
+      return;
+    }
+    montoPagadoUSD = +usdNec.toFixed(2);
+  } else {
+    montoPagadoCUP = cupEq;
+  }
+
+  if (cupEq > libre + 0.01) {
+    var extra = cupEq - libre;
     if (!usarReserva) {
-      RN.notifyUI.toast('El pago supera el bolsillo libre. Marca "Usar reserva" para continuar.', 'error');
+      RN.notifyUI.toast('El pago supera el libre de la caja total. Marca "Usar reserva" para continuar.', 'error');
       return;
     }
     if (extra > reserva + 0.01) {
@@ -808,12 +920,15 @@ RN.inversion.guardarDevolucion = function (inversionId) {
   RN.state.gastos.push({
     id: RN.calc.uid('devinv'),
     concepto: concepto,
-    monto: montoCUP,
+    monto: cupEq,
     montoMonedaDeuda: montoMon,
     monedaDeuda: mon,
     monedaPagoCaja: pagoMon,
+    moneda: pagoMon,
+    montoPagadoUSD: montoPagadoUSD,
+    montoPagadoCUP: montoPagadoCUP,
     tasaUsd: tasa,
-    usoReserva: !!(document.getElementById('dev-usar-reserva') || {}).checked && montoCUP > libre + 0.01,
+    usoReserva: usarReserva && cupEq > libre + 0.01,
     categoria: 'Devolución de préstamo',
     esDevolucionInversion: true,
     inversionId: inversionId,
@@ -822,7 +937,6 @@ RN.inversion.guardarDevolucion = function (inversionId) {
   });
 
   var concluida = RN.investment.verificarConclusion(inv);
-
   RN.storageLocal.guardar();
 
   if (concluida) {
