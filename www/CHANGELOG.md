@@ -2,6 +2,11 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.53 — Fluidez en APK
+
+- `RN.render.todo` ya no pinta las 16 vistas de golpe: renderiza la vista activa y refresca el resto en segundo plano (una por turno).
+- En pantallas táctiles/pequeñas se desactiva `backdrop-filter` (blur), muy costoso en el WebView de Android.
+
 ## v5.55.52 — Flujo de dinero: una sola ganancia, auditoría de caja
 
 Implementa las 6 recomendaciones de la revisión del flujo de dinero.
