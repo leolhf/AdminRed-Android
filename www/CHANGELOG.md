@@ -2,6 +2,18 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.52 — Flujo de dinero: una sola ganancia, auditoría de caja
+
+Implementa las 6 recomendaciones de la revisión del flujo de dinero.
+
+- **Ganancia unificada:** nuevo `RN.calc.utilidadOperativaMes` (ingresos − gastos operativos, sin cuadres, devoluciones ni aplicaciones de préstamo). La usan bolsillos/reserva, proyección de caja, aporte extra de inversiones y snapshots (`utilidadOperativa`). `utilidadMes` queda como "resultado de caja" (compatibilidad).
+- **Un solo criterio de gasto operativo:** inversiones usa `RN.calc.esGastoOperativo`.
+- **Recuperación virtual vs real:** `RN.investment.aplicacionPendiente` calcula cuánto generaron los clientes y aún no se devolvió de verdad. Aviso en Caja y en la tarjeta de deuda, con botón *Aplicar* (se puede apagar con `config.avisoAplicacionInversion = false`).
+- **Auditoría de caja** (`RN.auditoria.verificarCaja`, dentro de Auditoría financiera y tras importar un respaldo): fondo recalculado, gavetas CUP/USD, conciliación de bolsillos, movimientos sin mes, gastos USD sin `montoPagadoUSD`, clientes sin `mesInicio`.
+- **Bolsillos conciliables:** `bolsillos()` devuelve `serie` (mes a mes, con `recorte` de reserva), `fondoCorridoFinal` y `desfaseFondo`.
+- **Textos en la UI** que aclaran fondo real vs ganancia operativa vs % recuperado contable.
+- **Tests:** +25 de flujo de caja (pago mixto, vuelto USD, cuadre posterior, retiro que toca reserva, devolución en el mismo mes).
+
 ## v5.55.51 — Release sin iconos globales (5.50)
 
 - Empaqueta **5.55.49** (caja única libre/reserva al pagar deuda).

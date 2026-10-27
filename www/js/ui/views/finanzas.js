@@ -30,6 +30,21 @@ RN.render.caja = function () {
         accionTxt: 'Pagar'
       });
     }
+    // v5.55.52: recuperación contable vs dinero real. Avisa cuánto se debería aplicar a deudas.
+    try {
+      if (RN.investment.avisoAplicacionActivo && RN.investment.avisoAplicacionActivo()) {
+        (RN.investment.aplicacionesPendientes() || []).slice(0, 2).forEach(function (p) {
+          items.push({
+            cls: 'warn',
+            txt: 'Tus clientes ya generaron ' + RN.calc.formatCUP(p.info.pendiente) + ' para «' +
+              (p.inv.concepto || 'deuda') + '», pero aún no sale de caja' +
+              (p.info.sugerido > 0 ? '. Puedes aplicar hasta ' + RN.calc.formatCUP(p.info.sugerido) + ' hoy.' : ' y no hay libre para aplicarlo.'),
+            accion: 'RN.inversion.devolucionPrestamo(\'' + p.inv.id + '\')',
+            accionTxt: 'Aplicar'
+          });
+        });
+      }
+    } catch (e) {}
     try {
       if (RN.calc.usdEnCaja && RN.calc.usdEnCaja() < 0.01) {
         var deudasUsd = (RN.investment.deudasActivas ? RN.investment.deudasActivas() : []).some(function (i) {

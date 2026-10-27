@@ -190,7 +190,13 @@ RN.export.importarBackup = function () {
       }
       // Paso 4: Validar coherencia financiera después de importar
       var val = RN.validacion.validar();
-      if (val.ok) {
+      // v5.55.52: auditoría de caja tras importar (fondo, gavetas, bolsillos).
+      var cajaAud = null;
+      try { cajaAud = RN.auditoria && RN.auditoria.verificarCaja ? RN.auditoria.verificarCaja() : null; } catch (eA) {}
+      if (val.ok && cajaAud && cajaAud.errores.length) {
+        RN.notifyUI.toast('Importado, pero la auditoría de caja detectó ' + cajaAud.errores.length + ' inconsistencia(s). Ver Ajustes → Diagnóstico → Auditoría financiera.', 'warn');
+        console.warn('[AdminRed import] Auditoría de caja:', cajaAud.errores);
+      } else if (val.ok) {
         RN.notifyUI.toast('Respaldo importado correctamente. Integridad OK.', 'success');
       } else {
         RN.notifyUI.toast('Importado con ' + val.errores.length + ' advertencias de integridad', 'warn');

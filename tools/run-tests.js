@@ -18,6 +18,7 @@ const MODULOS = [
   'js/core/models/investment.js',
   'js/core/models/inventario.js',
   'js/cobros/descuentos.js',
+  'js/core/auditoria.js',
   'js/tests/tests-calculo.js'
 ];
 

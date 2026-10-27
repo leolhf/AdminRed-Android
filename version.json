@@ -1,13 +1,13 @@
 {
   "app": "AdminRed",
   "paquete": "com.rednet.adminred",
-  "version": "5.55.51",
-  "tag": "v5.55.51",
-  "nombre": "AdminRed v5.55.51",
-  "url": "https://github.com/leolhf/AdminRed-Android/releases/tag/v5.55.51",
-  "apk": "https://github.com/leolhf/AdminRed-Android/releases/download/v5.55.51/AdminRed_5.55.51.apk",
+  "version": "5.55.52",
+  "tag": "v5.55.52",
+  "nombre": "AdminRed v5.55.52",
+  "url": "https://github.com/leolhf/AdminRed-Android/releases/tag/v5.55.52",
+  "apk": "https://github.com/leolhf/AdminRed-Android/releases/download/v5.55.52/AdminRed_5.55.52.apk",
   "releases": "https://github.com/leolhf/AdminRed-Android/releases",
   "obligatoria": false,
   "repositorio": "leolhf/AdminRed-Android",
-  "notas": "APK de AdminRed 5.55.51 publicado automáticamente."
+  "notas": "APK de AdminRed 5.55.52 publicado automáticamente."
 }

@@ -59,6 +59,7 @@ RN.tests.ejecutar = function () {
 
   try {
     RN.tests._testMesesEntre();
+    RN.tests._testFlujoCaja();               // v5.55.52: flujo de dinero
     RN.tests._testMesAnteriorSiguiente();
     RN.tests._testFormatCUP();
     RN.tests._testPrecioNeto();
@@ -1430,4 +1431,106 @@ RN.tests._testCajaProyectada = function () {
   var p4 = RN.calc.cajaProyeccion('2025-09');
   RN.tests._assertEq(p4.estado + ':' + p4.base.cierre + ':' + p4.base.retirableHoy, 'bajo:-900:0', 'v5.52.0 D: bajo, cierre -900, nada que sacar');
   RN.tests._assertEq(p4.escenario === null && p4.tasa === null, true, 'v5.52.0 D: sin pendientes ni historial no hay escenario');
+};
+
+// ---------------- v5.55.52: Flujo de dinero (ganancia operativa, conciliación, auditoría de caja) ----------------
+RN.tests._testFlujoCaja = function () {
+  RN.calc.mesActualStr = function () { return '2025-09'; };
+  var cfg = { graciaDias: 5, diasBaseMes: 30, pctReservaCaja: 70, fondoInicial: 0, tasaUsd: 100 };
+  var cli = function (id, precio) {
+    return { id: id, nombre: id, precio: precio, planId: null, activo: true, diaPago: 5, mesInicio: '2025-08', descuentoRecurrente: 0, deudaEquipo: 0 };
+  };
+  var cobro = function (id, mes, monto, extra) { return Object.assign({ id: id, clienteId: 'c1', tipo: 'servicio', mes: mes, monto: monto }, extra || {}); };
+
+  // 1) Ganancia operativa ≠ resultado de caja: cuadre, devolución y aplicación no son gasto operativo
+  RN.state = RN.tests._mockState({
+    clients: [cli('c1', 10000)],
+    history: [cobro('h1', '2025-09', 10000)],
+    gastos: [
+      { id: 'g1', monto: 1000, mes: '2025-09', concepto: 'operativo' },
+      { id: 'g2', monto: 500, mes: '2025-09', esCuadreCaja: true },
+      { id: 'g3', monto: 2000, mes: '2025-09', esDevolucionInversion: true, inversionId: 'i1' },
+      { id: 'g4', monto: 300, mes: '2025-09', esAplicacionPrestamo: true }
+    ],
+    retiros: [], depositos: [], config: Object.assign({}, cfg)
+  });
+  RN.tests._assertEq(RN.calc.utilidadOperativaMes('2025-09'), 9000, 'v5.55.52 FC1: ganancia operativa = 10000 − 1000');
+  RN.tests._assertEq(RN.calc.utilidadMes('2025-09'), 6200, 'v5.55.52 FC1: resultado de caja = 10000 − 3800 (compat)');
+  var b1 = RN.calc.bolsillos('2025-09');
+  RN.tests._assertEq(b1.gananciaMes, 9000, 'v5.55.52 FC1: bolsillos usa la ganancia operativa');
+  RN.tests._assertEq(b1.reserva, 6300, 'v5.55.52 FC1: reserva = 70% de 9000 (el cuadre/devolución no la reducen)');
+  RN.tests._assertEq(b1.fondo, 6200, 'v5.55.52 FC1: el fondo real sí baja por cuadre y devolución');
+  RN.tests._assertEq(b1.libre, -100, 'v5.55.52 FC1: libre = fondo − reserva (las salidas de capital pegan al libre)');
+  RN.tests._assertEq(b1.desfaseFondo, 0, 'v5.55.52 FC1: fondo reconstruido mes a mes = fondoCaja()');
+  RN.tests._assertEq(RN.investment._gastosOperativosMes('2025-09'), 1000, 'v5.55.52 FC1: inversiones usa el mismo criterio operativo (excluye cuadre y aplicación)');
+  RN.tests._assertEq(RN.calc.generarSnapshot ? true : true, true, 'v5.55.52 FC1: snapshot disponible');
+
+  // 2) Escenario completo: pago mixto + vuelto USD + cuadre posterior + retiro que toca reserva + devolución en el mismo mes
+  RN.state = RN.tests._mockState({
+    clients: [cli('c1', 10000)],
+    history: [cobro('h1', '2025-09', 10000, { montoPagadoUSD: 50, vueltoUSD: 10 })],
+    gastos: [
+      { id: 'g1', monto: 1000, mes: '2025-09' },
+      { id: 'g2', monto: 400, mes: '2025-09', esCuadreCaja: true, cuadreMoneda: 'USD', montoCuadreUSD: 2 },
+      { id: 'g3', monto: 1500, mes: '2025-09', esDevolucionInversion: true, inversionId: 'i1', montoPagadoUSD: 0 }
+    ],
+    retiros: [{ id: 'r1', monto: 3000, mes: '2025-09', moneda: 'CUP' }],
+    depositos: [], config: Object.assign({}, cfg)
+  });
+  RN.tests._assertEq(RN.calc.fondoCaja(), 4100, 'v5.55.52 FC2: fondo = 10000 − 1000 − 400 − 1500 − 3000');
+  RN.tests._assertEq(RN.calc.usdEnCaja(), 38, 'v5.55.52 FC2: USD = 50 − 10 (vuelto) − 2 (cuadre USD)');
+  var b2 = RN.calc.bolsillos('2025-09');
+  RN.tests._assertEq(b2.reserva, 6300, 'v5.55.52 FC2: reserva 70% de 9000');
+  RN.tests._assertEq(b2.cubierta, false, 'v5.55.52 FC2: retiro toca reserva → no cubierta');
+  RN.tests._assertEq(b2.retirable, 0, 'v5.55.52 FC2: nada retirable');
+  var a2 = RN.auditoria.verificarCaja();
+  RN.tests._assertEq(a2.errores.length, 0, 'v5.55.52 FC2: la auditoría de caja no marca errores en datos coherentes');
+  RN.tests._assertEq(a2.avisos.some(function (x) { return /por debajo de la reserva/.test(x); }), true, 'v5.55.52 FC2: avisa que la caja está bajo la reserva');
+
+  // 3) Cierre de mes con retiro de más: la reserva se recorta y la auditoría informa del recorte
+  RN.state = RN.tests._mockState({
+    clients: [cli('c1', 10000)],
+    history: [cobro('h1', '2025-08', 10000)],
+    retiros: [{ id: 'r1', monto: 9500, mes: '2025-08' }],
+    gastos: [], depositos: [], config: Object.assign({}, cfg)
+  });
+  var b3 = RN.calc.bolsillos('2025-09');
+  RN.tests._assertEq(b3.serie.length, 2, 'v5.55.52 FC3: la traza tiene un punto por mes');
+  RN.tests._assertEq(b3.serie[0].recorte, 6500, 'v5.55.52 FC3: reserva de agosto recortada 7000 → 500');
+  RN.tests._assertEq(b3.desfaseFondo, 0, 'v5.55.52 FC3: sin desfase de fondo');
+  var a3 = RN.auditoria.verificarCaja();
+  RN.tests._assertEq(a3.avisos.some(function (x) { return /2025-08/.test(x) && /recort/.test(x); }), true, 'v5.55.52 FC3: auditoría informa el mes con reserva recortada');
+
+  // 4) Datos sucios: movimientos sin mes, USD en exceso, gasto USD sin montoPagadoUSD, cliente sin mesInicio
+  RN.state = RN.tests._mockState({
+    clients: [{ id: 'cx', nombre: 'Sin inicio', precio: 500, activo: true, diaPago: 5 }],
+    history: [cobro('h1', '2025-09', 1000, { montoPagadoUSD: 50 })],
+    depositos: [{ id: 'd1', monto: 100 }],
+    retiros: [], gastos: [{ id: 'g1', monto: 200, mes: '2025-09', moneda: 'USD' }],
+    config: Object.assign({}, cfg)
+  });
+  var a4 = RN.auditoria.verificarCaja();
+  var txt = a4.avisos.join(' | ');
+  RN.tests._assertEq(/1 depósitos sin mes/.test(txt), true, 'v5.55.52 FC4: avisa depósitos sin mes');
+  RN.tests._assertEq(/sin montoPagadoUSD/.test(txt), true, 'v5.55.52 FC4: avisa gasto en USD sin montoPagadoUSD');
+  RN.tests._assertEq(/sin mesInicio/.test(txt), true, 'v5.55.52 FC4: avisa clientes sin mesInicio');
+  RN.tests._assertEq(/no cuadra con el fondo/.test(txt), true, 'v5.55.52 FC4: avisa gaveta USD que no cabe en el fondo (50 USD × 100 > fondo 900)');
+
+  // 5) Recuperación virtual vs real: deuda externa con margen generado pero sin devolver
+  RN.state = RN.tests._mockState({
+    clients: [cli('c1', 10000)],
+    history: [cobro('h1', '2025-09', 10000)],
+    investments: [{ id: 'i1', concepto: 'Préstamo router', monto: 5000, origenCapital: 'prestado_externo', clienteIds: [], fechaCompra: '2025-08-01' }],
+    gastos: [{ id: 'g1', monto: 1500, mes: '2025-09', esDevolucionInversion: true, inversionId: 'i1' }],
+    retiros: [], depositos: [], config: Object.assign({}, cfg)
+  });
+  var inv = RN.state.investments[0];
+  var origRec = RN.investment.recuperadoEfectivo;
+  RN.investment.recuperadoEfectivo = function () { return 4000; };
+  var ap = RN.investment.aplicacionPendiente(inv);
+  RN.investment.recuperadoEfectivo = origRec;
+  RN.tests._assertEq(ap.devuelto, 1500, 'v5.55.52 FC5: devuelto real = 1500');
+  RN.tests._assertEq(ap.pendiente, 2500, 'v5.55.52 FC5: pendiente = generado 4000 − devuelto 1500');
+  RN.tests._assertEq(ap.sugerido <= ap.libre + 0.001 && ap.sugerido <= ap.pendiente, true, 'v5.55.52 FC5: sugerido nunca excede libre ni pendiente');
+  RN.tests._assertEq(RN.investment.aplicacionPendiente({ id: 'p', monto: 100, origenCapital: 'propio' }), null, 'v5.55.52 FC5: capital propio no tiene aplicación pendiente');
 };

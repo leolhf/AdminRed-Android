@@ -1043,7 +1043,8 @@ RN.inversion._htmlDetalleRecuperacion = function (inv, opts) {
   var _proyeccion = RN.investment.proyectarRecuperacion(inv);
   var _nClientes = (inv.clienteIds || []).length;
   var tituloRecuperacion = esDeuda ? 'Generado por clientes (referencia)' : 'Recuperación';
-  var _html = '<div class="acc-row" style="font-weight:600"><span class="acc-label">' + tituloRecuperacion + '</span><span class="acc-value">' + _pctRec + '%</span></div>'
+  var _html = '<div class="acc-row"><span class="acc-label muted" style="font-size:11px">ℹ️ Recuperado = margen de clientes (contable). No es efectivo disponible hasta que lo registres en Caja.</span></div>'
+    + '<div class="acc-row" style="font-weight:600"><span class="acc-label">' + tituloRecuperacion + '</span><span class="acc-value">' + _pctRec + '%</span></div>'
     + '<div class="acc-row"><span class="acc-label">Clientes vinculados</span><span class="acc-value">' + _nClientes + '</span></div>'
     + '<div class="acc-row"><span class="acc-label">Recuperado (neto, automático)</span><span class="acc-value"><strong>' + RN.calc.formatCUP(_recuperado) + '</strong></span></div>';
 
@@ -1071,6 +1072,12 @@ RN.inversion._htmlDetalleRecuperacion = function (inv, opts) {
       + (_pctGananciaMes > 0 ? '<div class="acc-row" style="font-weight:600"><span class="acc-label">Recuperado efectivo (cobrado + aporte extra)</span><span class="acc-value"><strong>' + RN.calc.formatCUP(_recuperadoEfectivo) + '</strong> <span class="badge ' + (_pctEfectivo >= 100 ? 'ok' : 'warn') + '">' + _pctEfectivo + '%</span></span></div>' : '')
       + '<div class="acc-row"><span class="acc-label">Tiempo restante para recuperar</span><span class="acc-value"><strong>' + RN.render.esc(_proyeccion) + '</strong></span></div>';
   } else {
+    // v5.55.52: lo generado por clientes aún no es dinero devuelto; mostrar cuánto falta aplicar.
+    var _ap = (RN.investment.avisoAplicacionActivo && RN.investment.avisoAplicacionActivo()) ? RN.investment.aplicacionPendiente(inv) : null;
+    if (_ap && _ap.pendiente > 0.009) {
+      _html += '<div class="acc-row"><span class="acc-label">Generado y aún sin aplicar en caja</span><span class="acc-value"><strong>' + RN.calc.formatCUP(_ap.pendiente) + '</strong>'
+        + (_ap.sugerido > 0 ? ' <span class="muted" style="font-size:11px">(puedes aplicar hasta ' + RN.calc.formatCUP(_ap.sugerido) + ' hoy)</span>' : ' <span class="muted" style="font-size:11px">(sin libre en caja)</span>') + '</span></div>';
+    }
     _html += '<div class="acc-row"><span class="acc-label">Margen neto mensual (bruto)</span><span class="acc-value">' + RN.calc.formatCUP(_margenMes) + '</span></div>'
       + '<div class="acc-row"><span class="acc-label">Aporte neto mensual a recuperación</span><span class="acc-value">' + RN.calc.formatCUP(_aporteMes) + '</span></div>'
       + '<div class="acc-row"><span class="acc-label">Tiempo restante para recuperar</span><span class="acc-value"><strong>' + RN.render.esc(_proyeccion) + '</strong></span></div>';

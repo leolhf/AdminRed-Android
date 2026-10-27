@@ -1170,7 +1170,8 @@ RN.calc.fondoCaja = function () {
 /**
  * v5.19.0 — Modelo "DOS BOLSILLOS" de la caja.
  *
- * Cada mes, la GANANCIA del mes (ingresos − gastos, SIN retiros) se reparte:
+ * Cada mes, la GANANCIA OPERATIVA del mes (v5.55.52: ingresos − gastos operativos, SIN
+ * retiros, cuadres ni movimientos de capital) se reparte:
  *   - 🔒 Reserva += gananciaMes × pct%      (intocable)
  *   - 💸 Libre   += gananciaMes × (100−pct)%
  * Los meses con pérdida NO tocan la reserva (solo reducen el bolsillo libre).
@@ -1227,10 +1228,11 @@ RN.calc.bolsillos = function (mes) {
   var fondoCorrido = +(RN.state.config.fondoInicial || 0);
   Object.keys(netoMes).forEach(function (k) { if (k < inicio) fondoCorrido += netoMes[k]; });
   var m = inicio, guard = 0;
+  var serie = []; // v5.55.52: traza mes a mes para conciliar con fondoCaja()
   while (m <= mes && guard < 1200) {
     fondoCorrido += (netoMes[m] || 0);
     if (m === mes) reservaInicioMes = reservaAcum;
-    var g = RN.calc.utilidadMes(m); // ingresos − gastos (los retiros ya no son gastos)
+    var g = RN.calc.utilidadOperativaMes(m); // v5.55.52: ganancia OPERATIVA (sin cuadres ni movimientos de capital)
     gananciaTotal += g;
     if (g > 0) {
       var r = g * pct / 100;
@@ -1240,11 +1242,13 @@ RN.calc.bolsillos = function (mes) {
       libreAcum += g; // la pérdida reduce el bolsillo libre, no la reserva
     }
     // v5.52.0: al cerrar un mes (no el actual) la reserva no puede exceder lo que quedó en caja.
+    var recorte = 0;
     if (m < mes) {
       var tope = Math.max(0, fondoCorrido);
-      if (reservaAcum > tope) reservaAcum = tope;
+      if (reservaAcum > tope) { recorte = reservaAcum - tope; reservaAcum = tope; }
     }
     nMeses++;
+    serie.push({ mes: m, ganancia: +g.toFixed(2), reserva: +reservaAcum.toFixed(2), fondoCorrido: +fondoCorrido.toFixed(2), recorte: +recorte.toFixed(2), cerrado: m < mes });
     // mes siguiente
     var p = m.split('-').map(Number);
     var yy = p[0], mm = p[1] + 1;
@@ -1254,6 +1258,11 @@ RN.calc.bolsillos = function (mes) {
   }
 
   var fondo = RN.calc.fondoCaja();
+  // v5.55.52: fondo reconstruido mes a mes + movimientos de meses posteriores al pedido
+  // (para que sea comparable con fondoCaja(), que suma TODO el historial).
+  var posterior = 0;
+  Object.keys(netoMes).forEach(function (k) { if (k > mes) posterior += netoMes[k]; });
+  var fondoCorridoFinal = +(fondoCorrido + posterior).toFixed(2);
   var reserva = +reservaAcum.toFixed(2);
   var libre = +(fondo - reserva).toFixed(2);
   var retirable = +Math.max(0, libre).toFixed(2);
@@ -1274,7 +1283,12 @@ RN.calc.bolsillos = function (mes) {
     saldoInicial: +(RN.state.config.fondoInicial || 0).toFixed(2),
     meses: nMeses,
     reservaInicioMes: +reservaInicioMes.toFixed(2),
-    gananciaMes: +RN.calc.utilidadMes(mes).toFixed(2)
+    gananciaMes: +RN.calc.utilidadOperativaMes(mes).toFixed(2),
+    // v5.55.52: conciliación. fondoCorrido (suma mes a mes, incluye movimientos sin
+    // mes) debe coincidir con fondoCaja(); si no, hay datos con fecha/mes dudoso.
+    serie: serie,
+    fondoCorridoFinal: fondoCorridoFinal,
+    desfaseFondo: +(fondo - fondoCorridoFinal).toFixed(2)
   };
 };
 
@@ -1340,7 +1354,7 @@ RN.calc.cajaProyeccion = function (mes) {
   var porPagar = (costoPaquete > 0 && RN.calc.saldoProveedorMes)
     ? RN.calc.saldoProveedorMes(mes)
     : ((costoPaquete > 0 && !RN.calc.pagoProveedorMes(mes)) ? costoPaquete : 0);
-  var utilHoy = RN.calc.utilidadMes(mes);
+  var utilHoy = RN.calc.utilidadOperativaMes(mes); // v5.55.52: misma ganancia que la reserva
 
   var resolver = function (fraccion) {
     var cobra = +(pendiente * fraccion).toFixed(2);
@@ -1561,9 +1575,27 @@ RN.calc.estadoCapacidad = function () {
   return { comprometido: 0, tope: 0, pct: 0, pctReal: 0, excedido: false, aviso: false, vendidos: 0, megasAdmin: 0, relacionVenta: 0, paquete: 0, reserva: 0, margen: 0 };
 };
 
-/** Utilidad neta del mes = ingresos - gastos. */
+/**
+ * v5.55.52 — Resultado de CAJA del mes = ingresos − TODOS los gastos del mes
+ * (incluye cuadres, devoluciones de deuda/inversión y aplicaciones de préstamo).
+ * Es lo que explica cuánto se movió el dinero físico; NO es la ganancia del
+ * negocio. Para ganancia/KPIs/reserva usar RN.calc.utilidadOperativaMes().
+ * Se conserva el nombre por compatibilidad (snapshots, reportes antiguos).
+ */
 RN.calc.utilidadMes = function (mes) {
   return RN.calc.ingresosMes(mes) - RN.calc.gastosMes(mes);
+};
+
+/**
+ * v5.55.52 — GANANCIA OPERATIVA del mes = ingresos − gastos OPERATIVOS.
+ * Excluye cuadres, devoluciones de inversión, aplicaciones de préstamo y retiros
+ * legacy (ver RN.calc.esGastoOperativo). Es la única definición de "ganancia"
+ * que usan bolsillos (reserva), proyección de caja, snapshots (campo
+ * utilidadOperativa), aporte extra de inversiones y los KPIs de salud.
+ */
+RN.calc.utilidadOperativaMes = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  return RN.calc.ingresosMes(mes) - RN.calc.gastosOperativosMes(mes);
 };
 
 /**
@@ -1734,6 +1766,7 @@ RN.calc.generarSnapshot = function (mes) {
     ingresos: RN.calc.ingresosMes(mes),
     gastos: RN.calc.gastosMes(mes),
     utilidad: RN.calc.utilidadMes(mes),
+    utilidadOperativa: RN.calc.utilidadOperativaMes(mes), // v5.55.52
     clientesTotal: cob.total,
     clientesPagaron: cob.pagaron,
     clientesFaltan: cob.faltan,

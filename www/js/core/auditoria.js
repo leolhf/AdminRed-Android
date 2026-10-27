@@ -86,6 +86,103 @@ RN.auditoria._htmlEventosDescuentos = function () {
 };
 
 /**
+ * v5.55.52 — Auditoría de CAJA y dinero (recomendaciones 3 y 6 de la revisión de flujo).
+ * Verifica, sin modificar datos:
+ *   1. fondoCaja() ≈ saldoInicial + Σ ingresos + Σ depósitos − Σ gastos − Σ retiros
+ *      (recalculado de forma independiente desde los arreglos).
+ *   2. Gaveta CUP + USD×tasa ≈ fondo (un CUP físico negativo = más dólares de los que caben).
+ *   3. bolsillos(): el fondo reconstruido mes a mes coincide con fondoCaja(); la reserva
+ *      nunca supera el fondo en meses cerrados (informa los meses en que se recortó).
+ *   4. Movimientos sin mes asignado (depósitos, retiros, cobros) que desordenan la reserva.
+ *   5. Gastos pagados en USD sin montoPagadoUSD (el dólar físico no se descontaría).
+ *   6. Clientes activos sin mesInicio ni createdAt (mora / "por iniciar" poco fiable).
+ * @returns {{errores: string[], avisos: string[], bolsillos: object|null}}
+ */
+RN.auditoria.verificarCaja = function () {
+  var errores = [], avisos = [];
+  var state = RN.state || {};
+  var cfg = state.config || {};
+  var TOL = 0.05;
+  var fmt = function (n) { return RN.calc.formatCUP ? RN.calc.formatCUP(n) : String(n); };
+  var sum = function (arr, f) { return (arr || []).reduce(function (s, x) { return s + (f(x) || 0); }, 0); };
+
+  // 1. Fondo recalculado de forma independiente
+  var fondo = RN.calc.fondoCaja();
+  var indep = (+cfg.fondoInicial || 0)
+    + sum(state.history, function (h) { return (h.monto || 0) + (h.montoEquipo || 0) + (h.montoMoraCobrada || 0); })
+    + sum(state.depositos, function (d) { return d.monto; })
+    - sum(state.gastos, function (g) { return g.monto; })
+    - sum(state.retiros, function (r) { return r.monto; });
+  if (Math.abs(fondo - indep) > TOL) {
+    errores.push('Fondo de caja incoherente: fondoCaja()=' + fmt(fondo) + ' vs suma independiente=' + fmt(indep));
+  }
+
+  // 2. Gavetas físicas vs fondo
+  try {
+    var tasa = +cfg.tasaUsd || 0;
+    var usd = RN.calc.usdEnCaja();
+    if (usd < -0.01) {
+      errores.push('USD físico negativo en caja (' + usd.toFixed(2) + '): hay más retiros/gastos en dólares que dólares ingresados');
+    }
+    if (tasa > 0) {
+      var cupBruto = fondo - usd * tasa;
+      if (cupBruto < -TOL) {
+        avisos.push('Gaveta CUP + USD×tasa no cuadra con el fondo: los ' + usd.toFixed(2) + ' USD a tasa ' + tasa +
+          ' valen ' + fmt(usd * tasa) + ' pero el fondo total es ' + fmt(fondo) + ' (CUP físico quedaría en ' + fmt(cupBruto) + ')');
+      }
+    } else if (usd > 0.01) {
+      avisos.push('Hay ' + usd.toFixed(2) + ' USD físicos pero no hay tasa USD configurada: no se puede conciliar con el fondo');
+    }
+  } catch (e) { /* la auditoría nunca debe romper la app */ }
+
+  // 3. Bolsillos: conciliación mes a mes
+  var b = null;
+  try {
+    b = RN.calc.bolsillos();
+    if (Math.abs(b.desfaseFondo) > TOL) {
+      errores.push('Bolsillos: el fondo reconstruido mes a mes (' + fmt(b.fondoCorridoFinal) + ') difiere de fondoCaja() (' + fmt(b.fondo) + ') por ' + fmt(b.desfaseFondo));
+    }
+    (b.serie || []).forEach(function (s) {
+      if (s.cerrado && s.reserva > Math.max(0, s.fondoCorrido) + TOL) {
+        errores.push('Bolsillos: la reserva (' + fmt(s.reserva) + ') supera el fondo (' + fmt(s.fondoCorrido) + ') al cerrar ' + s.mes);
+      }
+      if (s.recorte > TOL) {
+        avisos.push('Mes ' + s.mes + ': se retiró/gastó por encima del libre y la reserva se recortó ' + fmt(s.recorte) + ' al cerrar el mes');
+      }
+    });
+    if (!b.cubierta) {
+      avisos.push('La caja está por debajo de la reserva: faltan ' + fmt(b.reserva - b.fondo) + ' para cubrirla');
+    }
+  } catch (e2) { /* sin bolsillos no hay conciliación */ }
+
+  // 4. Movimientos sin mes (se cuentan "desde el inicio" y distorsionan la reserva)
+  var sinMes = function (arr) { return (arr || []).filter(function (x) { return !x.mes; }).length; };
+  [['cobros', state.history], ['depósitos', state.depositos], ['retiros', state.retiros]].forEach(function (p) {
+    var n = sinMes(p[1]);
+    if (n > 0) avisos.push(n + ' ' + p[0] + ' sin mes asignado: se cuentan desde el inicio y pueden desfasar la reserva');
+  });
+
+  // 5. Gastos en USD sin montoPagadoUSD
+  var gUsdSin = (state.gastos || []).filter(function (g) {
+    return g && !g.esCuadreCaja && g.moneda === 'USD' && !(+g.montoPagadoUSD > 0);
+  }).length;
+  if (gUsdSin > 0) {
+    avisos.push(gUsdSin + ' gasto(s) en USD sin montoPagadoUSD: el equivalente CUP se descontó pero el dólar físico no');
+  }
+
+  // 6. Clientes sin mes de inicio
+  var sinInicio = (state.clients || []).filter(function (c) {
+    return c.activo && !(c.mesInicio && /^\d{4}-\d{2}$/.test(c.mesInicio)) && !c.createdAt;
+  });
+  if (sinInicio.length) {
+    avisos.push(sinInicio.length + ' cliente(s) activo(s) sin mesInicio ni fecha de creación (mora y "por iniciar" usarán el mes actual): ' +
+      sinInicio.slice(0, 5).map(function (c) { return c.nombre || c.id; }).join(', ') + (sinInicio.length > 5 ? '…' : ''));
+  }
+
+  return { errores: errores, avisos: avisos, bolsillos: b };
+};
+
+/**
  * Ejecuta todas las verificaciones de coherencia financiera.
  * @returns {object} { ok: boolean, total: number, errores: [], avisos: [] }
  *   - errores: problemas que indican datos inconsistentes (rojo).
@@ -210,6 +307,13 @@ RN.auditoria.verificarCoherencia = function () {
     avisos.push('Tasa USD configurada pero sin fechaTasaUsd (no se puede saber si está desactualizada)');
   }
 
+  // ---- 9. v5.55.52: caja, gavetas y conciliación de bolsillos ----
+  try {
+    var caja = RN.auditoria.verificarCaja();
+    caja.errores.forEach(function (e) { errores.push(e); });
+    caja.avisos.forEach(function (a) { avisos.push(a); });
+  } catch (eCaja) { /* nunca romper la auditoría general */ }
+
   return {
     ok: errores.length === 0,
     total: errores.length + avisos.length,
@@ -257,7 +361,7 @@ RN.auditoria.mostrar = function () {
         '<div style="font-size:40px">' + icoEstado + '</div>' +
         '<p style="font-weight:700;color:' + colorEstado + ';margin-top:8px">' + esc(txtEstado) + '</p>' +
       '</div>' +
-      '<p class="muted" style="font-size:12px">Verifica: montos no negativos, coherencia de deudas de equipo, ingresos por mes vs funci\u00f3n, cobros duplicados, snapshots vs datos reales, clientes "paid" que cubren el neto, gastos sin mes, y tasa USD v\u00e1lida.</p>' +
+      '<p class="muted" style="font-size:12px">Verifica: montos no negativos, coherencia de deudas de equipo, ingresos por mes vs funci\u00f3n, cobros duplicados, snapshots vs datos reales, clientes "paid" que cubren el neto, gastos sin mes, tasa USD v\u00e1lida, y (v5.55.52) fondo de caja recalculado, gavetas CUP/USD, conciliaci\u00f3n de bolsillos mes a mes, movimientos sin mes y clientes sin mes de inicio.</p>' +
       erroresHtml + avisosHtml +
       RN.auditoria._htmlEventosDescuentos() +
     '</div>' +

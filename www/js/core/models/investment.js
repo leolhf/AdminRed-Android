@@ -909,6 +909,53 @@ RN.investment.recuperadoNetoInv = function (inv) {
 };
 
 /**
+ * v5.55.52 — Recuperación VIRTUAL vs dinero REAL.
+ * El "recuperado" de una inversión es contable (margen de clientes + aporte extra):
+ * no mueve caja. Para préstamos externos, lo que el negocio ya generó y todavía no
+ * se ha devuelto de verdad (gasto esDevolucionInversion) queda "pendiente de aplicar".
+ *   pendiente = min(saldoADevolver, recuperadoEfectivo − totalDevuelto)   (≥ 0)
+ *   sugerido  = min(pendiente, libre retirable de caja hoy)
+ * Capital propio: no hay a quién devolver, así que devuelve null.
+ */
+RN.investment.aplicacionPendiente = function (inv) {
+  if (!inv || RN.investment.origenCapital(inv) !== 'prestado_externo') return null;
+  var saldo = RN.investment.saldoADevolver(inv);
+  if (saldo <= 0.009) return null;
+  var generado = RN.investment.recuperadoEfectivo(inv);
+  var devuelto = RN.investment.totalDevuelto(inv);
+  var pendiente = Math.max(0, Math.min(saldo, +(generado - devuelto).toFixed(2)));
+  var libre = 0;
+  try {
+    var b = RN.calc.bolsillos();
+    libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  } catch (e) {}
+  return {
+    generado: +generado.toFixed(2),
+    devuelto: +devuelto.toFixed(2),
+    saldo: saldo,
+    pendiente: +pendiente.toFixed(2),
+    libre: +libre.toFixed(2),
+    sugerido: +Math.min(pendiente, libre).toFixed(2)
+  };
+};
+
+/** v5.55.52 — ¿Mostrar avisos de "aplicar recuperación a caja"? (config.avisoAplicacionInversion, default sí). */
+RN.investment.avisoAplicacionActivo = function () {
+  var c = (RN.state && RN.state.config) || {};
+  return c.avisoAplicacionInversion !== false;
+};
+
+/** v5.55.52 — Préstamos externos con recuperación generada y aún no devuelta en caja. */
+RN.investment.aplicacionesPendientes = function () {
+  var out = [];
+  (RN.state.investments || []).forEach(function (inv) {
+    var a = RN.investment.aplicacionPendiente(inv);
+    if (a && a.pendiente > 0.009) out.push({ inv: inv, info: a });
+  });
+  return out;
+};
+
+/**
  * v5.12.9 — % de ganancia del mes real destinado a recuperación/devolución.
  * Configurable en Ajustes (0-100). Default 0 (no se aplica aporte extra).
  */
@@ -932,9 +979,12 @@ RN.investment.pctGananciaMes = function () {
 RN.investment._gastosOperativosMes = function (mes) {
   var mesNorm = (mes || '').slice(0, 7);
   if (!mesNorm) return 0;
+  // v5.55.52: un único criterio de "gasto operativo" para toda la app (RN.calc.esGastoOperativo):
+  // excluye cuadres, devoluciones, aplicaciones de préstamo y retiros legacy.
+  var esOper = RN.calc.esGastoOperativo || function (g) { return !g.esDevolucionInversion && !g.esRetiroCaja; };
   return (RN.state.gastos || [])
     .filter(function (g) { return (g.mes || '').slice(0, 7) === mesNorm; })
-    .filter(function (g) { return !g.esDevolucionInversion && !g.esRetiroCaja; })
+    .filter(esOper)
     .reduce(function (s, g) { return s + (g.monto || 0); }, 0);
 };
 
