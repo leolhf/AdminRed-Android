@@ -119,6 +119,17 @@ RN.validacion.validar = function () {
     }
   }
 
+  try {
+    if (RN.calc && typeof RN.calc.auditoriaCaja === 'function') {
+      var aud = RN.calc.auditoriaCaja();
+      if (aud && aud.errores && aud.errores.length) {
+        aud.errores.forEach(function (e) { errores.push('Caja: ' + e); });
+      }
+    }
+  } catch (e) {
+    errores.push('Caja: error al auditar (' + (e && e.message ? e.message : e) + ')');
+  }
+
   return { ok: errores.length === 0, errores };
 };
 

@@ -1,9 +1,9 @@
-AdminRed v5.55.1 — Estructura de navegación
+AdminRed v5.55.55 — Estructura de navegación
 ==========================================
 
 Cambios respecto a 5.53.7:
 
-  • Versión de app: 5.55.1 (versionCode 5551)
+  • Versión de app: 5.55.55 (versionCode 5551)
   • Barra de pestañas en 5 grupos:
       🏠 Inicio      → Panel
       ⚡ Operación   → Clientes · Cobros · Realizados · Calendario

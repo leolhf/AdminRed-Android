@@ -2,10 +2,19 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
-## v5.55.53 — Fluidez en APK
+## v5.55.55 — Versión unificada
 
-- `RN.render.todo` ya no pinta las 16 vistas de golpe: renderiza la vista activa y refresca el resto en segundo plano (una por turno).
-- En pantallas táctiles/pequeñas se desactiva `backdrop-filter` (blur), muy costoso en el WebView de Android.
+- Bump de versión a **5.55.55** (versionCode 5555).
+- Incluye fluidez APK (v5.55.53) y modelo de caja/operativa de v5.55.52+.
+
+## v5.55.53 — Fluidez APK + auditoría de caja
+
+- No se carga `tests-calculo.js` en producción.
+- WebView: hardware layer, cache, sin overscroll; debug desactivado en release.
+- Manifest: `hardwareAccelerated` + `largeHeap`.
+- aapt ignora docs/changelogs/tests al empaquetar.
+- `RN.calc.auditoriaCaja()` restaurada; `aporteExtraMes` usa utilidad operativa.
+- Versión unificada 5.55.53 (versionCode 5553).
 
 ## v5.55.52 — Flujo de dinero: una sola ganancia, auditoría de caja
 

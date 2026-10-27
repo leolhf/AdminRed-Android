@@ -986,13 +986,3 @@ tr.cobranza-notificado-wa td:first-child {
 }
 .btn.icon-btn svg { display: block; width: 18px; height: 18px; }
 .btn.icon-btn:disabled svg { opacity: 0.35; fill: currentColor; }
-
-/* v5.55.53 — Fluidez en WebView/APK: el desenfoque (backdrop-filter) es muy costoso en GPU de
-   gama media/baja. En pantallas táctiles/pequeñas se desactiva y los paneles ganan opacidad. */
-@media (max-width: 900px), (pointer: coarse) {
-  *, *::before, *::after {
-    backdrop-filter: none !important;
-    -webkit-backdrop-filter: none !important;
-  }
-  .modal-overlay.open { background: rgba(3, 7, 18, .78); }
-}

@@ -1000,16 +1000,10 @@ RN.investment.aporteExtraMes = function (inv) {
   var pct = RN.investment.pctGananciaMes();
   if (pct <= 0) return 0;
   var mes = RN.calc.mesActualStr();
-  var ingresos = RN.calc.ingresosMes(mes);
-  // v5.13.16 (DUP-3): usar el helper compartido _gastosOperativosMes en lugar
-  // del filtro inline. Esto EXCLUYE devoluciones de inversión y retiros de
-  // caja (movimientos de capital, no gastos operativos). Nota (LOG-4): por eso
-  // la ganancia neta del mes NO descuenta las devoluciones, aunque el fondo de
-  // caja sí se reduce por ellas (fondoCaja() resta TODOS los gastos). Son dos
-  // métricas distintas: el aporte extra mide cuánto "sobra" del margen
-  // operativo, no cuánto dinero físico hay en caja.
-  var gastos = RN.investment._gastosOperativosMes(mes);
-  var gananciaNeta = ingresos - gastos;
+  // v5.55.53: misma utilidad operativa que bolsillos/reserva
+  var gananciaNeta = (RN.calc.utilidadOperativaMes
+    ? RN.calc.utilidadOperativaMes(mes)
+    : (RN.calc.ingresosMes(mes) - RN.investment._gastosOperativosMes(mes)));
   if (gananciaNeta <= 0) return 0;
   return +(gananciaNeta * pct / 100).toFixed(2);
 };

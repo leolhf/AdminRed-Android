@@ -4,6 +4,8 @@ import android.os.Bundle;
 
 import com.getcapacitor.Bridge;
 import com.getcapacitor.BridgeActivity;
+import android.webkit.WebSettings;
+import android.webkit.WebView;
 
 /**
  * v5.27.2 — Arranca el servicio en primer plano de AdminRed y expone el
@@ -47,6 +49,7 @@ public class MainActivity extends BridgeActivity {
     super.onCreate(savedInstanceState);
     // El bridge se crea durante super.onCreate(); guardamos la referencia.
     puente = getBridge();
+    optimizarWebView();
     ForegroundService.start(this);
     // v5.27.3: rearmar la alarma del watchdog en cada arranque de la app.
     KeepAlivePlugin.programarReinicio(this);
@@ -71,4 +74,30 @@ public class MainActivity extends BridgeActivity {
     if (puente != null && puente.getActivity() == this) puente = null;
     super.onDestroy();
   }
+
+  /**
+   * v5.55.53 — Ajustes de WebView para fluidez en APK.
+   */
+  private void optimizarWebView() {
+    try {
+      Bridge b = getBridge();
+      if (b == null) return;
+      WebView wv = b.getWebView();
+      if (wv == null) return;
+      WebSettings s = wv.getSettings();
+      s.setCacheMode(WebSettings.LOAD_DEFAULT);
+      s.setDomStorageEnabled(true);
+      s.setDatabaseEnabled(true);
+      s.setLoadWithOverviewMode(true);
+      s.setUseWideViewPort(true);
+      wv.setOverScrollMode(WebView.OVER_SCROLL_NEVER);
+      if (android.os.Build.VERSION.SDK_INT >= 23) {
+        s.setOffscreenPreRaster(true);
+      }
+      wv.setLayerType(WebView.LAYER_TYPE_HARDWARE, null);
+    } catch (Exception e) {
+      // no bloquear arranque
+    }
+  }
+
 }

@@ -17,6 +17,16 @@ RN.render.caja = function () {
   var alertas = document.getElementById('caja-alertas');
   if (alertas) {
     var items = [];
+    try {
+      if (RN.calc.auditoriaCaja) {
+        var aud = RN.calc.auditoriaCaja();
+        if (aud && !aud.ok && aud.errores && aud.errores.length) {
+          items.push({ cls: 'bad', txt: 'Inconsistencia de caja: ' + aud.errores[0] });
+        } else if (aud && aud.avisos && aud.avisos.length) {
+          items.push({ cls: 'warn', txt: aud.avisos[0] });
+        }
+      }
+    } catch (e) {}
     if (libre <= 0.01) {
       items.push({ cls: 'bad', txt: 'No hay libre retirable. La reserva está protegida.' });
     } else if (libre < fondo * 0.1 && fondo > 0) {

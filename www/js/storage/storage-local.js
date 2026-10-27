@@ -57,6 +57,17 @@ RN.storageLocal.cargar = function () {
     if (data.config) Object.assign(RN.state.config, data.config);
     RN.state.reciboCounter = data.reciboCounter || 0;
     RN.state.mesActual = data.mesActual || RN.calc.mesActualStr();
+    try {
+      if (RN.calc && RN.calc.auditoriaCaja) {
+        var aud = RN.calc.auditoriaCaja();
+        if (aud && !aud.ok) {
+          console.warn('auditoriaCaja al cargar:', aud.errores, aud.avisos);
+          if (RN.notifyUI && RN.notifyUI.toast && aud.errores.length) {
+            RN.notifyUI.toast('Caja inconsistente: ' + aud.errores[0], 'error');
+          }
+        }
+      }
+    } catch (ae) { console.warn('auditoriaCaja', ae); }
     return true;
   } catch (e) {
     console.error('storage-local: error al cargar', e);

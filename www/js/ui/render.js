@@ -166,27 +166,11 @@ RN.render.compararClientePorIP = function (a, b) {
   return RN.render.compararIP(aIp, bIp);
 };
 
-/**
- * Render completo. v5.55.53 (fluidez en APK): antes se pintaban las 16 vistas de golpe
- * en cada guardado, bloqueando el hilo del WebView. Ahora se pinta SOLO la vista activa
- * y el resto se refresca en segundo plano, una por turno (cancelable si llega otro todo()).
- * Al cambiar de pestaña, RN.tabs.ir ya vuelve a renderizar la vista, así que nunca se ve vacía.
- */
-RN.render._VISTAS = ['dashboard', 'clientes', 'cobros', 'realizados', 'caja', 'inversion', 'deudas', 'inventario', 'gastos', 'reportes', 'calendario', 'descuentos', 'salud', 'margen', 'morosos', 'incidencias'];
-RN.render._cola = null;
+/** Render completo: refresca todas las vistas. */
 RN.render.todo = function () {
-  var activa = (RN.tabs && RN.tabs.actual) || 'dashboard';
-  if (RN.render._cola) { clearTimeout(RN.render._cola); RN.render._cola = null; }
-  var pendientes = RN.render._VISTAS.filter(function (v) { return v !== activa; });
-  if (RN.render._VISTAS.indexOf(activa) !== -1) RN.render.vista(activa);
-  else pendientes = RN.render._VISTAS.slice();
-  var paso = function () {
-    var v = pendientes.shift();
-    if (!v) { RN.render._cola = null; return; }
-    try { RN.render.vista(v); } catch (e) { console.warn('[render] vista ' + v + ':', e); }
-    RN.render._cola = setTimeout(paso, 16);
-  };
-  RN.render._cola = setTimeout(paso, 50);
+  ['dashboard', 'clientes', 'cobros', 'realizados', 'caja', 'inversion', 'deudas', 'inventario', 'gastos', 'reportes', 'calendario', 'descuentos', 'salud', 'margen', 'morosos', 'incidencias'].forEach(v => {
+    RN.render.vista(v);
+  });
   RN.config.rellenarForm();
   // v5.12.7: refrescar el indicador visual de estado de la tasa en Ajustes
   if (RN.tasaAviso) RN.tasaAviso.actualizarIndicador();

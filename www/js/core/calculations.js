@@ -1853,6 +1853,51 @@ RN.calc.prediccionIngresos = function () {
 };
 
 
+
+/**
+ * v5.55.53 — Auditoría de consistencia del flujo de caja.
+ * Complementa bolsillos().desfaseFondo: valida la identidad contable global
+ * y las gavetas físicas.
+ */
+RN.calc.auditoriaCaja = function () {
+  var errores = [];
+  var avisos = [];
+  var tol = 0.02;
+  var saldoInicial = +(RN.state.config.fondoInicial || 0);
+  var ingresos = RN.calc.ingresosTotales();
+  var gastos = RN.calc.gastosTotales();
+  var depositos = RN.calc.totalDepositos();
+  var retiros = RN.calc.totalRetiros();
+  var esperado = +(saldoInicial + ingresos + depositos - gastos - retiros).toFixed(2);
+  var fondo = RN.calc.fondoCaja();
+  if (Math.abs(fondo - esperado) > tol) {
+    errores.push("fondoCaja (" + fondo + ") ≠ saldoInicial+ingresos+depósitos−gastos−retiros (" + esperado + ")");
+  }
+  var usd = RN.calc.usdEnCaja();
+  var cup = RN.calc.cupEnCaja();
+  if (usd < -tol) errores.push("usdEnCaja negativo: " + usd);
+  if (cup < -tol) errores.push("cupEnCaja negativo: " + cup);
+  var b = RN.calc.bolsillos();
+  if (b && typeof b.desfaseFondo === "number" && Math.abs(b.desfaseFondo) > 1) {
+    avisos.push("Desfase bolsillos vs fondoCaja: " + b.desfaseFondo + " CUP (revisar fechas/mes de movimientos).");
+  }
+  if (b && b.reserva > fondo + tol) {
+    avisos.push("Reserva (" + b.reserva + ") supera el fondo (" + fondo + ").");
+  }
+  return {
+    ok: errores.length === 0,
+    errores: errores,
+    avisos: avisos,
+    fondo: fondo,
+    esperado: esperado,
+    usd: usd,
+    cup: cup,
+    reserva: b ? b.reserva : 0,
+    libre: b ? b.libre : 0,
+    desfaseFondo: b && b.desfaseFondo != null ? b.desfaseFondo : 0
+  };
+};
+
 // v5.13.9 (DUP-1): Helper para obtener el total de un cobro del historial.
 // Centraliza el patron repetido ~8 veces: h.totalCUP || (h.monto + h.montoEquipo)
 RN.calc.totalCobro = function (h) {
