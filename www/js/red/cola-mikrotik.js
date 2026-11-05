@@ -676,7 +676,8 @@ RN.cola.abrirAjustes = function () {
     '<input id="cola-padres-extra" value="' + RN.render.esc((cfg.colaPadresExtra || []).join(', ')) +
     '" placeholder="LEO CASA, OTRO" spellcheck="false" autocapitalize="off">' +
     '<small class="muted">Separadas por coma. Se suman a la cola padre por defecto.</small></div></div>';
-  h += h += '<p class="muted" style="font-size:12px;margin:6px 0 10px">Tope de capacidad = paquete del proveedor \u2212 reserva. Las reglas se aplican de arriba hacia abajo por m\u00ednimo de megas. El Limit At se redondea a m\u00faltiplos de 50k.</p>';
+  // v5.55.59: antes era `h += h += '...'` y duplicaba TODO el modal (bug visual "doble").
+  h += '<p class="muted" style="font-size:12px;margin:6px 0 10px">Tope de capacidad = paquete del proveedor \u2212 reserva. Las reglas se aplican de arriba hacia abajo por m\u00ednimo de megas. El Limit At se redondea a m\u00faltiplos de 50k.</p>';
   h += '<table style="width:100%;font-size:13px"><thead><tr><th style="text-align:left">Desde (M)</th><th style="text-align:left">% del plan</th><th style="text-align:left">Prioridad</th></tr></thead><tbody id="cola-reglas">';
   reglas.forEach(function (r, i) {
     h += '<tr><td><input type="number" min="0" step="1" class="cola-r-min" value="' + r.minMegas + '"></td>' +

@@ -2,6 +2,16 @@
 
 > Este es el changelog unificado. Las notas por versión anteriores a v5.42 que vivían en `CHANGELOG_vX.Y.Z.md` se archivaron en `docs/historial/`.
 
+## v5.55.61 — Modal Cola MikroTik sin duplicar
+
+- Bump a **5.55.61** (versionCode 55561).
+- Incluye el arreglo del modal ⚙ Cola MikroTik que aparecía duplicado (`h += h +=` en `abrirAjustes`).
+
+## v5.55.60 — Sincronización de versión
+
+- Bump a **5.55.60** (versionCode 55560) sincronizado en `www/js/version.js`, `android/app/build.gradle`, `package.json`, `package-lock.json` y `version.json`.
+- Corrige que la app/APK siguiera mostrando la 5.55.58.
+
 ## v5.55.55 — Versión unificada
 
 - Bump de versión a **5.55.55** (versionCode 5555).
