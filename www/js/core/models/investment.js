@@ -1,0 +1,1377 @@
+/**
+ * models/investment.js — Modelo de deuda de equipo / recuperación de inversión.
+ * Debe cargar antes de render.js, inversion.js y migration.js.
+ * Nota de diseño: deudaEquipo se modela como número simple (saldo pendiente).
+ *
+ * v5.11.3 — Recuperación basada en GANANCIA REAL (margen neto):
+ *   - El aporte de cada cliente a la recuperación descuenta el costo del mega
+ *     que a mí me cuesta proveer el servicio (proveedorPrecioMega × megas).
+ *   - Se aplica un % de ganancia personal (config.pctPersonalInversion) que se
+ *     retiene y NO computa como recuperación de capital.
+ *   - El campo "recuperado" pasa a ser AUTOMÁTICO (suma de aportes netos
+ *     reales desde la fecha de compra), no manual.
+ */
+
+RN.investment = RN.investment || {};
+
+/**
+ * v5.12.2 — Normaliza una fecha a medianoche LOCAL en milisegundos.
+ * Evita el bug de zona horaria donde new Date("2025-06-15") se interpreta como
+ * UTC medianoche, pero los cobros tienen horas locales. Al normalizar ambos
+ * lados a medianoche local, la comparación t >= desde incluye correctamente
+ * los cobros del mismo día de la compra.
+ * @param {string|Date} f — fecha (YYYY-MM-DD o ISO)
+ * @returns {number} timestamp en ms a medianoche local, o 0 si inválida
+ */
+RN.investment._medianocheLocal = function (f) {
+  if (!f) return 0;
+  var d = new Date(f);
+  if (isNaN(d.getTime())) {
+    // Intentar parsear como YYYY-MM-DD
+    var parts = String(f).slice(0, 10).split('-');
+    if (parts.length === 3) d = new Date(+parts[0], +parts[1] - 1, +parts[2]);
+  }
+  if (isNaN(d.getTime())) return 0;
+  d.setHours(0, 0, 0, 0);
+  return d.getTime();
+};
+
+/** Saldo pendiente de deuda de equipo de un cliente. Exige deudaEquipo > 0 explícitamente. */
+RN.investment.getDeudaEquipoCliente = function (cliente) {
+  if (!cliente) return 0;
+  if (typeof cliente.deudaEquipo !== 'number') return 0;
+  return cliente.deudaEquipo > 0 ? cliente.deudaEquipo : 0;
+};
+
+/** Cuota mensual de equipo de un cliente (si tiene deuda y cuota definida). */
+RN.investment.getCuotaEquipoCliente = function (cliente) {
+  if (RN.investment.getDeudaEquipoCliente(cliente) <= 0) return 0;
+  return cliente.cuotaEquipo || 0;
+};
+
+/** Progreso de pago de equipo de un cliente (0-100). */
+RN.investment.getProgresoEquipoCliente = function (cliente) {
+  const deuda = RN.investment.getDeudaEquipoCliente(cliente);
+  if (deuda <= 0) return 100;
+  const original = cliente.deudaEquipoOriginal || deuda;
+  if (original <= 0) return 100;
+  const pagado = original - deuda;
+  return Math.max(0, Math.min(100, Math.round(pagado / original * 100)));
+};
+
+/** Inversión personal: total invertido. */
+RN.investment.totalInvertido = function () {
+  // v5.55.15: solo capital propio (excluye préstamos externos)
+  return (RN.state.investments || []).reduce(function (s, i) {
+    if (RN.investment.origenCapital(i) === 'prestado_externo') return s;
+    return s + (i.monto || 0);
+  }, 0);
+};
+
+/**
+ * Inversión personal: total recuperado (AUTOMÁTICO, v5.11.3).
+ * = suma del recuperado real de cada inversión (aporte neto de los clientes
+ * vinculados desde la fecha de compra, descontando costo del mega y retención
+ * personal). Para inversiones sin clientes vinculados, conserva el valor
+ * manual histórico inv.recuperado.
+ */
+RN.investment.totalRecuperado = function () {
+  // v5.55.15: solo capital propio
+  return (RN.state.investments || []).reduce(function (s, i) {
+    if (RN.investment.origenCapital(i) === 'prestado_externo') return s;
+    return s + RN.investment.recuperadoRealInv(i);
+  }, 0);
+};
+
+/** Porcentaje global de recuperación (basado en el recuperado automático). */
+RN.investment.porcentajeRecuperacion = function () {
+  const total = RN.investment.totalInvertido();
+  if (!total) return 0;
+  return +(RN.investment.totalRecuperado() / total * 100).toFixed(1);
+};
+
+/**
+ * v5.13.16 (BUG-1) — Restante EFECTIVO de una inversión por recuperar.
+ *
+ * Cuando pctGananciaMes > 0, el "recuperado efectivo" incluye el aporte extra
+ * acumulado de la ganancia del mes (además del margen de los clientes). Antes,
+ * proyectarRecuperacion() y mesesParaRecuperar() usaban recuperadoRealInv()
+ * (solo margen de clientes), lo que producía una proyección pesimista e
+ * inconsistente con el "% efectivo" que muestra la card.
+ *
+ * Cuando pctGananciaMes === 0, se comporta igual que antes (restante sobre
+ * recuperadoRealInv), preservando el comportamiento histórico.
+ *
+ * @param {object} inv — inversión
+ * @returns {number} monto restante efectivo, mínimo 0
+ */
+RN.investment.restanteEfectivo = function (inv) {
+  var monto = inv.monto || 0;
+  var rec = RN.investment.pctGananciaMes() > 0
+    ? RN.investment.recuperadoEfectivo(inv)
+    : RN.investment.recuperadoRealInv(inv);
+  return Math.max(0, +(monto - rec).toFixed(2));
+};
+
+/**
+ * Proyecta la fecha de recuperación total de una inversión según el aporte
+ * neto mensual de los clientes vinculados (v5.11.3: usa ganancia real, no bruta).
+ *
+ * v5.13.16 (BUG-1): usa restanteEfectivo() para ser consistente con el
+ * "% efectivo" de la card cuando pctGananciaMes > 0.
+ * v5.13.16 (LOG-3): añade nota aclarativa de que la estimación se basa en el
+ * precio esperado mensual, no en el histórico real de cobros.
+ */
+RN.investment.proyectarRecuperacion = function (inv) {
+  const restante = RN.investment.restanteEfectivo(inv);
+  const aporteMensual = RN.investment.aporteMensualNeto(inv);
+  if (restante <= 0) return 'Recuperada';
+  if (aporteMensual <= 0) return '—';
+  const meses = Math.ceil(restante / aporteMensual);
+  const dias = Math.ceil(restante / (aporteMensual / 30));
+  const fecha = new Date();
+  fecha.setMonth(fecha.getMonth() + meses);
+  const fechaTxt = fecha.toLocaleDateString('es-CU', { month: 'long', year: 'numeric' });
+  // v5.13.16 (LOG-3): aclaración de que es una estimación basada en el precio esperado.
+  return 'Faltan ' + meses + ' mes' + (meses === 1 ? '' : 'es') + ' (≈' + dias + ' días) · ' + fechaTxt
+    + ' · estimación según precio esperado mensual';
+};
+
+/**
+ * v5.12.1 — Meses restantes para recuperar la inversión (número entero).
+ * Devuelve null si no se puede calcular (sin aporte mensual o ya recuperada).
+ * v5.13.16 (BUG-1): usa restanteEfectivo() para consistencia con la card.
+ */
+RN.investment.mesesParaRecuperar = function (inv) {
+  const restante = RN.investment.restanteEfectivo(inv);
+  if (restante <= 0) return 0;
+  const aporteMensual = RN.investment.aporteMensualNeto(inv);
+  if (aporteMensual <= 0) return null;
+  return Math.ceil(restante / aporteMensual);
+};
+
+/**
+ * v5.11.0 — Fecha de compra de la inversión (YYYY-MM-DD o ISO).
+ * Si no existe, se deduce del campo fecha de creación.
+ */
+RN.investment.fechaCompra = function (inv) {
+  if (!inv) return '';
+  return inv.fechaCompra || inv.fecha || '';
+};
+
+/** v5.11.0 — Días transcurridos desde la fecha de compra hasta hoy. */
+RN.investment.diasDesdeCompra = function (inv) {
+  const f = RN.investment.fechaCompra(inv);
+  if (!f) return 0;
+  const desdeMs = RN.investment._medianocheLocal(f);
+  if (!desdeMs) return 0;
+  const hoyMs = RN.investment._medianocheLocal(new Date());
+  return Math.max(0, Math.floor((hoyMs - desdeMs) / 86400000));
+};
+
+/**
+ * v5.13.2 — Helper compartido: filtra los cobros de un cliente desde la fecha
+ * de compra de la inversión. Centraliza la lógica que antes estaba duplicada
+ * en aporteCliente(), aporteRecuperacionCliente() y margenNetoCliente().
+ *
+ * Filtros aplicados:
+ *   - h.clienteId === clienteId
+ *   - h.tipo es 'servicio' o undefined
+ *   - h.fecha >= fechaCompra (medianoche local, evita bug de zona horaria)
+ *   - h.mes >= mesCompra (v5.13.1 Bug #11: evita inflar con cobros de mes anterior)
+ *
+ * @param {string} clienteId — ID del cliente
+ * @param {object} inv — inversión (para obtener fechaCompra)
+ * @returns {Array} cobros filtrados (orden del history original)
+ */
+RN.investment._cobrosClienteDesde = function (clienteId, inv) {
+  var f = RN.investment.fechaCompra(inv);
+  var desde = f ? RN.investment._medianocheLocal(f) : 0;
+  var mesCompra = f ? f.slice(0, 7) : null;
+  return (RN.state.history || []).filter(function (h) {
+    if (h.clienteId !== clienteId) return false;
+    if (h.tipo && h.tipo !== 'servicio') return false;
+    if (!desde) return true;
+    var t = RN.investment._medianocheLocal(h.fecha);
+    if (t < desde) return false;
+    if (mesCompra && h.mes && h.mes < mesCompra) return false;
+    return true;
+  });
+};
+
+/**
+ * v5.11.0 — Aporte BRUTO de un cliente vinculado (ingreso cobrado) desde la
+ * fecha de compra. Se mantiene por compatibilidad. Para la ganancia real
+ * (aporte neto) usar aporteRecuperacionCliente().
+ */
+RN.investment.aporteCliente = function (inv, clienteId) {
+  if (!inv || !clienteId) return 0;
+  return RN.investment._cobrosClienteDesde(clienteId, inv)
+    .reduce(function (s, h) { return s + (h.monto || 0); }, 0);
+};
+
+/**
+ * v5.11.3 — Costo del mega que a mí me cuesta proveer el servicio a un cliente
+ * en un mes dado = proveedorPrecioMega × megas del cliente.
+ * Si no hay precio de proveedor configurado, el costo es 0 (no se puede
+ * determinar el margen real; se asume costo 0).
+ */
+RN.investment.costoMegaClienteMes = function (cliente, mes) {
+  if (!cliente) return 0;
+  const precioMegaProv = +(RN.state.config.proveedorPrecioMega || 0);
+  if (precioMegaProv <= 0) return 0;
+  const megas = RN.calc.getMegasCliente(cliente);
+  return +(megas * precioMegaProv).toFixed(2);
+};
+
+/**
+ * v5.13.1: Bug #17 — Indica si el costo del mega está configurado.
+ * Si es false, las métricas de margen y recuperación de inversión están
+ * infladas (asumen costo 0). La UI debería advertir al usuario.
+ */
+RN.investment.costoMegaConfigurado = function () {
+  var precioMegaProv = +(RN.state.config.proveedorPrecioMega || 0);
+  return precioMegaProv > 0;
+};
+
+/** v5.11.3 — % de ganancia personal retenida (no recupera inversión). Global, 0-100. */
+RN.investment.pctPersonal = function () {
+  const p = +(RN.state.config.pctPersonalInversion || 0);
+  return Math.max(0, Math.min(100, p));
+};
+
+/**
+ * v5.11.3 — APORTE NETO a la recuperación de un cliente vinculado, desde la
+ * fecha de compra. Por cada mes en que el cliente pagó (decisión 2=a):
+ *   margenMes    = montoCobrado - costoMega(mes)
+ *   recuperacion = margenMes * (1 - pctPersonal/100)   [lo que recupera el capital]
+ * Si el margen es negativo ese mes, el aporte a recuperación es 0 (la pérdida
+ * es del negocio, no se carga contra el capital invertido).
+ */
+RN.investment.aporteRecuperacionCliente = function (inv, clienteId) {
+  if (!inv || !clienteId) return 0;
+  const cli = (RN.state.clients || []).find(function (c) { return c.id === clienteId; });
+  const pct = RN.investment.pctPersonal();
+  const factorRec = 1 - pct / 100;
+  const cobros = RN.investment._cobrosClienteDesde(clienteId, inv);
+  // Agrupar cobros por mes: restar el costo del mes una sola vez por mes.
+  const porMes = {};
+  cobros.forEach(function (h) {
+    const mes = h.mes || '__sinmes__';
+    if (!porMes[mes]) porMes[mes] = { cobrado: 0, costo: 0 };
+    porMes[mes].cobrado += (h.monto || 0);
+  });
+  let total = 0;
+  Object.keys(porMes).forEach(function (mes) {
+    const costoMes = (mes !== '__sinmes__') ? RN.investment.costoMegaClienteMes(cli, mes) : 0;
+    const margen = porMes[mes].cobrado - costoMes;
+    if (margen > 0) total += margen * factorRec;
+  });
+  return +total.toFixed(2);
+};
+
+/**
+ * v5.11.3 — Margen neto total de un cliente vinculado desde la compra (sin
+ * aplicar retención personal). Útil para mostrar el desglose.
+ */
+RN.investment.margenNetoCliente = function (inv, clienteId) {
+  if (!inv || !clienteId) return 0;
+  const cli = (RN.state.clients || []).find(function (c) { return c.id === clienteId; });
+  const cobros = RN.investment._cobrosClienteDesde(clienteId, inv);
+  const porMes = {};
+  cobros.forEach(function (h) {
+    const mes = h.mes || '__sinmes__';
+    if (!porMes[mes]) porMes[mes] = 0;
+    porMes[mes] += (h.monto || 0);
+  });
+  let total = 0;
+  Object.keys(porMes).forEach(function (mes) {
+    const costoMes = (mes !== '__sinmes__') ? RN.investment.costoMegaClienteMes(cli, mes) : 0;
+    total += porMes[mes] - costoMes;
+  });
+  return +total.toFixed(2);
+};
+
+/**
+ * v5.13.2 — Helper compartido: suma el margen mensual de los clientes activos
+ * vinculados a una inversión para un mes dado. Centraliza el bucle que antes
+ * estaba duplicado en aporteMensualNeto(), margenMensualBruto() y
+ * retiroMensualEstimado().
+ *
+ * El margen de cada cliente = precioNeto − costoMega. Solo se suma si es > 0.
+ *
+ * @param {object} inv — inversión con clienteIds
+ * @param {string} mes — mes en formato YYYY-MM
+ * @returns {number} suma de márgenes positivos de los clientes activos vinculados
+ */
+RN.investment._margenMensualClientes = function (inv, mes) {
+  if (!inv || !inv.clienteIds || !inv.clienteIds.length) return 0;
+  var total = 0;
+  inv.clienteIds.forEach(function (cid) {
+    var cli = (RN.state.clients || []).find(function (c) { return c.id === cid; });
+    if (!cli || cli.activo === false) return;
+    var precioNeto = RN.calc.getPrecioNeto(cli, mes);
+    var costo = RN.investment.costoMegaClienteMes(cli, mes);
+    var margen = precioNeto - costo;
+    if (margen > 0) total += margen;
+  });
+  return total;
+};
+
+/**
+ * v5.11.3 — Aporte mensual neto estimado de los clientes vinculados (para la
+ * proyección). Basado en el ingreso neto esperado mensual de cada cliente
+ * activo vinculado (precio neto - costo mega), aplicando retención personal.
+ */
+RN.investment.aporteMensualNeto = function (inv) {
+  if (!inv || !inv.clienteIds || !inv.clienteIds.length) return 0;
+  const pct = RN.investment.pctPersonal();
+  const factorRec = 1 - pct / 100;
+  const mes = RN.calc.mesActualStr();
+  var total = RN.investment._margenMensualClientes(inv, mes);
+  return +(total * factorRec).toFixed(2);
+};
+
+/**
+ * v5.11.3 — Clientes vinculados con su aporte bruto, margen neto y aporte a
+ * recuperación, ordenados de mayor a menor aporte de recuperación.
+ */
+RN.investment.aportesPorCliente = function (inv) {
+  if (!inv || !inv.clienteIds || !inv.clienteIds.length) return [];
+  return inv.clienteIds.map(function (cid) {
+    const cli = (RN.state.clients || []).find(function (c) { return c.id === cid; });
+    return {
+      cliente: cli,
+      aporte: RN.investment.aporteCliente(inv, cid),               // bruto (compat)
+      margenNeto: RN.investment.margenNetoCliente(inv, cid),       // ganancia real antes de retención
+      recuperacion: RN.investment.aporteRecuperacionCliente(inv, cid) // lo que recupera el capital
+    };
+  }).sort(function (a, b) { return b.recuperacion - a.recuperacion; });
+};
+
+/** v5.11.0 — Total aportado (BRUTO) por los clientes vinculados desde la compra. */
+RN.investment.totalAporteClientes = function (inv) {
+  return RN.investment.aportesPorCliente(inv).reduce(function (s, x) { return s + x.aporte; }, 0);
+};
+
+/** v5.11.3 — Total que los clientes vinculados han recuperado del capital (NETO, con retención). */
+RN.investment.totalRecuperacionClientes = function (inv) {
+  return RN.investment.aportesPorCliente(inv).reduce(function (s, x) { return s + x.recuperacion; }, 0);
+};
+
+/** v5.11.3 — Total de margen neto generado por los clientes vinculados (antes de retención). */
+RN.investment.totalMargenNetoClientes = function (inv) {
+  return RN.investment.aportesPorCliente(inv).reduce(function (s, x) { return s + x.margenNeto; }, 0);
+};
+
+/**
+ * v5.11.3 — Recuperado REAL de una inversión = aporte neto automático de los
+ * clientes vinculados desde la fecha de compra. Reemplaza el campo manual.
+ * Para inversiones sin clientes vinculados, conserva el valor manual histórico.
+ */
+RN.investment.recuperadoRealInv = function (inv) {
+  if (!inv) return 0;
+  if (!inv.clienteIds || !inv.clienteIds.length) return +(inv.recuperado || 0);
+  return RN.investment.totalRecuperacionClientes(inv);
+};
+
+
+/**
+ * v5.12.1 — Acumulado retenido como ganancia personal de una inversión
+ * (desde la fecha de compra). = margen neto total × pctPersonal/100.
+ * Representa el dinero que el inversor se "saca" del margen y que NO recupera
+ * el capital invertido.
+ */
+RN.investment.acumuladoRetenido = function (inv) {
+  if (!inv) return 0;
+  const pct = RN.investment.pctPersonal();
+  if (pct <= 0) return 0;
+  const margenNeto = RN.investment.totalMargenNetoClientes(inv);
+  return +(Math.max(0, margenNeto) * pct / 100).toFixed(2);
+};
+
+/**
+ * v5.12.1 — Retiro mensual estimado como ganancia personal.
+ * = aporte mensual neto BRUTO (sin retención) × pctPersonal/100.
+ * Es lo que el inversor puede "retirar" cada mes del margen que generan los
+ * clientes vinculados, mientras el resto recupera el capital.
+ */
+RN.investment.retiroMensualEstimado = function (inv) {
+  if (!inv || !inv.clienteIds || !inv.clienteIds.length) return 0;
+  const pct = RN.investment.pctPersonal();
+  if (pct <= 0) return 0;
+  const mes = RN.calc.mesActualStr();
+  var totalMargenMensual = RN.investment._margenMensualClientes(inv, mes);
+  return +(totalMargenMensual * pct / 100).toFixed(2);
+};
+
+/**
+ * v5.12.1 — Margen neto mensual BRUTO (sin aplicar retención personal).
+ * = suma de (precioNeto - costoMega) de cada cliente activo vinculado.
+ * Útil para mostrar cuánto genera la inversión por mes antes de separar
+ * la ganancia personal del capital.
+ */
+RN.investment.margenMensualBruto = function (inv) {
+  if (!inv || !inv.clienteIds || !inv.clienteIds.length) return 0;
+  const mes = RN.calc.mesActualStr();
+  var total = RN.investment._margenMensualClientes(inv, mes);
+  return +total.toFixed(2);
+};
+
+/* ============================================================
+ * v5.12.9 — Modelo de ORIGEN DEL CAPITAL + DEVOLUCIONES
+ * ------------------------------------------------------------
+ * Nueva forma de entender la recuperación de la inversión.
+ *
+ * PROBLEMA que resuelve:
+ *   Antes, todo el margen neto de los clientes "recuperaba" el capital
+ *   invertido. Pero cuando el capital es un PRÉSTAMO EXTERNO (dinero que el
+ *   dueño debe devolver), tratarlo como "recuperación propia" mezcla dos
+ *   cosas distintas: (a) el capital que es tuyo y ya recuperaste, y (b) el
+ *   capital prestado que tienes que DEVOLVER. Eso genera duda contable.
+ *
+ * NUEVO MODELO:
+ *   Cada inversión tiene un "origen del capital":
+ *     - 'propio'         → dinero del dueño, NO hay que devolverlo.
+ *                          La "recuperación" es ganancia retenida del capital.
+ *     - 'prestado_externo'→ dinero prestado (banco, familiar, etc.) que HAY
+ *                          QUE DEVOLVER. La app lleva un saldo a devolver.
+ *
+ *   Cuando el origen es 'prestado_externo':
+ *     - recuperado     = margen neto acumulado de los clientes vinculados
+ *                        (lo que el negocio ha generado para cubrir el capital).
+ *     - devuelto       = suma de las DEVOLUCIONES registradas (extracciones
+ *                        de caja marcadas como "Devolución de préstamo").
+ *     - saldoADevolver = monto invertido − devuelto (lo que aún debes al
+ *                        prestamista).
+ *     - recuperadoNeto = recuperado − devuelto (lo que has generado pero aún
+ *                        NO has devuelto; es dinero "acumulado" en caja listo
+ *                        para devolver).
+ *
+ *   DEVOLUCIONES: se registran como retiros de caja (RN.caja) con la marca
+ *   esDevolucionInversion + inversionId, para que salgan del fondo de caja
+ *   y queden trazables. Así se usa la CAJA de la app como vehículo real del
+ *   dinero que sale.
+ *
+ *   % DE GANANCIA DEL MES REAL: además del margen de los clientes vinculados,
+ *   el dueño puede destinar un porcentaje (config.pctRecuperacionGananciaMes)
+ *   de la GANANCIA NETA REAL DEL MES (ingresos − gastos del mes) a acelerar la
+ *   recuperación/devolución del capital. Esto se calcula automáticamente y se
+ *   muestra como "aporte extra del mes" sugerido.
+ * ============================================================ */
+
+/** Origen del capital de una inversión: 'propio' o 'prestado_externo'. Default 'propio'. */
+RN.investment.origenCapital = function (inv) {
+  if (!inv) return 'propio';
+  return inv.origenCapital === 'prestado_externo' ? 'prestado_externo' : 'propio';
+};
+
+/** Nombre legible del origen del capital. */
+/** v5.55.15 — true si es capital propio (no préstamo externo). */
+RN.investment.esCapitalPropio = function (inv) {
+  return RN.investment.origenCapital(inv) !== 'prestado_externo';
+};
+
+RN.investment.origenCapitalTxt = function (inv) {
+  return RN.investment.origenCapital(inv) === 'prestado_externo'
+    ? 'Préstamo externo (a devolver)'
+    : 'Capital propio';
+};
+
+/**
+ * Devoluciones registradas para una inversión (retiros de caja marcados como
+ * devolución de préstamo de esta inversión). Devuelve el array de gastos.
+ */
+RN.investment.devolucionesInv = function (inv) {
+  if (!inv || !inv.id) return [];
+  return (RN.state.gastos || []).filter(function (g) {
+    return g.esDevolucionInversion && g.inversionId === inv.id;
+  });
+};
+
+/** Total devuelto de una inversión (suma de las devoluciones registradas). */
+RN.investment.totalDevuelto = function (inv) {
+  return RN.investment.devolucionesInv(inv).reduce(function (s, g) {
+    return s + (g.monto || 0);
+  }, 0);
+};
+
+/**
+ * Saldo a devolver de una inversión de préstamo externo.
+ * = monto invertido − total devuelto. Mínimo 0.
+ * Para capital propio devuelve 0 (no hay nada que devolver).
+ */
+RN.investment.saldoADevolver = function (inv) {
+  if (RN.investment.origenCapital(inv) !== 'prestado_externo') return 0;
+  var restante = (inv.monto || 0) - RN.investment.totalDevuelto(inv);
+  return Math.max(0, +restante.toFixed(2));
+};
+
+/* ============================================================
+ * v5.55.5 — Deuda en moneda de origen + sugerido según bolsillo libre
+ * ============================================================ */
+
+/** % del bolsillo libre sugerido para devoluciones. Default 25. Config: pctLibreDeudas */
+RN.investment.pctLibreDeudas = function () {
+  var p = +(RN.state && RN.state.config && RN.state.config.pctLibreDeudas);
+  if (!(p >= 0 && p <= 100)) p = 25;
+  return p;
+};
+
+/** % de austeridad si el libre está bajo. Default 10. */
+RN.investment.pctAusteridadDeudas = function () {
+  var p = +(RN.state && RN.state.config && RN.state.config.pctAusteridadDeudas);
+  if (!(p >= 0 && p <= 100)) p = 10;
+  return p;
+};
+
+/**
+ * Política de reserva: 'nunca' | 'con_meta' | 'siempre_confirmar'
+ */
+RN.investment.politicaReservaDeudas = function () {
+  var v = (RN.state && RN.state.config && RN.state.config.politicaReservaDeudas) || 'con_meta';
+  if (v !== 'nunca' && v !== 'con_meta' && v !== 'siempre_confirmar') v = 'con_meta';
+  return v;
+};
+
+/** Texto legible de la política (para UI). */
+RN.investment.textoPoliticaDeudas = function () {
+  var n = RN.investment.pctLibreDeudas();
+  var a = RN.investment.pctAusteridadDeudas();
+  var r = RN.investment.politicaReservaDeudas();
+  var rt = r === 'nunca' ? 'nunca se toca la reserva'
+    : (r === 'con_meta' ? 'reserva solo si hay meta y confirmas'
+    : 'reserva permitida con confirmación');
+  return 'En condiciones normales se sugiere destinar el ' + n + '% del bolsillo libre a deudas. '
+    + 'Si el libre está justo respecto a lo que proyectas tras cobrar, se baja al ' + a + '%. '
+    + 'La reserva: ' + rt + '.';
+};
+
+/**
+ * Agenda ordenada de deudas activas:
+ * 1) con fecha objetivo vencida o esta semana
+ * 2) prioridad alta (si existe)
+ * 3) con meta de cuota
+ * 4) mayor saldo
+ */
+RN.investment.colaDeudasOrdenada = function () {
+  var hoy = new Date();
+  hoy.setHours(0, 0, 0, 0);
+  var en7 = new Date(hoy.getTime() + 7 * 86400000);
+  var list = (RN.investment.deudasActivas() || []).slice();
+  function score(inv) {
+    var s = 0;
+    var fo = RN.investment.fechaObjetivoDeuda(inv);
+    if (fo) {
+      var d = new Date(fo + 'T00:00:00');
+      if (!isNaN(d.getTime())) {
+        if (d < hoy) s += 1000;
+        else if (d <= en7) s += 500;
+      }
+    }
+    if (inv.prioridadDeuda === 'alta') s += 200;
+    if (RN.investment.metaCuotaDeuda(inv) > 0) s += 50;
+    s += Math.min(49, RN.investment.saldoADevolverMoneda(inv) / 1000);
+    return s;
+  }
+  list.sort(function (a, b) { return score(b) - score(a); });
+  return list;
+};
+
+RN.investment.abrirPoliticaDeudas = function () {
+  if (RN.ajustes && RN.ajustes.abrir) {
+    RN.ajustes.abrir();
+    setTimeout(function () {
+      var el = document.getElementById('cfg-pct-libre-deudas');
+      if (el && el.scrollIntoView) el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }, 200);
+  } else {
+    RN.notifyUI.toast('Abre Ajustes para editar la política de deudas', 'info');
+  }
+};
+
+/**
+ * Moneda en la que se lleva el saldo de la deuda: 'USD' | 'CUP'.
+ * Explicit inv.monedaDeuda, o se infiere del pago al crear el préstamo.
+ */
+RN.investment.monedaDeuda = function (inv) {
+  if (!inv) return 'CUP';
+  if (inv.monedaDeuda === 'USD' || inv.monedaDeuda === 'CUP') return inv.monedaDeuda;
+  if (inv.monedaPago === 'USD') return 'USD';
+  if (inv.monedaPago === 'MIXTO' && +inv.montoPagoUSD > 0) {
+    var tasa = +inv.tasaUsdCompra || (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || +(RN.state.config && RN.state.config.tasaUsd) || 0;
+    var cupDesdeUsd = (+inv.montoPagoUSD) * tasa;
+    var cupDirecto = +inv.montoPagoCUP || 0;
+    if (cupDesdeUsd >= cupDirecto) return 'USD';
+  }
+  return 'CUP';
+};
+
+/** Principal en moneda de la deuda (USD o CUP). */
+RN.investment.montoMonedaDeuda = function (inv) {
+  if (!inv) return 0;
+  if (+inv.montoMoneda > 0) return +inv.montoMoneda;
+  if (RN.investment.monedaDeuda(inv) === 'USD') {
+    return +inv.montoPagoUSD > 0 ? +inv.montoPagoUSD : 0;
+  }
+  return +inv.monto || 0;
+};
+
+/** Total ya devuelto en moneda de la deuda. */
+RN.investment.totalDevueltoMoneda = function (inv) {
+  return RN.investment.devolucionesInv(inv).reduce(function (s, g) {
+    if (+g.montoMonedaDeuda > 0) return s + +g.montoMonedaDeuda;
+    if (RN.investment.monedaDeuda(inv) === 'CUP') return s + (+g.monto || 0);
+    var tasa = +g.tasaUsd || (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || +(RN.state.config && RN.state.config.tasaUsd) || 0;
+    if (tasa > 0 && +g.monto > 0) return s + (+g.monto / tasa);
+    return s;
+  }, 0);
+};
+
+/** Saldo pendiente en moneda de la deuda. */
+RN.investment.saldoADevolverMoneda = function (inv) {
+  if (RN.investment.origenCapital(inv) !== 'prestado_externo') return 0;
+  var rest = RN.investment.montoMonedaDeuda(inv) - RN.investment.totalDevueltoMoneda(inv);
+  return Math.max(0, +rest.toFixed(4));
+};
+
+/** Formato legible del saldo (ej. "80.00 USD" o CUP formateado). */
+RN.investment.fmtSaldoDeuda = function (inv) {
+  var mon = RN.investment.monedaDeuda(inv);
+  var s = RN.investment.saldoADevolverMoneda(inv);
+  if (mon === 'USD') {
+    return (typeof RN.moneda !== 'undefined' && RN.moneda.formatUSD)
+      ? RN.moneda.formatUSD(s)
+      : (Number(s).toFixed(2) + ' USD');
+  }
+  return RN.calc.formatCUP(s);
+};
+
+/**
+ * Monto sugerido a devolver en moneda de la deuda, según % del bolsillo libre.
+ * = min(saldo, libre × pct/100 convertido a moneda de la deuda).
+ */
+
+RN.investment.sugeridoDevolucion = function (inv) {
+  var mon = RN.investment.monedaDeuda(inv);
+  var saldo = RN.investment.saldoADevolverMoneda(inv);
+  if (saldo <= 0) return 0;
+  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0 };
+  var libreCUP = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  var pct = RN.investment.pctLibreDeudas();
+  var cupSugerido = libreCUP * (pct / 100);
+  var tasa = (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || +(RN.state.config && RN.state.config.tasaUsd) || 0;
+  var enMoneda = mon === 'USD' ? (tasa > 0 ? cupSugerido / tasa : 0) : cupSugerido;
+  if (!(enMoneda > 0)) enMoneda = 0;
+  return +Math.min(saldo, enMoneda).toFixed(2);
+};
+
+/* ============================================================
+ * v5.55.6 — Plan de pago de deudas: meta, proyección, tiempo, reserva
+ * ============================================================ */
+
+/** Total por cobrar (cartera): suma de deuda de todos los clientes. */
+RN.investment.porCobrarTotal = function () {
+  var mes = RN.calc.mesActualStr();
+  var t = 0;
+  (RN.state.clients || []).forEach(function (c) {
+    t += RN.calc.deudaTotalCliente ? RN.calc.deudaTotalCliente(c, mes) : 0;
+  });
+  return +t.toFixed(2);
+};
+
+/**
+ * Libre proyectado si se cobrara toda la cartera pendiente.
+ * Aproxima: libre actual + porCobrar × (1 − % reserva).
+ */
+RN.investment.libreProyectadoTrasCobros = function () {
+  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0, pct: 30 };
+  var libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  var pctRes = +(b.pct != null ? b.pct : (RN.state.config && RN.state.config.pctReservaCaja)) || 0;
+  if (pctRes < 0) pctRes = 0;
+  if (pctRes > 100) pctRes = 100;
+  var porCobrar = RN.investment.porCobrarTotal();
+  var libreExtra = porCobrar * (100 - pctRes) / 100;
+  return +(libre + Math.max(0, libreExtra)).toFixed(2);
+};
+
+/** Meta de cuota de esta deuda en su moneda (0 = sin meta). */
+RN.investment.metaCuotaDeuda = function (inv) {
+  if (!inv) return 0;
+  return Math.max(0, +inv.metaCuotaMoneda || 0);
+};
+
+/** Fecha objetivo YYYY-MM-DD o ''. */
+RN.investment.fechaObjetivoDeuda = function (inv) {
+  if (!inv || !inv.fechaObjetivo) return '';
+  return String(inv.fechaObjetivo).slice(0, 10);
+};
+
+/** Convierte CUP → moneda de la deuda. */
+RN.investment.cupAMonedaDeuda = function (inv, cup) {
+  var mon = RN.investment.monedaDeuda(inv);
+  cup = +cup || 0;
+  if (mon !== 'USD') return +cup.toFixed(2);
+  var tasa = (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || +(RN.state.config && RN.state.config.tasaUsd) || 0;
+  if (!(tasa > 0)) return 0;
+  return +(cup / tasa).toFixed(2);
+};
+
+/** Convierte moneda de la deuda → CUP. */
+RN.investment.monedaDeudaACup = function (inv, montoMon) {
+  var mon = RN.investment.monedaDeuda(inv);
+  montoMon = +montoMon || 0;
+  if (mon !== 'USD') return +montoMon.toFixed(2);
+  var tasa = (RN.moneda && RN.moneda.tasa ? RN.moneda.tasa() : 0) || +(RN.state.config && RN.state.config.tasaUsd) || 0;
+  if (!(tasa > 0)) return 0;
+  return +(montoMon * tasa).toFixed(2);
+};
+
+/**
+ * Plan completo de pago para una deuda.
+ * @returns {object}
+ */
+RN.investment.planDevolucion = function (inv) {
+  var mon = RN.investment.monedaDeuda(inv);
+  var saldo = RN.investment.saldoADevolverMoneda(inv);
+  var pctIdeal = RN.investment.pctLibreDeudas();
+  var pctBajo = Math.min(pctIdeal, RN.investment.pctAusteridadDeudas());
+  var b = RN.calc.bolsillos ? RN.calc.bolsillos() : { retirable: 0, libre: 0, reserva: 0 };
+  var libreReal = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  var reserva = Math.max(0, +(b.reserva) || 0);
+  var libreProy = RN.investment.libreProyectadoTrasCobros();
+  var porCobrar = RN.investment.porCobrarTotal();
+
+  var sugIdeal = Math.min(saldo, RN.investment.cupAMonedaDeuda(inv, libreProy * pctIdeal / 100));
+  var sugReal25 = Math.min(saldo, RN.investment.cupAMonedaDeuda(inv, libreReal * pctIdeal / 100));
+  var sugReal10 = Math.min(saldo, RN.investment.cupAMonedaDeuda(inv, libreReal * pctBajo / 100));
+
+  var metaCuota = RN.investment.metaCuotaDeuda(inv);
+  var fechaObj = RN.investment.fechaObjetivoDeuda(inv);
+
+  // Cuota efectiva para proyección de meses
+  var cuotaRef = metaCuota > 0 ? metaCuota : (sugIdeal > 0 ? sugIdeal : sugReal25);
+  var mesesEst = null;
+  if (saldo > 0 && cuotaRef > 0) {
+    mesesEst = Math.ceil(saldo / cuotaRef);
+  }
+  // Si hay fecha objetivo, cuota cuota necesaria
+  var cuotaPorFecha = null;
+  var mesesHastaFecha = null;
+  if (fechaObj && saldo > 0) {
+    var hoy = new Date();
+    hoy.setHours(0, 0, 0, 0);
+    var fin = new Date(fechaObj + 'T00:00:00');
+    if (!isNaN(fin.getTime()) && fin > hoy) {
+      mesesHastaFecha = (fin.getFullYear() - hoy.getFullYear()) * 12 + (fin.getMonth() - hoy.getMonth());
+      if (fin.getDate() > hoy.getDate()) { /* same month partial counts as 1 if any days left */ }
+      if (mesesHastaFecha < 1) mesesHastaFecha = 1;
+      cuotaPorFecha = +(saldo / mesesHastaFecha).toFixed(2);
+    }
+  }
+
+  // Elegir recomendación
+  var pctRec = pctIdeal;
+  var sugerido = sugReal25;
+  var nivel = 'ok'; // ok | bajo | reserva
+  var mensajes = [];
+  var tocaReserva = false;
+  var reservaNecesariaCUP = 0;
+
+  var libreApretado = libreReal < libreProy * 0.5 && porCobrar > 0;
+  // Meta / fecha como objetivo del pago de este mes
+  var objetivoMes = metaCuota;
+  if (cuotaPorFecha != null && (objetivoMes <= 0 || cuotaPorFecha > objetivoMes)) {
+    objetivoMes = cuotaPorFecha;
+  }
+
+  if (saldo <= 0) {
+    sugerido = 0;
+    mensajes.push('Deuda liquidada.');
+  } else if (libreReal <= 0.01) {
+    pctRec = 0;
+    sugerido = 0;
+    nivel = 'reserva';
+    mensajes.push('No hay bolsillo libre disponible ahora.');
+    if (objetivoMes > 0) {
+      reservaNecesariaCUP = RN.investment.monedaDeudaACup(inv, Math.min(saldo, objetivoMes));
+      if (reservaNecesariaCUP > 0 && reserva > 0) {
+        tocaReserva = true;
+        mensajes.push('Para cumplir la meta harían falta ' + RN.calc.formatCUP(Math.min(reservaNecesariaCUP, reserva)) + ' de la reserva (confirmación requerida).');
+      }
+    } else {
+      mensajes.push('Cobra la cartera o espera ingresos antes de pagar, o confirma usar reserva.');
+    }
+  } else if (sugReal25 + 0.0001 >= Math.min(saldo, sugIdeal) && !libreApretado) {
+    pctRec = pctIdeal;
+    sugerido = sugReal25;
+    nivel = 'ok';
+    mensajes.push('Puedes mantener el ' + pctIdeal + '% del libre.');
+  } else if (libreApretado || sugReal25 < sugIdeal * 0.6) {
+    // Libre tocado / menor de lo proyectado
+    if (sugReal10 > 0 && sugReal25 < sugIdeal * 0.5) {
+      pctRec = pctBajo;
+      sugerido = Math.max(sugReal10, Math.min(sugReal25, saldo));
+      nivel = 'bajo';
+      mensajes.push('El libre ya está justo respecto a lo proyectado tras cobros. Se recomienda bajar al ' + pctBajo + '%.');
+    } else {
+      pctRec = pctIdeal;
+      sugerido = sugReal25;
+      nivel = 'bajo';
+      mensajes.push('Libre real menor que el proyectado tras cobros. Sugerido según libre de hoy (' + pctIdeal + '%).');
+    }
+  } else {
+    pctRec = pctIdeal;
+    sugerido = sugReal25;
+    nivel = 'ok';
+  }
+
+  // Si hay meta/cuota y el sugerido no llega
+  var polRes = RN.investment.politicaReservaDeudas();
+  if (objetivoMes > 0 && sugerido + 0.0001 < Math.min(saldo, objetivoMes)) {
+    var faltaMon = +(Math.min(saldo, objetivoMes) - sugerido).toFixed(2);
+    var faltaCUP = RN.investment.monedaDeudaACup(inv, faltaMon);
+    if (faltaCUP > 0.01) {
+      nivel = 'reserva';
+      reservaNecesariaCUP = faltaCUP;
+      if (polRes === 'nunca') {
+        tocaReserva = false;
+        mensajes.push('La meta supera el libre. Política: no tocar reserva. Reduce la meta o espera cobros.');
+      } else if (polRes === 'con_meta' || polRes === 'siempre_confirmar') {
+        tocaReserva = true;
+        mensajes.push('La meta/cuota del mes es mayor que el sugerido por libre. Faltan ' +
+          (mon === 'USD' ? faltaMon.toFixed(2) + ' USD' : RN.calc.formatCUP(faltaMon)) +
+          ' (≈ ' + RN.calc.formatCUP(faltaCUP) + '). Puedes usar reserva solo confirmando.');
+      }
+    }
+  } else if (polRes === 'siempre_confirmar' && libreReal <= 0.01 && saldo > 0) {
+    tocaReserva = true;
+  }
+
+  // Tiempo estimado textual
+  var tiempoTxt = '';
+  if (mesesEst != null && mesesEst > 0) {
+    tiempoTxt = '≈ ' + mesesEst + ' mes' + (mesesEst === 1 ? '' : 'es');
+    if (metaCuota > 0) tiempoTxt += ' (según meta de cuota)';
+    else tiempoTxt += ' (según ' + pctIdeal + '% del libre proyectado)';
+  }
+  if (fechaObj && mesesHastaFecha) {
+    tiempoTxt += (tiempoTxt ? ' · ' : '') + 'objetivo ' + fechaObj + ' (cuota ≈ ' +
+      (mon === 'USD' ? cuotaPorFecha.toFixed(2) + ' USD' : RN.calc.formatCUP(cuotaPorFecha)) + '/mes)';
+  }
+
+  return {
+    moneda: mon,
+    saldo: saldo,
+    libreReal: libreReal,
+    libreProyectado: libreProy,
+    porCobrar: porCobrar,
+    pctIdeal: pctIdeal,
+    pctRecomendado: pctRec,
+    sugeridoIdeal: +sugIdeal.toFixed(2),
+    sugeridoReal: +sugerido.toFixed(2),
+    sugerido25Real: +sugReal25.toFixed(2),
+    sugerido10Real: +sugReal10.toFixed(2),
+    metaCuota: metaCuota,
+    fechaObjetivo: fechaObj,
+    cuotaPorFecha: cuotaPorFecha,
+    mesesEstimados: mesesEst,
+    tiempoTxt: tiempoTxt,
+    nivel: nivel,
+    tocaReserva: tocaReserva,
+    reservaNecesariaCUP: +reservaNecesariaCUP.toFixed(2),
+    reservaDisponible: reserva,
+    mensajes: mensajes
+  };
+};
+
+/** Formato corto de un monto en moneda de deuda. */
+RN.investment.fmtMontoDeuda = function (inv, monto) {
+  var mon = RN.investment.monedaDeuda(inv);
+  monto = +monto || 0;
+  if (mon === 'USD') {
+    return (typeof RN.moneda !== 'undefined' && RN.moneda.formatUSD)
+      ? RN.moneda.formatUSD(monto)
+      : (monto.toFixed(2) + ' USD');
+  }
+  return RN.calc.formatCUP(monto);
+};
+
+/**
+ * Recuperado NETO de una inversión = lo que el negocio ha generado (margen de
+ * clientes) MENOS lo que ya se ha devuelto al prestamista.
+ * Para capital propio es simplemente el recuperado (no hay devoluciones).
+ */
+RN.investment.recuperadoNetoInv = function (inv) {
+  var recuperado = RN.investment.recuperadoRealInv(inv);
+  var devuelto = RN.investment.totalDevuelto(inv);
+  return +(recuperado - devuelto).toFixed(2);
+};
+
+/**
+ * v5.55.52 — Recuperación VIRTUAL vs dinero REAL.
+ * El "recuperado" de una inversión es contable (margen de clientes + aporte extra):
+ * no mueve caja. Para préstamos externos, lo que el negocio ya generó y todavía no
+ * se ha devuelto de verdad (gasto esDevolucionInversion) queda "pendiente de aplicar".
+ *   pendiente = min(saldoADevolver, recuperadoEfectivo − totalDevuelto)   (≥ 0)
+ *   sugerido  = min(pendiente, libre retirable de caja hoy)
+ * Capital propio: no hay a quién devolver, así que devuelve null.
+ */
+RN.investment.aplicacionPendiente = function (inv) {
+  if (!inv || RN.investment.origenCapital(inv) !== 'prestado_externo') return null;
+  var saldo = RN.investment.saldoADevolver(inv);
+  if (saldo <= 0.009) return null;
+  var generado = RN.investment.recuperadoEfectivo(inv);
+  var devuelto = RN.investment.totalDevuelto(inv);
+  var pendiente = Math.max(0, Math.min(saldo, +(generado - devuelto).toFixed(2)));
+  var libre = 0;
+  try {
+    var b = RN.calc.bolsillos();
+    libre = Math.max(0, +(b.retirable != null ? b.retirable : b.libre) || 0);
+  } catch (e) {}
+  return {
+    generado: +generado.toFixed(2),
+    devuelto: +devuelto.toFixed(2),
+    saldo: saldo,
+    pendiente: +pendiente.toFixed(2),
+    libre: +libre.toFixed(2),
+    sugerido: +Math.min(pendiente, libre).toFixed(2)
+  };
+};
+
+/** v5.55.52 — ¿Mostrar avisos de "aplicar recuperación a caja"? (config.avisoAplicacionInversion, default sí). */
+RN.investment.avisoAplicacionActivo = function () {
+  var c = (RN.state && RN.state.config) || {};
+  return c.avisoAplicacionInversion !== false;
+};
+
+/** v5.55.52 — Préstamos externos con recuperación generada y aún no devuelta en caja. */
+RN.investment.aplicacionesPendientes = function () {
+  var out = [];
+  (RN.state.investments || []).forEach(function (inv) {
+    var a = RN.investment.aplicacionPendiente(inv);
+    if (a && a.pendiente > 0.009) out.push({ inv: inv, info: a });
+  });
+  return out;
+};
+
+/**
+ * v5.12.9 — % de ganancia del mes real destinado a recuperación/devolución.
+ * Configurable en Ajustes (0-100). Default 0 (no se aplica aporte extra).
+ */
+RN.investment.pctGananciaMes = function () {
+  var p = +(RN.state.config.pctRecuperacionGananciaMes || 0);
+  return Math.max(0, Math.min(100, p));
+};
+
+/**
+ * v5.13.16 (DUP-3) — Helper compartido: gastos OPERATIVOS de un mes
+ * (excluyendo devoluciones de inversión y retiros de caja, que son
+ * movimientos de capital, no gastos operativos).
+ *
+ * Centraliza el filtro que antes estaba duplicado inline en aporteExtraMes() y
+ * aporteExtraAcumulado(). Si se añade una nueva categoría de movimiento de
+ * capital, basta con actualizar este único helper.
+ *
+ * @param {string} mes — mes en formato YYYY-MM
+ * @returns {number} suma de gastos operativos del mes
+ */
+RN.investment._gastosOperativosMes = function (mes) {
+  var mesNorm = (mes || '').slice(0, 7);
+  if (!mesNorm) return 0;
+  // v5.55.52: un único criterio de "gasto operativo" para toda la app (RN.calc.esGastoOperativo):
+  // excluye cuadres, devoluciones, aplicaciones de préstamo y retiros legacy.
+  var esOper = RN.calc.esGastoOperativo || function (g) { return !g.esDevolucionInversion && !g.esRetiroCaja; };
+  return (RN.state.gastos || [])
+    .filter(function (g) { return (g.mes || '').slice(0, 7) === mesNorm; })
+    .filter(esOper)
+    .reduce(function (s, g) { return s + (g.monto || 0); }, 0);
+};
+
+/**
+ * v5.12.9 — Aporte extra sugerido del mes para esta inversión, basado en la
+ * GANANCIA NETA REAL del mes (ingresos del mes − gastos del mes, excluyendo
+ * las propias devoluciones/retiros de caja).
+ * = gananciaNetaMes × pctGananciaMes/100.
+ * Esto es lo que el dueño puede "sacar" de la ganancia real del mes y
+ * destinar a devolver el capital prestado (o a recuperar el propio).
+ */
+RN.investment.aporteExtraMes = function (inv) {
+  var pct = RN.investment.pctGananciaMes();
+  if (pct <= 0) return 0;
+  var mes = RN.calc.mesActualStr();
+  // v5.55.53: misma utilidad operativa que bolsillos/reserva
+  var gananciaNeta = (RN.calc.utilidadOperativaMes
+    ? RN.calc.utilidadOperativaMes(mes)
+    : (RN.calc.ingresosMes(mes) - RN.investment._gastosOperativosMes(mes)));
+  if (gananciaNeta <= 0) return 0;
+  return +(gananciaNeta * pct / 100).toFixed(2);
+};
+
+/**
+ * v5.12.9 — Total acumulado de aportes extra (de todos los meses cerrados)
+ * basados en la ganancia neta real mensual × pctGananciaMes.
+ * Se aproxima sumando la ganancia neta histórica de meses ya cerrados.
+ * Útil para mostrar cuánto capital se ha cubierto gracias a este aporte.
+ */
+RN.investment.aporteExtraAcumulado = function (inv) {
+  var pct = RN.investment.pctGananciaMes();
+  if (pct <= 0) return 0;
+  // v5.13.16 (BUG-2): sumar SOLO cobros de servicio (h.tipo === 'servicio' o
+  // undefined). Los cobros de tipo 'equipo' (pago de equipo del cliente) son
+  // movimientos de capital, no ingresos operativos; y las ventas de inventario
+  // ('venta-inventario') son ingresos no recurrentes que no deben computar para
+  // el aporte extra de recuperación de capital. Además, se quitó h.montoEquipo
+  // (es capital, no ingreso) para no inflar el aporte extra.
+  var porMes = {};
+  (RN.state.history || []).forEach(function (h) {
+    if (h.tipo && h.tipo !== 'servicio') return;  // solo cobros de servicio
+    var mes = (h.mes || '').slice(0, 7);
+    if (!mes) return;
+    if (!porMes[mes]) porMes[mes] = 0;
+    porMes[mes] += (h.monto || 0);  // sin h.montoEquipo (es capital, no ingreso)
+  });
+  // v5.13.16 (DUP-3): usar el helper compartido para restar gastos operativos.
+  // Construimos el set de meses con ingresos y restamos los gastos operativos
+  // de cada uno.
+  var mesesConIngreso = Object.keys(porMes);
+  mesesConIngreso.forEach(function (mes) {
+    porMes[mes] -= RN.investment._gastosOperativosMes(mes);
+  });
+  var total = 0;
+  Object.keys(porMes).forEach(function (mes) {
+    if (porMes[mes] > 0) total += porMes[mes] * pct / 100;
+  });
+  return +total.toFixed(2);
+};
+
+/**
+ * v5.12.9 — Total "recuperado efectivo" de una inversión considerando TODO:
+ *   margen neto de clientes + aporte extra acumulado de ganancia del mes.
+ * Es la cifra más realista de cuánto capital se ha cubierto.
+ */
+RN.investment.recuperadoEfectivo = function (inv) {
+  var base = RN.investment.recuperadoRealInv(inv);
+  var extra = RN.investment.aporteExtraAcumulado(inv);
+  return +(base + extra).toFixed(2);
+};
+
+/**
+ * v5.12.9 — % de recuperación efectivo (sobre el monto invertido).
+ * Usa recuperadoEfectivo (margen clientes + aporte extra).
+ */
+RN.investment.pctRecuperacionEfectiva = function (inv) {
+  var monto = inv.monto || 0;
+  if (monto <= 0) return 0;
+  return +((RN.investment.recuperadoEfectivo(inv) / monto) * 100).toFixed(1);
+};
+
+/**
+ * v5.13.16 (LOG-1) — Total recuperado EFECTIVO de TODAS las inversiones
+ * (margen de clientes + aporte extra acumulado). Se usa para que el KPI global
+ * "% recuperación" sea consistente con el "% efectivo" que muestra cada card
+ * cuando pctGananciaMes > 0.
+ */
+RN.investment.totalRecuperadoEfectivo = function () {
+  // v5.55.15: solo capital propio
+  return (RN.state.investments || []).reduce(function (s, i) {
+    if (RN.investment.origenCapital(i) === 'prestado_externo') return s;
+    return s + RN.investment.recuperadoEfectivo(i);
+  }, 0);
+};
+
+/**
+ * v5.13.16 (LOG-1) — % de recuperación EFECTIVO global (sobre el total
+ * invertido). Usa totalRecuperadoEfectivo (margen clientes + aporte extra).
+ * Cuando pctGananciaMes === 0, coincide con porcentajeRecuperacion().
+ */
+RN.investment.porcentajeRecuperacionEfectiva = function () {
+  const total = RN.investment.totalInvertido();
+  if (!total) return 0;
+  return +((RN.investment.totalRecuperadoEfectivo() / total) * 100).toFixed(1);
+};
+
+/**
+ * v5.12.9 — Total de devoluciones registradas en TODAS las inversiones.
+ */
+RN.investment.totalDevolucionesGlobal = function () {
+  return (RN.state.gastos || [])
+    .filter(function (g) { return g.esDevolucionInversion; })
+    .reduce(function (s, g) { return s + (g.monto || 0); }, 0);
+};
+
+/**
+ * v5.12.9 — Total invertido que es préstamo externo (a devolver).
+ */
+RN.investment.totalPrestadoExterno = function () {
+  return (RN.state.investments || [])
+    .filter(function (i) { return RN.investment.origenCapital(i) === 'prestado_externo'; })
+    .reduce(function (s, i) { return s + (i.monto || 0); }, 0);
+};
+
+/**
+ * v5.12.9 — Total que falta por devolver al prestamista (todas las inversiones).
+ */
+RN.investment.totalFaltaDevolver = function () {
+  return (RN.state.investments || [])
+    .filter(function (i) { return RN.investment.origenCapital(i) === 'prestado_externo'; })
+    .reduce(function (s, i) { return s + RN.investment.saldoADevolver(i); }, 0);
+};
+
+/**
+ * v5.13.0 — Lista de deudas personales activas (préstamo externo con saldo > 0
+ * y no marcada como concluida).
+ */
+RN.investment.deudasActivas = function () {
+  return (RN.state.investments || []).filter(function (i) {
+    return RN.investment.origenCapital(i) === 'prestado_externo'
+      && !i.deudaConcluida
+      && RN.investment.saldoADevolverMoneda(i) > 0.0001;
+  });
+};
+
+/**
+ * v5.13.0 — Lista de deudas personales concluidas (préstamo externo marcado
+ * como deudaConcluida o con saldoADevolver === 0).
+ */
+RN.investment.deudasConcluidas = function () {
+  return (RN.state.investments || []).filter(function (i) {
+    return RN.investment.origenCapital(i) === 'prestado_externo'
+      && (i.deudaConcluida || RN.investment.saldoADevolver(i) <= 0);
+  });
+};
+
+/**
+ * v5.13.0 — Verifica si una inversión préstamo debe marcarse como concluida.
+ * Si saldoADevolver === 0 y no estaba marcada, la marca y guarda la fecha.
+ * Devuelve true si se marcó como concluida en esta llamada.
+ */
+RN.investment.verificarConclusion = function (inv) {
+  if (!inv) return false;
+  if (RN.investment.origenCapital(inv) !== 'prestado_externo') return false;
+  if (inv.deudaConcluida) return false;
+  // v5.55.5: priorizar saldo en moneda de la deuda (USD o CUP)
+  var saldoMon = RN.investment.saldoADevolverMoneda(inv);
+  var saldoCup = RN.investment.saldoADevolver(inv);
+  if (saldoMon <= 0.0001 || saldoCup <= 0) {
+    inv.deudaConcluida = true;
+    inv.fechaConclusion = new Date().toISOString();
+    return true;
+  }
+  return false;
+};
+
+/**
+ * v5.52.5 — Lista de inversiones de capital propio ACTIVAS (aún no recuperadas).
+ */
+RN.investment.inversionesActivas = function () {
+  return (RN.state.investments || []).filter(function (i) {
+    return RN.investment.origenCapital(i) !== 'prestado_externo'
+      && !i.inversionRecuperada;
+  });
+};
+
+/**
+ * v5.52.5 — Lista de inversiones de capital propio ya recuperadas
+ * (capital cubierto por margen de clientes + aporte extra).
+ */
+RN.investment.inversionesRecuperadas = function () {
+  return (RN.state.investments || []).filter(function (i) {
+    return RN.investment.origenCapital(i) !== 'prestado_externo'
+      && !!i.inversionRecuperada;
+  });
+};
+
+/**
+ * v5.52.5 — Verifica si una inversión de capital propio debe marcarse como recuperada.
+ * Criterio: recuperadoEfectivo >= monto (incluye aporte extra de ganancia del mes).
+ * Si se marca, guarda fechaRecuperacion. Devuelve true si se marcó en esta llamada.
+ * Los cobros posteriores siguen contando (excedente = ganancia), pero el estado formal queda cerrado.
+ */
+RN.investment.verificarRecuperacion = function (inv) {
+  if (!inv) return false;
+  if (RN.investment.origenCapital(inv) === 'prestado_externo') return false;
+  if (inv.inversionRecuperada) return false;
+  var monto = +(inv.monto || 0);
+  if (monto <= 0) return false;
+  var recuperado = RN.investment.recuperadoEfectivo
+    ? RN.investment.recuperadoEfectivo(inv)
+    : RN.investment.recuperadoRealInv(inv);
+  if (recuperado + 0.005 >= monto) {
+    inv.inversionRecuperada = true;
+    inv.fechaRecuperacion = new Date().toISOString();
+    return true;
+  }
+  return false;
+};
+
+/**
+ * v5.52.5 — Verifica todas las inversiones de capital propio y marca las que
+ * ya alcanzaron el 100 %. Devuelve la lista de las recién marcadas (para toast).
+ */
+RN.investment.verificarRecuperaciones = function () {
+  var recien = [];
+  (RN.state.investments || []).forEach(function (inv) {
+    if (RN.investment.verificarRecuperacion(inv)) recien.push(inv);
+  });
+  return recien;
+};
+
+
+
+/**
+ * v5.13.0 — Total de devuelto por todas las deudas concluidas.
+ */
+RN.investment.totalDevueltoConcluidas = function () {
+  return RN.investment.deudasConcluidas().reduce(function (s, i) {
+    return s + RN.investment.totalDevuelto(i);
+  }, 0);
+};
+
+/**
+ * v5.32.0 — Total prestado de las deudas ACTIVAS (excluye concluidas, para
+ * que la barra de "Deudas personales activas" no arrastre deudas ya saldadas).
+ */
+RN.investment.totalPrestadoActivas = function () {
+  return RN.investment.deudasActivas().reduce(function (s, i) {
+    return s + (i.monto || 0);
+  }, 0);
+};
+
+/**
+ * v5.32.0 — Total ya devuelto de las deudas ACTIVAS.
+ */
+RN.investment.totalDevueltoActivas = function () {
+  return RN.investment.deudasActivas().reduce(function (s, i) {
+    return s + RN.investment.totalDevuelto(i);
+  }, 0);
+};
+
+/**
+ * v5.32.0 — Porcentaje devuelto de las deudas personales activas, para la
+ * barra "Deudas personales activas" (mismo patrón que porcentajeRecuperacion,
+ * pero solo sobre préstamos externos activos).
+ */
+RN.investment.porcentajeDevueltoDeudas = function () {
+  var total = RN.investment.totalPrestadoActivas();
+  if (!total) return 0;
+  return +(RN.investment.totalDevueltoActivas() / total * 100).toFixed(1);
+};
+
+
+/* ============================================================
+ * v5.53.0 Fase 4 — Meta de devolución de préstamos + saldo USD/CUP
+ * ============================================================ */
+
+/** Meta mensual de devolución (CUP) guardada en config. */
+RN.investment.metaDevolucionMensual = function () {
+  var m = RN.state.config && RN.state.config.metaDevolucionPrestamo;
+  return (typeof m === 'number' && m >= 0) ? m : 0;
+};
+
+RN.investment.setMetaDevolucionMensual = function (cup) {
+  RN.state.config.metaDevolucionPrestamo = Math.max(0, +cup || 0);
+  try { RN.config.persistir(); } catch (e) {}
+  try { RN.storageLocal.guardar(); } catch (e) {}
+};
+
+/** Total devuelto en el mes (todas las deudas activas). */
+RN.investment.devueltoEnMes = function (mes) {
+  mes = mes || RN.calc.mesActualStr();
+  var total = 0;
+  (RN.state.investments || []).forEach(function (inv) {
+    if (RN.investment.origenCapital(inv) !== 'prestado_externo') return;
+    RN.investment.devolucionesInv(inv).forEach(function (d) {
+      var dm = d.mes || (d.fecha ? String(d.fecha).slice(0, 7) : '');
+      if (dm === mes) total += (+d.monto || 0);
+    });
+  });
+  return +total.toFixed(2);
+};
+
+/**
+ * Resumen de deudas activas en CUP y USD (si el préstamo se registró en USD).
+ */
+RN.investment.resumenDeudasDual = function () {
+  var tasa = (RN.moneda && RN.moneda.tasa) ? RN.moneda.tasa() : (RN.state.config.tasaUsd || 0);
+  var prestadoCUP = 0, devueltoCUP = 0, prestadoUSD = 0, devueltoUSD = 0;
+  (RN.investment.deudasActivas ? RN.investment.deudasActivas() : []).forEach(function (inv) {
+    var m = +inv.monto || 0;
+    var d = RN.investment.totalDevuelto(inv);
+    prestadoCUP += m;
+    devueltoCUP += d;
+    if (inv.monedaPago === 'USD' && inv.montoPagoUSD) {
+      prestadoUSD += +inv.montoPagoUSD;
+      // proporción devuelta
+      var pct = m > 0 ? d / m : 0;
+      devueltoUSD += +(inv.montoPagoUSD * pct).toFixed(2);
+    } else if (tasa > 0) {
+      prestadoUSD += m / tasa;
+      devueltoUSD += d / tasa;
+    }
+  });
+  var faltaCUP = Math.max(0, prestadoCUP - devueltoCUP);
+  var faltaUSD = Math.max(0, prestadoUSD - devueltoUSD);
+  var meta = RN.investment.metaDevolucionMensual();
+  var devMes = RN.investment.devueltoEnMes();
+  var mesesEst = (meta > 0 && faltaCUP > 0) ? Math.ceil(faltaCUP / meta) : null;
+  return {
+    prestadoCUP: +prestadoCUP.toFixed(2),
+    devueltoCUP: +devueltoCUP.toFixed(2),
+    faltaCUP: +faltaCUP.toFixed(2),
+    prestadoUSD: +prestadoUSD.toFixed(2),
+    devueltoUSD: +devueltoUSD.toFixed(2),
+    faltaUSD: +faltaUSD.toFixed(2),
+    tasa: tasa,
+    metaMensual: meta,
+    devueltoMes: devMes,
+    mesesEstimados: mesesEst,
+    pctMetaMes: meta > 0 ? Math.min(100, +(devMes / meta * 100).toFixed(1)) : null
+  };
+};
+
+/** HTML compacto para la barra de deudas (meta + dual). */
+RN.investment.htmlMetaDevolucion = function () {
+  var r = RN.investment.resumenDeudasDual();
+  if (r.prestadoCUP <= 0) return '';
+  var f = RN.calc.formatCUP;
+  var metaTxt = r.metaMensual > 0
+    ? ('Meta mes: ' + f(r.metaMensual) + ' · devuelto este mes: ' + f(r.devueltoMes) +
+       (r.pctMetaMes != null ? ' (' + r.pctMetaMes + '%)' : '') +
+       (r.mesesEstimados != null ? ' · ~' + r.mesesEstimados + ' mes(es) restantes' : ''))
+    : 'Sin meta mensual configurada';
+  var dual = r.prestadoUSD > 0
+    ? ('USD orig./equiv.: prestado ' + r.prestadoUSD.toFixed(2) +
+       ' · devuelto ' + r.devueltoUSD.toFixed(2) +
+       ' · falta ' + r.faltaUSD.toFixed(2) +
+       (r.tasa ? ' (tasa ' + r.tasa + ')' : ''))
+    : '';
+  return '<div class="meta-dev-box muted" style="font-size:12px;margin-top:8px">' +
+    '<div>' + metaTxt +
+    ' <button type="button" class="btn sm" style="margin-left:6px" onclick="RN.investment.abrirMetaDevolucion()">⚙️ Meta</button></div>' +
+    (dual ? '<div style="margin-top:4px">' + dual + '</div>' : '') +
+    '</div>';
+};
+
+RN.investment.abrirMetaDevolucion = function () {
+  var actual = RN.investment.metaDevolucionMensual();
+  var html = '<div class="modal-header"><h3>Meta de devolución mensual</h3>' +
+    '<button class="close" onclick="RN.uiComponents.cerrarModal()">×</button></div>' +
+    '<div class="modal-body">' +
+    '<p class="muted">Cuánto pretendes devolver cada mes a los préstamos externos (CUP).</p>' +
+    '<div class="form-row"><div><label>Meta mensual (CUP)</label>' +
+    '<input type="number" id="meta-dev-input" min="0" step="100" value="' + actual + '"></div></div>' +
+    '</div><div class="modal-footer">' +
+    '<button class="btn ghost" onclick="RN.uiComponents.cerrarModal()">Cancelar</button>' +
+    '<button class="btn primary" onclick="RN.investment.guardarMetaDevolucion()">Guardar</button></div>';
+  RN.uiComponents.modal(html, {});
+};
+
+RN.investment.guardarMetaDevolucion = function () {
+  var el = document.getElementById('meta-dev-input');
+  RN.investment.setMetaDevolucionMensual(el ? el.value : 0);
+  RN.uiComponents.cerrarModal();
+  if (RN.render && RN.render.inversion) RN.render.inversion();
+  else if (RN.render && RN.render.todo) RN.render.todo();
+  RN.notifyUI.toast('Meta de devolución guardada', 'success');
+};
