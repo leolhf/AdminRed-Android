@@ -1,3 +1,9 @@
+## v5.55.63 — Vuelto mixto automático
+
+- Al editar **Vuelto en USD**, el CUP se completa solo (excedente − USD×tasa).
+- Al editar **Vuelto en CUP**, el USD se completa solo (lo que falta, sin superar lo pagado en USD).
+- Siempre suma el excedente total; no quedan montos incompletos como $0.50 + 200 ≠ 912.50.
+
 ## v5.55.62 — Cobro: Usar total CUP + auto-cálculo + vuelto
 
 Sobre v5.55.61:

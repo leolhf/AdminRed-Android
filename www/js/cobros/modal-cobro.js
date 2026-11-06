@@ -181,9 +181,9 @@ RN.modalCobro.abrir = function (clienteId) {
             <div id="cobro-vuelto-mixto" style="display:none;margin-bottom:6px">
               <div class="form-row cols-2" style="margin:0">
                 <div><label style="font-size:12px">Vuelto en USD</label>
-                  <input id="cobro-vuelto-usd" type="number" step="0.01" min="0" value="0" oninput="RN.modalCobro.onVueltoManual()"></div>
+                  <input id="cobro-vuelto-usd" type="number" step="0.01" min="0" value="0" oninput="RN.modalCobro.onVueltoManual('USD')"></div>
                 <div><label style="font-size:12px">Vuelto en CUP</label>
-                  <input id="cobro-vuelto-cup" type="number" step="0.01" min="0" value="0" oninput="RN.modalCobro.onVueltoManual()"></div>
+                  <input id="cobro-vuelto-cup" type="number" step="0.01" min="0" value="0" oninput="RN.modalCobro.onVueltoManual('CUP')"></div>
               </div>
             </div>
             <div id="cobro-vuelto-resumen" class="muted" style="font-size:12px"></div>
@@ -365,6 +365,7 @@ RN.modalCobro._vueltoManual = false;
 RN.modalCobro.setModoVuelto = function (modo) {
   RN.modalCobro._modoVuelto = modo || 'USD';
   RN.modalCobro._vueltoManual = false;
+  RN.modalCobro._vueltoEditando = null;
   document.querySelectorAll('#cobro-vuelto-toggle button').forEach(function (b) {
     b.classList.toggle('primary', b.getAttribute('data-vuelto') === RN.modalCobro._modoVuelto);
   });
@@ -384,11 +385,28 @@ RN.modalCobro.calcularVuelto = function (excedenteCUP, usdRecibido, cupRecibido,
   if (modo === 'MIXTO' && RN.modalCobro._vueltoManual) {
     var iu = document.getElementById('cobro-vuelto-usd');
     var ic = document.getElementById('cobro-vuelto-cup');
-    vueltoUSD = Math.min(usdRecibido, Math.max(0, parseFloat(iu && iu.value) || 0));
-    var cubierto = tasa > 0 ? +(vueltoUSD * tasa).toFixed(2) : 0;
-    var falta = Math.max(0, +(excedenteCUP - cubierto).toFixed(2));
-    if (ic && String(ic.value).length) vueltoCUP = Math.max(0, parseFloat(ic.value) || 0);
-    else vueltoCUP = falta;
+    var edit = RN.modalCobro._vueltoEditando || 'USD';
+    var rawU = iu ? String(iu.value || '').replace(',', '.') : '0';
+    var rawC = ic ? String(ic.value || '').replace(',', '.') : '0';
+    // v5.55.63: al editar un campo, el otro completa el excedente automáticamente
+    if (edit === 'CUP') {
+      vueltoCUP = Math.max(0, parseFloat(rawC) || 0);
+      if (vueltoCUP > excedenteCUP + 0.01) vueltoCUP = excedenteCUP;
+      var faltaUsd = (tasa > 0) ? +((excedenteCUP - vueltoCUP) / tasa).toFixed(2) : 0;
+      vueltoUSD = Math.min(usdRecibido, Math.max(0, faltaUsd));
+      // si se topó el USD recibido, el CUP absorbe el resto
+      var cub = tasa > 0 ? +(vueltoUSD * tasa).toFixed(2) : 0;
+      vueltoCUP = Math.max(0, +(excedenteCUP - cub).toFixed(2));
+    } else {
+      vueltoUSD = Math.min(usdRecibido, Math.max(0, parseFloat(rawU) || 0));
+      var cub2 = tasa > 0 ? +(vueltoUSD * tasa).toFixed(2) : 0;
+      if (cub2 > excedenteCUP + 0.01) {
+        vueltoUSD = tasa > 0 ? Math.min(usdRecibido, +(excedenteCUP / tasa).toFixed(2)) : 0;
+        cub2 = tasa > 0 ? +(vueltoUSD * tasa).toFixed(2) : 0;
+      }
+      vueltoCUP = Math.max(0, +(excedenteCUP - cub2).toFixed(2));
+      if (vueltoCUP < 0.5) vueltoCUP = 0;
+    }
     return { vueltoUSD: +vueltoUSD.toFixed(2), vueltoCUP: +vueltoCUP.toFixed(2), excedenteCUP: excedenteCUP };
   }
 
@@ -412,9 +430,10 @@ RN.modalCobro.calcularVuelto = function (excedenteCUP, usdRecibido, cupRecibido,
   return { vueltoUSD: +(+vueltoUSD).toFixed(2), vueltoCUP: +(+vueltoCUP).toFixed(2), excedenteCUP: excedenteCUP };
 };
 
-RN.modalCobro.onVueltoManual = function () {
+RN.modalCobro.onVueltoManual = function (campo) {
   RN.modalCobro._vueltoManual = true;
   RN.modalCobro._modoVuelto = 'MIXTO';
+  RN.modalCobro._vueltoEditando = (campo === 'CUP') ? 'CUP' : 'USD';
   document.querySelectorAll('#cobro-vuelto-toggle button').forEach(function (b) {
     b.classList.toggle('primary', b.getAttribute('data-vuelto') === 'MIXTO');
   });
@@ -433,11 +452,22 @@ RN.modalCobro._aplicarUIVuelto = function (excede, usd, cup, tasa) {
   }
   box.style.display = '';
   var v = RN.modalCobro.calcularVuelto(excede, usd, cup, tasa);
+  var iu = document.getElementById('cobro-vuelto-usd');
+  var ic = document.getElementById('cobro-vuelto-cup');
   if (!RN.modalCobro._vueltoManual) {
-    var iu = document.getElementById('cobro-vuelto-usd');
-    var ic = document.getElementById('cobro-vuelto-cup');
     if (iu) iu.value = v.vueltoUSD ? v.vueltoUSD.toFixed(2) : '0';
     if (ic) ic.value = v.vueltoCUP ? v.vueltoCUP.toFixed(2) : '0';
+  } else {
+    // Completar el campo que no está editando (mantiene el foco en el activo)
+    var edit = RN.modalCobro._vueltoEditando || 'USD';
+    if (edit === 'USD') {
+      if (ic) ic.value = v.vueltoCUP ? v.vueltoCUP.toFixed(2) : '0';
+      // Si el USD digitado se topeó, reflejarlo
+      if (iu && document.activeElement !== iu) iu.value = v.vueltoUSD ? v.vueltoUSD.toFixed(2) : '0';
+    } else {
+      if (iu) iu.value = v.vueltoUSD ? v.vueltoUSD.toFixed(2) : '0';
+      if (ic && document.activeElement !== ic) ic.value = v.vueltoCUP ? v.vueltoCUP.toFixed(2) : '0';
+    }
   }
   if (res) {
     var partes = [];
